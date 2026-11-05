@@ -1,0 +1,146 @@
+year,band,n_active,n_new,n_returning,n_receipts,partial
+2008,United States,12137,3772,8365,22784,True
+2008,Europe (EU+UK),3649,1752,1897,4489,True
+2008,South America,561,265,296,723,True
+2008,Middle East,136,65,71,157,True
+2008,South Asia,271,140,131,348,True
+2008,East Asia & Pacific,699,390,309,832,True
+2008,Rest of world,1825,768,1057,2614,True
+2009,United States,18838,8472,10366,29260,False
+2009,Europe (EU+UK),7780,4715,3065,8897,False
+2009,South America,1454,986,468,1702,False
+2009,Middle East,402,284,118,442,False
+2009,South Asia,728,493,235,907,False
+2009,East Asia & Pacific,1802,1209,593,2075,False
+2009,Rest of world,3452,1972,1480,4208,False
+2009,Unknown,12,12,0,12,False
+2010,United States,18774,8476,10298,27984,False
+2010,Europe (EU+UK),7030,4415,2615,7926,False
+2010,South America,1091,716,375,1211,False
+2010,Middle East,368,238,130,397,False
+2010,South Asia,604,378,226,711,False
+2010,East Asia & Pacific,1899,1307,592,2136,False
+2010,Rest of world,3184,1841,1343,3732,False
+2010,Unknown,4,4,0,4,False
+2011,United States,20247,8256,11991,31530,False
+2011,Europe (EU+UK),7259,4194,3065,8213,False
+2011,South America,1074,626,448,1215,False
+2011,Middle East,315,183,132,348,False
+2011,South Asia,592,346,246,690,False
+2011,East Asia & Pacific,1750,1060,690,1938,False
+2011,Rest of world,3043,1629,1414,3613,False
+2011,Unknown,3,2,1,3,False
+2012,United States,21242,9086,12156,33751,False
+2012,Europe (EU+UK),7579,4343,3236,8747,False
+2012,South America,1195,679,516,1351,False
+2012,Middle East,384,218,166,441,False
+2012,South Asia,507,303,204,557,False
+2012,East Asia & Pacific,1806,1095,711,2045,False
+2012,Rest of world,2933,1477,1456,3546,False
+2012,Unknown,4,4,0,4,False
+2013,United States,19062,8224,10838,30589,False
+2013,Europe (EU+UK),7716,4241,3475,8935,False
+2013,South America,850,442,408,973,False
+2013,Middle East,333,202,131,368,False
+2013,South Asia,318,164,154,347,False
+2013,East Asia & Pacific,2114,1291,823,2407,False
+2013,Rest of world,3150,1543,1607,3766,False
+2014,United States,23132,10813,12319,35659,False
+2014,Europe (EU+UK),8308,4644,3664,9567,False
+2014,South America,1027,549,478,1161,False
+2014,Middle East,495,308,187,551,False
+2014,South Asia,288,179,109,301,False
+2014,East Asia & Pacific,2330,1459,871,2662,False
+2014,Rest of world,3110,1542,1568,3708,False
+2014,Unknown,4,3,1,4,False
+2015,United States,19542,7427,12115,30221,False
+2015,Europe (EU+UK),8286,4139,4147,9665,False
+2015,South America,924,432,492,1057,False
+2015,Middle East,454,258,196,522,False
+2015,South Asia,207,119,88,213,False
+2015,East Asia & Pacific,2195,1228,967,2554,False
+2015,Rest of world,2682,1196,1486,3208,False
+2016,United States,18191,6323,11868,29512,False
+2016,Europe (EU+UK),6980,3193,3787,8337,False
+2016,South America,734,331,403,841,False
+2016,Middle East,435,242,193,497,False
+2016,South Asia,151,107,44,151,False
+2016,East Asia & Pacific,2194,1219,975,2566,False
+2016,Rest of world,2305,963,1342,2808,False
+2016,Unknown,1,0,1,1,False
+2017,United States,18893,6705,12188,30877,False
+2017,Europe (EU+UK),8228,3796,4432,10151,False
+2017,South America,892,416,476,1055,False
+2017,Middle East,606,339,267,733,False
+2017,South Asia,157,115,42,170,False
+2017,East Asia & Pacific,2514,1421,1093,3041,False
+2017,Rest of world,2876,1161,1715,3688,False
+2017,Unknown,3,1,2,3,False
+2018,United States,20400,6977,13423,32995,False
+2018,Europe (EU+UK),6934,2979,3955,8463,False
+2018,South America,718,355,363,844,False
+2018,Middle East,509,292,217,572,False
+2018,South Asia,284,176,108,333,False
+2018,East Asia & Pacific,2430,1199,1231,2922,False
+2018,Rest of world,2460,1017,1443,3124,False
+2018,Unknown,1,0,1,1,False
+2019,United States,25099,8498,16601,40565,False
+2019,Europe (EU+UK),7858,3309,4549,9612,False
+2019,South America,610,267,343,663,False
+2019,Middle East,559,275,284,635,False
+2019,South Asia,230,143,87,241,False
+2019,East Asia & Pacific,2675,1265,1410,3358,False
+2019,Rest of world,2528,957,1571,3122,False
+2020,United States,25508,9611,15897,40270,False
+2020,Europe (EU+UK),6642,2930,3712,7327,False
+2020,South America,583,290,293,629,False
+2020,Middle East,463,231,232,491,False
+2020,South Asia,244,155,89,249,False
+2020,East Asia & Pacific,2298,1021,1277,2664,False
+2020,Rest of world,2489,993,1496,2885,False
+2021,United States,20823,7755,13068,35910,False
+2021,Europe (EU+UK),2943,1357,1586,3193,False
+2021,South America,484,259,225,532,False
+2021,Middle East,198,98,100,210,False
+2021,South Asia,187,140,47,197,False
+2021,East Asia & Pacific,1571,771,800,1761,False
+2021,Rest of world,1376,619,757,1599,False
+2021,Unknown,1,0,1,1,False
+2022,United States,20670,7307,13363,37269,False
+2022,Europe (EU+UK),2512,1139,1373,2731,False
+2022,South America,365,207,158,396,False
+2022,Middle East,190,83,107,211,False
+2022,South Asia,150,105,45,162,False
+2022,East Asia & Pacific,1454,711,743,1657,False
+2022,Rest of world,1008,422,586,1180,False
+2022,Unknown,1,0,1,1,False
+2023,United States,20604,7713,12891,36205,False
+2023,Europe (EU+UK),2512,1200,1312,2765,False
+2023,South America,381,192,189,428,False
+2023,Middle East,188,90,98,205,False
+2023,South Asia,171,108,63,201,False
+2023,East Asia & Pacific,1551,774,777,1812,False
+2023,Rest of world,926,400,526,1095,False
+2023,Unknown,1,0,1,2,False
+2024,United States,21649,7365,14284,38351,False
+2024,Europe (EU+UK),2401,1244,1157,2631,False
+2024,South America,468,258,210,521,False
+2024,Middle East,221,112,109,241,False
+2024,South Asia,195,132,63,213,False
+2024,East Asia & Pacific,1934,1054,880,2244,False
+2024,Rest of world,828,379,449,981,False
+2025,United States,24084,8190,15894,45030,False
+2025,Europe (EU+UK),1990,1023,967,2134,False
+2025,South America,483,259,224,548,False
+2025,Middle East,203,131,72,221,False
+2025,South Asia,248,167,81,291,False
+2025,East Asia & Pacific,1812,1028,784,2065,False
+2025,Rest of world,776,366,410,931,False
+2026,United States,19431,5589,13842,33953,True
+2026,Europe (EU+UK),1926,1021,905,2042,True
+2026,South America,388,210,178,427,True
+2026,Middle East,147,80,67,163,True
+2026,South Asia,273,191,82,282,True
+2026,East Asia & Pacific,1632,834,798,1904,True
+2026,Rest of world,583,290,293,679,True
+2026,Unknown,1,0,1,1,True
