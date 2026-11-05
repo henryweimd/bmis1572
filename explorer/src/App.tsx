@@ -1,0 +1,656 @@
+import { useEffect, useState } from 'react';
+import { createViews, escapeLiteral, loadManifest, query } from './duckdb';
+import type { Manifest } from './duckdb';
+import { CategoryBars, MultiLineChart, StackedBars } from './charts';
+import type { LineSeries } from './charts';
+import './App.css';
+
+const BANDS = [
+  'United States',
+  'Europe (EU+UK)',
+  'South America',
+  'Middle East',
+  'South Asia',
+  'East Asia & Pacific',
+  'Rest of world',
+  'Unknown',
+];
+const BAND_COLORS: Record<string, string> = {
+  'United States': '#1f77b4',
+  'Europe (EU+UK)': '#ff7f0e',
+  'South America': '#2ca02c',
+  'Middle East': '#d62728',
+  'South Asia': '#9467bd',
+  'East Asia & Pacific': '#8c564b',
+  'Rest of world': '#7f7f7f',
+  Unknown: '#bcbd22',
+};
+const VERSIONS = ['strict', 'merged', 'raw'] as const;
+type Version = (typeof VERSIONS)[number];
+const VERSION_LABEL: Record<Version, string> = {
+  strict: 'Strict',
+  merged: 'Merged',
+  raw: 'Raw bound',
+};
+const YEAR_MIN = 2008;
+const YEAR_MAX = 2026;
+const LATEST_FULL = 2025;
+
+interface GeoRow {
+  y: number;
+  band: string;
+  n: number;
+}
+interface NewRetRow {
+  y: number;
+  n_new: number;
+  n_ret: number;
+}
+interface TrialRow {
+  y: number;
+  s: number | null;
+  r: number | null;
+}
+interface TightRow {
+  y: number;
+  pr: number | null;
+  ps: number | null;
+}
+interface BinRow {
+  bin: string;
+  n: number;
+}
+interface LeaderRow {
+  rank: number;
+  display_name: string;
+  deg: string | null;
+  site: string | null;
+  country: string;
+  n_trials: number;
+  n_years: number;
+  first_year: number;
+  last_year: number;
+}
+interface TopRow {
+  name: string;
+  n: number;
+}
+interface CohortRow {
+  cohort: number;
+  n_persons: number;
+  mean_trials: number;
+  median_trials: number;
+  one_trial_share: number;
+}
+interface EntRow {
+  y: number;
+  type: string;
+  n: number;
+}
+interface Kpi {
+  active: number;
+  active09: number;
+  nnew: number;
+  oneTrial: number | null;
+  tight: number | null;
+}
+type Status = 'loading' | 'ready' | 'error';
+
+const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const num = (v: unknown): number | null =>
+  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? null : Number(v);
+const num0 = (v: unknown): number => num(v) ?? 0;
+const pct = (v: number | null, d = 1): string =>
+  v === null ? '—' : `${(v * 100).toFixed(d)}%`;
+
+const DEF_TITLES: [string, string][] = [
+  ['person_strict', 'Strict person'],
+  ['person_merged', 'Merged person'],
+  ['person_raw', 'Raw bound'],
+  ['trials_per_person', 'Trials per person'],
+  ['active', 'Active / new / returning'],
+  ['one_trial', 'One-trial'],
+  ['scope_unadjusted', 'Unadjusted benchmark'],
+  ['scope_adjusted', 'Adjusted benchmark'],
+  ['starts_running', 'Starts vs. running'],
+  ['tightness', 'Tightness ratio'],
+  ['partial', 'Partial years'],
+  ['bmis_scope', 'BMIS scope'],
+];
+
+function years(): number[] {
+  const out: number[] = [];
+  for (let y = YEAR_MIN; y <= YEAR_MAX; y++) out.push(y);
+  return out;
+}
+
+export default function App() {
+  const [status, setStatus] = useState<Status>('loading');
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [demo, setDemo] = useState(false);
+
+  const [version, setVersion] = useState<Version>('strict');
+  const [band, setBand] = useState('all');
+  const [y0, setY0] = useState(YEAR_MIN);
+  const [y1, setY1] = useState(YEAR_MAX);
+  const [scope, setScope] = useState<'adjusted' | 'unadjusted'>('adjusted');
+  const [leaderGeo, setLeaderGeo] = useState('ALL');
+
+  const [kpi, setKpi] = useState<Kpi | null>(null);
+  const [geo, setGeo] = useState<LineSeries[]>([]);
+  const [newret, setNewret] = useState<{ x: number; bottom: number; top: number }[]>([]);
+  const [trials, setTrials] = useState<LineSeries[]>([]);
+  const [tight, setTight] = useState<LineSeries[]>([]);
+  const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
+  const [leaders, setLeaders] = useState<LeaderRow[]>([]);
+  const [countries, setCountries] = useState<{ category: string; v: number }[]>([]);
+  const [states, setStates] = useState<{ category: string; v: number }[]>([]);
+  const [cohorts, setCohorts] = useState<CohortRow[]>([]);
+  const [ents, setEnts] = useState<LineSeries[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { manifest: m, baseUrl } = await loadManifest();
+        if (cancelled) return;
+        setManifest(m);
+        setDemo(!m);
+        await createViews(baseUrl, m);
+        if (cancelled) return;
+        setStatus('ready');
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setStatus('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'ready') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const v = escapeLiteral(version);
+        const bandClause = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
+        const k = await query<{ active: number; active09: number; nnew: number }>(
+          `SELECT CAST(SUM(CASE WHEN year = ${LATEST_FULL} THEN n_active ELSE 0 END) AS DOUBLE) AS active,` +
+            ` CAST(SUM(CASE WHEN year = 2009 THEN n_active ELSE 0 END) AS DOUBLE) AS active09,` +
+            ` CAST(SUM(CASE WHEN year = ${LATEST_FULL} THEN n_new ELSE 0 END) AS DOUBLE) AS nnew` +
+            ` FROM investigators_year_geo WHERE version = '${v}'${bandClause}`,
+        );
+        const g = await query<GeoRow>(
+          `SELECT CAST(year AS INTEGER) AS y, CAST(band AS VARCHAR) AS band,` +
+            ` CAST(SUM(n_active) AS DOUBLE) AS n FROM investigators_year_geo` +
+            ` WHERE version = '${v}' AND year BETWEEN ${y0} AND ${y1}${bandClause}` +
+            ` GROUP BY 1, 2 ORDER BY 1, 2`,
+        );
+        const nr = await query<NewRetRow>(
+          `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_new) AS DOUBLE) AS n_new,` +
+            ` CAST(SUM(n_returning) AS DOUBLE) AS n_ret FROM investigators_year_geo` +
+            ` WHERE version = '${v}' AND year BETWEEN ${y0} AND ${y1}${bandClause}` +
+            ` GROUP BY 1 ORDER BY 1`,
+        );
+        if (cancelled) return;
+        const bands = band === 'all' ? BANDS : [band];
+        setGeo(
+          bands.map((b) => ({
+            label: b,
+            color: BAND_COLORS[b] ?? '#333',
+            points: g.filter((r) => r.band === b).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
+        );
+        setNewret(nr.map((r) => ({ x: r.y, bottom: num0(r.n_ret), top: num0(r.n_new) })));
+
+        if (demo) {
+          setKpi({ active: num0(k[0]?.active), active09: num0(k[0]?.active09), nnew: num0(k[0]?.nnew), oneTrial: null, tight: null });
+          setNote('');
+          return;
+        }
+        const s = escapeLiteral(scope);
+        const [ot, ti, tr, tser, bn, lb, cy, sy, ch, en] = await Promise.all([
+          query<{ v: number | null }>(
+            `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
+              ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
+              ` WHERE version = '${v}' AND year = ${LATEST_FULL}`,
+          ),
+          query<{ v: number | null }>(
+            `SELECT CAST(per_running AS DOUBLE) AS v FROM tightness WHERE version = '${v}'` +
+              ` AND scope = 'adjusted' AND year = ${LATEST_FULL}`,
+          ),
+          query<TrialRow>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(n_starts AS DOUBLE) AS s,` +
+              ` CAST(n_running AS DOUBLE) AS r FROM trials_year WHERE scope = '${s}'` +
+              ` AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
+          ),
+          query<TightRow>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(per_running AS DOUBLE) AS pr,` +
+              ` CAST(per_start AS DOUBLE) AS ps FROM tightness WHERE version = '${v}'` +
+              ` AND scope = '${s}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
+          ),
+          query<BinRow>(
+            `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
+              ` FROM active_bins WHERE version = '${v}' GROUP BY 1`,
+          ),
+          query<LeaderRow>(
+            `SELECT CAST(rank AS INTEGER) AS rank, CAST(display_name AS VARCHAR) AS display_name,` +
+              ` CAST(deg AS VARCHAR) AS deg, CAST(site AS VARCHAR) AS site,` +
+              ` CAST(country AS VARCHAR) AS country, CAST(n_trials AS DOUBLE) AS n_trials,` +
+              ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
+              ` CAST(last_year AS INTEGER) AS last_year FROM leaderboard WHERE version = '${v}'` +
+              (leaderGeo === 'ALL'
+                ? ` AND scope = 'global'`
+                : ` AND scope = 'band' AND scope_value = '${escapeLiteral(leaderGeo)}'`) +
+              ` ORDER BY rank LIMIT 25`,
+          ),
+          query<TopRow>(
+            `SELECT CAST(country AS VARCHAR) AS name, CAST(SUM(n_active) AS DOUBLE) AS n` +
+              ` FROM country_year WHERE version = '${v}' AND year = ${LATEST_FULL}` +
+              ` GROUP BY 1 ORDER BY 2 DESC LIMIT 15`,
+          ),
+          query<TopRow>(
+            `SELECT CAST(state AS VARCHAR) AS name, CAST(SUM(n_active) AS DOUBLE) AS n` +
+              ` FROM us_state_year WHERE version = '${v}' AND year = ${LATEST_FULL}` +
+              ` GROUP BY 1 ORDER BY 2 DESC LIMIT 10`,
+          ),
+          query<CohortRow>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(n_persons AS DOUBLE) AS n_persons,` +
+              ` CAST(mean_trials AS DOUBLE) AS mean_trials, CAST(median_trials AS DOUBLE) AS median_trials,` +
+              ` CAST(one_trial_share AS DOUBLE) AS one_trial_share FROM cohort_summary` +
+              ` WHERE version = '${v}' AND cohort >= ${YEAR_MIN} ORDER BY 1`,
+          ),
+          query<EntRow>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(type AS VARCHAR) AS type,` +
+              ` CAST(SUM(n_entities) AS DOUBLE) AS n FROM irb_cro_year` +
+              ` WHERE type IN ('IRB', 'CRO') AND year BETWEEN ${y0} AND ${y1}` +
+              ` GROUP BY 1, 2 ORDER BY 1, 2`,
+          ),
+        ]);
+        if (cancelled) return;
+        setKpi({
+          active: num0(k[0]?.active),
+          active09: num0(k[0]?.active09),
+          nnew: num0(k[0]?.nnew),
+          oneTrial: num(ot[0]?.v),
+          tight: num(ti[0]?.v),
+        });
+        setTrials([
+          { label: 'Starts', color: '#1f77b4', points: tr.map((r) => ({ x: r.y, y: num(r.s) })) },
+          ...(scope === 'adjusted'
+            ? [{ label: 'Running', color: '#ff7f0e', points: tr.map((r) => ({ x: r.y, y: num(r.r) })) }]
+            : []),
+        ]);
+        setTight([
+          { label: 'Active per running trial', color: '#d62728', points: tser.map((r) => ({ x: r.y, y: num(r.pr) })) },
+          { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
+        ]);
+        const binOrder = ['1', '2', '3-5', '6-10', '11+'];
+        setBins(
+          bn
+            .map((r) => ({ category: r.bin, v: num0(r.n) }))
+            .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
+        );
+        setLeaders(lb);
+        setCountries(cy.map((r) => ({ category: r.name, v: num0(r.n) })));
+        setStates(sy.map((r) => ({ category: r.name, v: num0(r.n) })));
+        setCohorts(ch);
+        setEnts(
+          ['IRB', 'CRO'].map((t, i) => ({
+            label: t,
+            color: ['#2ca02c', '#9467bd'][i],
+            points: en.filter((r) => r.type === t).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
+        );
+        setNote('');
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`Query failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, version, band, y0, y1, scope, leaderGeo, demo]);
+
+  if (status === 'loading') {
+    return (
+      <div className="wrap">
+        <p className="muted">Loading engine and data…</p>
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="wrap">
+        <h1>Investigator Supply Explorer</h1>
+        <p className="error">Could not load: {error}</p>
+        <p className="muted">
+          Run the pipeline first: <code>uv run python pipeline/build.py</code> from the repo root.
+        </p>
+      </div>
+    );
+  }
+
+  const growth =
+    kpi && kpi.active09 > 0 ? (((kpi.active - kpi.active09) / kpi.active09) * 100).toFixed(1) : null;
+  const defs = manifest?.definitions ?? {};
+  const sources = (manifest?.sources ?? {}) as {
+    bmis_file?: string;
+    ctgov?: { meta?: { api_version?: { dataTimestamp?: string } } };
+  };
+  const ctgovTs = sources.ctgov?.meta?.api_version?.dataTimestamp?.slice(0, 10) ?? '—';
+
+  return (
+    <div className="wrap">
+      <header>
+        <div>
+          <h1>Investigator Supply Explorer</h1>
+          <p className="muted">
+            {demo ? 'Demo sample (strict, yearly geo)' : 'FDA BMIS investigators vs. industry trials'}
+            {manifest && !demo && ` · built ${manifest.generated_at.slice(0, 16).replace('T', ' ')} UTC`}
+          </p>
+        </div>
+        <span className={demo ? 'badge demo' : 'badge'}>{demo ? 'demo data' : 'full lake'}</span>
+      </header>
+
+      {demo && (
+        <p className="banner">
+          Showing the committed demo sample. Run <code>uv run python pipeline/build.py</code> to build and
+          explore the full lake locally.
+        </p>
+      )}
+      {note && <p className="banner">{note}</p>}
+
+      <section className="panel controls">
+        <div className="filters">
+          <div className="seg" role="group" aria-label="Person version">
+            {VERSIONS.map((v) => (
+              <button
+                key={v}
+                className={version === v ? 'active' : ''}
+                onClick={() => setVersion(v)}
+                title={manifest?.versions?.[v] ?? v}
+              >
+                {VERSION_LABEL[v]}
+              </button>
+            ))}
+          </div>
+          <label>
+            Geography
+            <select value={band} onChange={(e) => setBand(e.target.value)}>
+              <option value="all">All bands</option>
+              {BANDS.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            From
+            <select value={y0} onChange={(e) => setY0(Number(e.target.value))}>
+              {years().map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            To
+            <select value={y1} onChange={(e) => setY1(Number(e.target.value))}>
+              {years().map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="seg" role="group" aria-label="Trial scope">
+            {(['adjusted', 'unadjusted'] as const).map((s) => (
+              <button key={s} className={scope === s ? 'active' : ''} onClick={() => setScope(s)}>
+                {s === 'adjusted' ? 'US trials' : 'Global trials'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="filters future">
+          <label title="BMIS carries no therapeutic-area field; needs a linked source (parked)">
+            Therapeutic area
+            <select disabled value="">
+              <option value="">Needs linked source</option>
+            </select>
+          </label>
+          <label title="BMIS carries no phase field; needs a linked source (parked)">
+            Trial phase
+            <select disabled value="">
+              <option value="">Needs linked source</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="kpis four">
+        <div className="kpi">
+          <span className="kpi-label">Active investigators, {LATEST_FULL}</span>
+          <span className="kpi-value">{kpi ? fmtInt.format(kpi.active) : '—'}</span>
+          <span className="kpi-label">{growth !== null ? `${growth}% vs 2009` : ' '}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">New in {LATEST_FULL}</span>
+          <span className="kpi-value">
+            {kpi ? fmtInt.format(kpi.nnew) : '—'}
+          </span>
+          <span className="kpi-label">
+            {kpi && kpi.active > 0 ? pct(kpi.nnew / kpi.active) + ' of active' : ' '}
+          </span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">One-trial share of active (global)</span>
+          <span className="kpi-value">{kpi ? pct(kpi.oneTrial) : '—'}</span>
+          <span className="kpi-label">{VERSION_LABEL[version]} persons</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Active per running trial, US</span>
+          <span className="kpi-value">{kpi && kpi.tight !== null ? kpi.tight.toFixed(2) : '—'}</span>
+          <span className="kpi-label">adjusted scope</span>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Active investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
+        <MultiLineChart series={geo} />
+        <p className="caption">
+          Active = ≥1 BMIS receipt in year · {VERSION_LABEL[version]} persons · 2008 (ramp-up) and 2026
+          (thru Aug) are partial.
+        </p>
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>New vs. returning</h2>
+          <StackedBars data={newret} labels={['Returning', 'New']} />
+          <p className="caption">New = first receipt ever in that year (2008–09 inflated by file start).</p>
+        </div>
+        <div className="panel">
+          <h2>Industry trials per year ({scope})</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline for trial data.</p>
+          ) : (
+            <>
+              <MultiLineChart series={trials} />
+              <p className="caption">
+                {scope === 'adjusted'
+                  ? 'US-site industry interventional trials.'
+                  : 'Global industry interventional trials.'}{' '}
+                Starts by Start Date; running = start ≤ year, completion ≥ year or still active.
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>Tightness: investigators per trial</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline for trial data.</p>
+          ) : (
+            <>
+              <MultiLineChart series={tight} />
+              <p className="caption">
+                Descriptive workload proxy only — supply and trial counts are not independent.
+              </p>
+            </>
+          )}
+        </div>
+        <div className="panel">
+          <h2>Lifetime trial bins (person-years)</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline for distribution data.</p>
+          ) : (
+            <>
+              <CategoryBars data={bins} />
+              <p className="caption">One row = one IND reference; bin by person lifetime total.</p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Leaderboard: most lifetime IND references</h2>
+        <div className="filters">
+          <label>
+            Board
+            <select value={leaderGeo} onChange={(e) => setLeaderGeo(e.target.value)}>
+              <option value="ALL">Global top 25</option>
+              {BANDS.map((b) => (
+                <option key={b} value={b}>
+                  {b} top 25
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="muted">Names exactly as published in BMIS. Counts are IND references, not confirmed distinct trials.</span>
+        </div>
+        {demo ? (
+          <p className="muted">Run the pipeline for leaderboard data.</p>
+        ) : leaders.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Investigator</th>
+                  <th>Deg</th>
+                  <th>Site</th>
+                  <th>Country</th>
+                  <th>IND refs</th>
+                  <th>Years</th>
+                  <th>Span</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaders.map((r) => (
+                  <tr key={r.rank}>
+                    <td>{r.rank}</td>
+                    <td>{r.display_name}</td>
+                    <td>{r.deg ?? ''}</td>
+                    <td>{r.site ?? ''}</td>
+                    <td>{r.country}</td>
+                    <td>{fmtInt.format(r.n_trials)}</td>
+                    <td>{r.n_years}</td>
+                    <td>
+                      {r.first_year}–{r.last_year}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">No rows.</p>
+        )}
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>Top countries, {LATEST_FULL}</h2>
+          {demo ? <p className="muted">Run the pipeline.</p> : <CategoryBars data={countries} />}
+        </div>
+        <div className="panel">
+          <h2>Top US states, {LATEST_FULL}</h2>
+          {demo ? <p className="muted">Run the pipeline.</p> : <CategoryBars data={states} />}
+        </div>
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>Cohort detail (first-seen year)</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline.</p>
+          ) : (
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cohort</th>
+                    <th>Persons</th>
+                    <th>Mean</th>
+                    <th>Median</th>
+                    <th>One-trial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((r) => (
+                    <tr key={r.cohort}>
+                      <td>{r.cohort}</td>
+                      <td>{fmtInt.format(r.n_persons)}</td>
+                      <td>{r.mean_trials.toFixed(2)}</td>
+                      <td>{r.median_trials}</td>
+                      <td>{pct(r.one_trial_share)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="panel">
+          <h2>IRB / CRO entities per year</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline.</p>
+          ) : (
+            <>
+              <MultiLineChart series={ents} />
+              <p className="caption">Review-capacity context; institutions, not investigators.</p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Definitions</h2>
+        <dl className="defs">
+          {DEF_TITLES.map(([k, t]) => (
+            <div key={k}>
+              <dt>{t}</dt>
+              <dd>{defs[k] ?? '—'}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <footer className="muted">
+        Queried in-browser with DuckDB-WASM · no backend · BMIS {sources.bmis_file ?? 'file'} · CT.gov
+        snapshot {ctgovTs} · {demo ? 'demo-investigators.csv' : 'parquet lake'}
+      </footer>
+    </div>
+  );
+}
