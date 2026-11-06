@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { createViews, escapeLiteral, loadManifest, query } from './duckdb';
 import type { Manifest } from './duckdb';
-import { CategoryBars, MultiLineChart, StackedBars } from './charts';
-import type { LineSeries } from './charts';
+import { CategoryBars, MultiLineChart, StackedBars, VintageHeatmap } from './charts';
+import type { LineSeries, VintageRow } from './charts';
 import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
 import About from './About';
@@ -40,8 +40,7 @@ const VERSION_LABEL: Record<Version, string> = {
 const YEAR_MIN = 2008;
 const YEAR_MAX = 2026;
 const LATEST_FULL = 2025;
-const RET_COHORTS = [2009, 2013, 2017, 2021];
-const RET_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
+const VINTAGE_KMAX = 10;
 
 interface GeoRow {
   y: number;
@@ -121,7 +120,7 @@ const DEF_TITLES: [string, string][] = [
   ['active', 'Active / new / returning'],
   ['one_trial', 'One-trial'],
   ['trials_per_year', 'Trials/year rate'],
-  ['retention', 'Cohort retention'],
+  ['retention', 'Vintage attrition'],
   ['concentration', 'Work concentration'],
   ['scope_unadjusted', 'Unadjusted benchmark'],
   ['scope_adjusted', 'Adjusted benchmark'],
@@ -211,7 +210,7 @@ export default function App() {
   const [trials, setTrials] = useState<LineSeries[]>([]);
   const [tight, setTight] = useState<LineSeries[]>([]);
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
-  const [ret, setRet] = useState<LineSeries[]>([]);
+  const [ret, setRet] = useState<VintageRow[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [countries, setCountries] = useState<{ category: string; v: number }[]>([]);
@@ -335,10 +334,10 @@ export default function App() {
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
               ` FROM active_bins WHERE version = '${v}' GROUP BY 1`,
           ),
-          query<{ cohort: number; k: number; v: number }>(
+          query<{ cohort: number; k: number; v: number; n: number }>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
-              ` CAST(retention AS DOUBLE) AS v FROM retention WHERE version = '${v}'` +
-              ` AND cohort IN (2009, 2013, 2017, 2021) ORDER BY 1, 2`,
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n FROM retention` +
+              ` WHERE version = '${v}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX} ORDER BY 1, 2`,
           ),
           query<{ y: number; t1: number; t10: number; g: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(top1_share AS DOUBLE) AS t1,` +
@@ -405,12 +404,23 @@ export default function App() {
             .map((r) => ({ category: r.bin, v: num0(r.n) }))
             .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
         );
+        const byVintage = new Map<number, { n: number; m: Map<number, number> }>();
+        for (const r of rt) {
+          let e = byVintage.get(r.cohort);
+          if (!e) {
+            e = { n: num0(r.n), m: new Map() };
+            byVintage.set(r.cohort, e);
+          }
+          e.m.set(r.k, num0(r.v) * 100);
+        }
         setRet(
-          RET_COHORTS.map((c, i) => ({
-            label: `${c} cohort`,
-            color: RET_COLORS[i % RET_COLORS.length],
-            points: rt.filter((r) => r.cohort === c).map((r) => ({ x: r.k, y: num0(r.v) * 100 })),
-          })),
+          [...byVintage.entries()]
+            .sort((a, b) => a[0] - b[0])
+            .map(([c, e]) => ({
+              cohort: c,
+              n: e.n,
+              cells: Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
+            })),
         );
         const concDefs: { label: string; color: string; key: 't1' | 't10' | 'g' }[] = [
           { label: 'Top 1% share', color: '#d62728', key: 't1' },
@@ -1091,15 +1101,15 @@ export default function App() {
       </section>
 
           <section className="panel">
-            <h2>Cohort retention</h2>
+            <h2>Vintage attrition</h2>
             {demo ? (
               <p className="muted">Run the pipeline for retention data.</p>
             ) : (
               <>
-                <MultiLineChart series={ret} />
+                <VintageHeatmap rows={ret} kMax={VINTAGE_KMAX} />
                 <p className="caption">
-                  Share of each first-seen cohort still active k years later (percent). Right-censored:
-                  recent cohorts show fewer years.
+                  Share of each first-seen vintage still active k years later (percent). Gray cells are
+                  right-censored (vintage too recent to observe). 2008 excluded: file ramp-up distorts the base.
                 </p>
               </>
             )}

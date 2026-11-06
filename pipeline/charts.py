@@ -6,11 +6,12 @@ import textwrap
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
+from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from aggregate import BIN_ORDER, DEFINITIONS
 from geo_bands import BAND_ORDER
@@ -120,20 +121,31 @@ def chart_distribution(abins: pd.DataFrame, out: Path) -> None:
 
 
 def chart_retention(ret: pd.DataFrame, out: Path) -> None:
-    d = ret[ret["version"] == "strict"]
-    fig, ax = plt.subplots(figsize=(10, 4.8))
-    for c, color in zip([2009, 2013, 2017, 2021],
-                        ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]):
-        s = d[d["cohort"] == c].sort_values("k")
-        ax.plot(s["k"], s["retention"] * 100, marker="o", ms=3,
-                label=f"{c} cohort (n={int(s['n_cohort'].iloc[0]):,})",
-                color=color)
-    ax.set_title("Cohort retention: % still active k years after first seen (Strict)")
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax.set_xlabel("Years since first receipt (k)")
-    ax.set_ylabel("% of cohort active")
-    ax.legend(fontsize=8)
-    fig.tight_layout(rect=(0, 0.14, 1, 1))
+    d = ret[(ret["version"] == "strict") & (ret["cohort"] >= 2009)
+            & (ret["cohort"] <= 2025) & (ret["k"] <= 10)]
+    piv = (d.pivot_table(index="cohort", columns="k", values="retention",
+                         aggfunc="first")
+           .reindex(index=range(2009, 2026), columns=range(0, 11)))
+    nmap = d.groupby("cohort")["n_cohort"].first()
+    fig, ax = plt.subplots(figsize=(10, 6.4))
+    vals = piv.to_numpy() * 100
+    cmap = plt.cm.Blues.copy()
+    cmap.set_bad("0.92")
+    im = ax.imshow(np.ma.masked_invalid(vals), cmap=cmap, vmin=0, vmax=100,
+                   aspect="auto")
+    for i in range(vals.shape[0]):
+        for j in range(vals.shape[1]):
+            v = vals[i, j]
+            if np.isnan(v):
+                continue
+            ax.text(j, i, f"{v:.1f}", ha="center", va="center", fontsize=6,
+                    color="white" if v > 50 else "black")
+    ax.set_xticks(range(11), [f"+{k}y" for k in range(11)])
+    ax.set_yticks(range(len(piv.index)),
+                  [f"{c} (n={int(nmap.get(c, 0)):,})" for c in piv.index])
+    ax.set_title("Vintage attrition: % of each first-seen vintage still active (Strict)")
+    fig.colorbar(im, ax=ax, label="% active", shrink=0.85)
+    fig.tight_layout(rect=(0, 0.13, 1, 1))
     _caption(fig, "DEFINITIONS: " + DEFINITIONS["retention"] + " " +
              DEFINITIONS["person_strict"])
     fig.savefig(out / "retention.png", bbox_inches="tight")
