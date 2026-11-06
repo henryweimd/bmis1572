@@ -132,6 +132,7 @@ const DEF_TITLES: [string, string][] = [
   ['irb', 'IRB board grouping'],
   ['site', 'Site definition'],
   ['site_churn', 'Site roster churn'],
+  ['site_xcheck', 'CT.gov cross-check (experimental)'],
 ];
 
 function years(): number[] {

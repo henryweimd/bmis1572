@@ -103,6 +103,7 @@ export default function SiteTab({
   const [info, setInfo] = useState<SiteInfo | null>(null);
   const [detail, setDetail] = useState<{ y: number; invs: number; joins: number; ends: number }[]>([]);
   const [roster, setRoster] = useState<{ name: string; country: string; n: number }[]>([]);
+  const [xc, setXc] = useState<{ n: number; ns: number; j: number; samp: string; fac: string; sib: number } | null>(null);
   const [note, setNote] = useState('');
 
   const yearOpts: number[] = [];
@@ -193,6 +194,7 @@ export default function SiteTab({
     if (!ready || demo || !sel) {
       setInfo(null);
       setDetail([]);
+      setXc(null);
       return;
     }
     let cancelled = false;
@@ -200,7 +202,7 @@ export default function SiteTab({
       try {
         const col = ver === 'strict' ? 'site_strict' : 'site_merged';
         const yr = 'EXTRACT(YEAR FROM CAST(rcvd AS DATE))';
-        const [inf, yy, pr] = await Promise.all([
+        const [inf, yy, pr, xq] = await Promise.all([
           query<SiteInfo>(
             `SELECT CAST(display_name AS VARCHAR) AS name, CAST(display_addr AS VARCHAR) AS addr,` +
               ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
@@ -218,6 +220,12 @@ export default function SiteTab({
             `SELECT CAST(MIN(${yr}) AS INTEGER) AS f, CAST(MAX(${yr}) AS INTEGER) AS l` +
               ` FROM person_receipts WHERE ${col} = ${sel.n} GROUP BY person_id`,
           ),
+          query<{ n: number; ns: number; j: number; samp: string; fac: string; sib: number }>(
+            `SELECT CAST(n_plausible AS INTEGER) AS n, CAST(n_strong AS INTEGER) AS ns,` +
+              ` CAST(best_j AS DOUBLE) AS j, CAST(sample AS VARCHAR) AS samp,` +
+              ` CAST(sample_fac AS VARCHAR) AS fac, CAST(n_sibling_sites AS INTEGER) AS sib` +
+              ` FROM site_ctgov_xcheck WHERE version = '${ver}' AND site_n = ${sel.n}`,
+          ),
         ]);
         if (cancelled) return;
         setInfo(inf[0] ?? null);
@@ -228,6 +236,7 @@ export default function SiteTab({
           ends.set(r.l, (ends.get(r.l) ?? 0) + 1);
         }
         setDetail(yy.map((r) => ({ y: r.y, invs: num0(r.invs), joins: joins.get(r.y) ?? 0, ends: ends.get(r.y) ?? 0 })));
+        setXc(xq[0] ? { n: num0(xq[0].n), ns: num0(xq[0].ns), j: num0(xq[0].j), samp: xq[0].samp, fac: xq[0].fac, sib: num0(xq[0].sib) } : null);
       } catch (e) {
         if (cancelled) return;
         setNote(`Site detail failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -569,6 +578,25 @@ export default function SiteTab({
               { label: 'Last seen', color: '#d62728', points: detail.map((d) => ({ x: d.y, y: d.ends })) },
             ]}
           />
+          <h3>CT.gov cross-check (experimental, US only)</h3>
+          {xc ? (
+            <p>
+              {fmtInt.format(xc.n)} plausible industry trials ({fmtInt.format(xc.ns)} strong), shared across{' '}
+              {xc.sib} {xc.sib === 1 ? 'address' : 'addresses'} of this institution — e.g. matched facility “
+              {xc.fac}”. Sample:{' '}
+              {xc.samp.split(';').map((nct, i) => (
+                <span key={nct}>
+                  {i > 0 && ', '}
+                  <a href={`https://clinicaltrials.gov/study/${nct}`} target="_blank" rel="noreferrer">
+                    {nct}
+                  </a>
+                </span>
+              ))}
+              . Counts are institution × city, not address-level (see Definitions: site_xcheck).
+            </p>
+          ) : (
+            <p className="muted">No CT.gov facility match for this site (non-US, generic, or unmatched name).</p>
+          )}
           <h3>
             Roster,{' '}
             <select value={ry} onChange={(e) => setRy(Number(e.target.value))}>
