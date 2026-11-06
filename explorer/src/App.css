@@ -346,3 +346,56 @@ footer {
   max-height: 320px;
   overflow-y: auto;
 }
+
+.chart-wrap {
+  position: relative;
+}
+
+.tick-x {
+  font-size: 10px;
+}
+
+.grid-x {
+  opacity: 0.55;
+}
+
+.crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.tooltip {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  pointer-events: none;
+  min-width: 150px;
+  max-width: 260px;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.tooltip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooltip-val {
+  margin-left: auto;
+  padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
