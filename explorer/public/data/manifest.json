@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T01:19:55.428919+00:00",
+  "generated_at": "2026-11-06T01:24:47.814730+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -731,6 +731,46 @@
     }
   },
   "datasets": [
+    {
+      "id": "person_index",
+      "title": "Investigator search index (strict persons)",
+      "format": "parquet",
+      "files": [
+        "data/person_index.parquet"
+      ],
+      "row_count": 288855,
+      "columns": [
+        "person_id",
+        "display_name",
+        "country",
+        "band",
+        "state",
+        "n_trials",
+        "n_years",
+        "first_year",
+        "last_year",
+        "name_key"
+      ]
+    },
+    {
+      "id": "person_receipts",
+      "title": "Per-investigator receipt history, newest first",
+      "format": "parquet",
+      "files": [
+        "data/person_receipts.parquet"
+      ],
+      "row_count": 1108619,
+      "columns": [
+        "rcvd",
+        "site",
+        "city",
+        "state",
+        "zip",
+        "country",
+        "invn",
+        "person_id"
+      ]
+    },
     {
       "id": "investigators_year_geo",
       "title": "Active investigators by year, band, version",

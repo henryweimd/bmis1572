@@ -206,6 +206,50 @@ select {
   padding: 6px 10px;
 }
 
+input[type='search'] {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 220px;
+}
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  filter: brightness(0.97);
+}
+
+tr.pickable {
+  cursor: pointer;
+}
+
+tr.pickable:hover td {
+  background: var(--accent-soft);
+}
+
+tr.picked td {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 14px;
+  margin: 14px 0 8px;
+}
+
 .table-scroll {
   overflow-x: auto;
 }

@@ -124,6 +124,36 @@ function years(): number[] {
   return out;
 }
 
+/** Client twin of the pipeline's name_key normalization (ASCII-folded,
+ * uppercase, letters/spaces only) — output is LIKE-safe by construction. */
+function normName(s: string): string {
+  return s
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+interface HitRow {
+  person_id: string;
+  display_name: string;
+  country: string;
+  n_trials: number;
+  n_years: number;
+  first_year: number;
+  last_year: number;
+}
+interface RcRow {
+  rcvd: string;
+  site: string | null;
+  city: string | null;
+  state: string | null;
+  country: string;
+  invn: string;
+}
+
 export default function App() {
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState('');
@@ -149,6 +179,12 @@ export default function App() {
   const [states, setStates] = useState<{ category: string; v: number }[]>([]);
   const [cohorts, setCohorts] = useState<CohortRow[]>([]);
   const [ents, setEnts] = useState<LineSeries[]>([]);
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<HitRow[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
+  const [receipts, setReceipts] = useState<RcRow[]>([]);
+  const [rcTotal, setRcTotal] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -317,6 +353,51 @@ export default function App() {
       cancelled = true;
     };
   }, [status, version, band, y0, y1, scope, leaderGeo, demo]);
+
+  const runSearch = async () => {
+    if (demo) return;
+    const needle = normName(q);
+    if (!needle) {
+      setHits([]);
+      setSearched(false);
+      return;
+    }
+    try {
+      const r = await query<HitRow>(
+        `SELECT CAST(person_id AS VARCHAR) AS person_id, CAST(display_name AS VARCHAR) AS display_name,` +
+          ` CAST(country AS VARCHAR) AS country, CAST(n_trials AS INTEGER) AS n_trials,` +
+          ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
+          ` CAST(last_year AS INTEGER) AS last_year FROM person_index` +
+          ` WHERE name_key LIKE '%${needle}%' ORDER BY n_trials DESC LIMIT 50`,
+      );
+      setHits(r);
+      setSearched(true);
+      setSel(null);
+      setReceipts([]);
+    } catch (e) {
+      setNote(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const selectPerson = async (id: string, name: string) => {
+    setSel({ id, name });
+    try {
+      const pid = escapeLiteral(id);
+      const [rows, cnt] = await Promise.all([
+        query<RcRow>(
+          `SELECT CAST(rcvd AS VARCHAR) AS rcvd, CAST(site AS VARCHAR) AS site,` +
+            ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
+            ` CAST(country AS VARCHAR) AS country, CAST(invn AS VARCHAR) AS invn` +
+            ` FROM person_receipts WHERE person_id = '${pid}' ORDER BY rcvd DESC LIMIT 1000`,
+        ),
+        query<{ n: number }>(`SELECT COUNT(*) AS n FROM person_receipts WHERE person_id = '${pid}'`),
+      ]);
+      setReceipts(rows);
+      setRcTotal(num0(cnt[0]?.n));
+    } catch (e) {
+      setNote(`Receipts query failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   if (status === 'loading') {
     return (
@@ -540,6 +621,107 @@ export default function App() {
             </>
           )}
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Search investigators</h2>
+        {demo ? (
+          <p className="muted">Run the pipeline for investigator search.</p>
+        ) : (
+          <>
+            <div className="filters">
+              <label>
+                Name
+                <input
+                  type="search"
+                  value={q}
+                  placeholder="e.g. Smith John"
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') runSearch();
+                  }}
+                />
+              </label>
+              <button className="btn" onClick={runSearch}>
+                Search
+              </button>
+              <span className="muted">Strict persons · top 50 by IND references · names as published</span>
+            </div>
+            {searched && !hits.length && <p className="muted">No investigators match.</p>}
+            {!!hits.length && (
+              <div className="table-scroll short">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Investigator</th>
+                      <th>Country</th>
+                      <th>IND refs</th>
+                      <th>Years</th>
+                      <th>Span</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hits.map((r) => (
+                      <tr
+                        key={r.person_id}
+                        className={sel?.id === r.person_id ? 'picked' : 'pickable'}
+                        onClick={() => selectPerson(r.person_id, r.display_name)}
+                      >
+                        <td>{r.display_name}</td>
+                        <td>{r.country}</td>
+                        <td>{fmtInt.format(r.n_trials)}</td>
+                        <td>{r.n_years}</td>
+                        <td>
+                          {r.first_year}–{r.last_year}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {sel && (
+              <>
+                <h3>
+                  {sel.name} <span className="muted">· {fmtInt.format(rcTotal)} receipts, newest first</span>
+                </h3>
+                <div className="table-scroll short">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Receipt date</th>
+                        <th>Site</th>
+                        <th>City</th>
+                        <th>State</th>
+                        <th>Country</th>
+                        <th>Reviewer ID</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receipts.map((r, i) => (
+                        <tr key={i}>
+                          <td>{r.rcvd}</td>
+                          <td>{r.site ?? ''}</td>
+                          <td>{r.city ?? ''}</td>
+                          <td>{r.state ?? ''}</td>
+                          <td>{r.country}</td>
+                          <td>{r.invn}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {rcTotal > receipts.length && (
+                  <p className="muted">Showing latest {receipts.length} of {fmtInt.format(rcTotal)}.</p>
+                )}
+                <p className="caption">
+                  One row = one IND submission reference naming this investigator (date + site as filed).
+                  BMIS carries no trial identifiers, so rows cannot be mapped to specific trials.
+                </p>
+              </>
+            )}
+          </>
+        )}
       </section>
 
       <section className="panel">
