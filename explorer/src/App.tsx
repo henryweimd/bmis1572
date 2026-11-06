@@ -73,6 +73,7 @@ interface LeaderRow {
   n_years: number;
   first_year: number;
   last_year: number;
+  tpy: number;
 }
 interface TopRow {
   name: string;
@@ -113,6 +114,7 @@ const DEF_TITLES: [string, string][] = [
   ['trials_per_person', 'Trials per person'],
   ['active', 'Active / new / returning'],
   ['one_trial', 'One-trial'],
+  ['trials_per_year', 'Trials/year rate'],
   ['scope_unadjusted', 'Unadjusted benchmark'],
   ['scope_adjusted', 'Adjusted benchmark'],
   ['starts_running', 'Starts vs. running'],
@@ -167,6 +169,7 @@ interface CroTopRow {
   top_country: string;
   n_variants: number;
   example_site: string | null;
+  tpy: number;
 }
 
 export default function App() {
@@ -182,6 +185,7 @@ export default function App() {
   const [y1, setY1] = useState(YEAR_MAX);
   const [scope, setScope] = useState<'adjusted' | 'unadjusted'>('adjusted');
   const [leaderGeo, setLeaderGeo] = useState('ALL');
+  const [leaderSort, setLeaderSort] = useState<'total' | 'rate'>('total');
 
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [geo, setGeo] = useState<LineSeries[]>([]);
@@ -205,6 +209,7 @@ export default function App() {
   const [cy0, setCy0] = useState(YEAR_MIN);
   const [cy1, setCy1] = useState(YEAR_MAX);
   const [croSel, setCroSel] = useState('all');
+  const [croSort, setCroSort] = useState<'total' | 'rate'>('total');
   const [croOpts, setCroOpts] = useState<{ cro: string; n: number }[]>([]);
   const [ckpi, setCkpi] = useState<{ active: number; receipts: number; receipts09: number; companies: number } | null>(null);
   const [cseries, setCseries] = useState<LineSeries[]>([]);
@@ -305,7 +310,8 @@ export default function App() {
               ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
               ` CAST(country AS VARCHAR) AS country, CAST(n_trials AS DOUBLE) AS n_trials,` +
               ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
-              ` CAST(last_year AS INTEGER) AS last_year FROM leaderboard WHERE version = '${v}'` +
+              ` CAST(last_year AS INTEGER) AS last_year, CAST(tpy AS DOUBLE) AS tpy` +
+              ` FROM leaderboard WHERE version = '${v}' AND metric = '${leaderSort === 'rate' ? 'rate' : 'receipts'}'` +
               (leaderGeo === 'ALL'
                 ? ` AND scope = 'global'`
                 : ` AND scope = 'band' AND scope_value = '${escapeLiteral(leaderGeo)}'`) +
@@ -378,7 +384,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [status, version, band, y0, y1, scope, leaderGeo, demo]);
+  }, [status, version, band, y0, y1, scope, leaderGeo, leaderSort, demo]);
 
   useEffect(() => {
     if (status !== 'ready' || tab !== 'cro' || demo) return;
@@ -403,7 +409,9 @@ export default function App() {
               ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
               ` CAST(last_year AS INTEGER) AS last_year, CAST(n_countries AS INTEGER) AS n_countries,` +
               ` CAST(top_country AS VARCHAR) AS top_country, CAST(n_variants AS INTEGER) AS n_variants,` +
-              ` CAST(example_site AS VARCHAR) AS example_site FROM cro_index ORDER BY n_receipts DESC LIMIT 25`,
+              ` CAST(example_site AS VARCHAR) AS example_site,` +
+              ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM cro_index` +
+              ` ORDER BY ${croSort === 'rate' ? 'tpy DESC' : 'n_receipts DESC'} LIMIT 25`,
           ),
           query<{ y: number; n: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_entities) AS DOUBLE) AS n FROM cro_year` +
@@ -458,7 +466,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [status, tab, croBand, cy0, cy1, croSel, demo]);
+  }, [status, tab, croBand, cy0, cy1, croSel, croSort, demo]);
 
   const runSearch = async () => {
     if (demo) return;
@@ -783,6 +791,7 @@ export default function App() {
                       <th>Investigator</th>
                       <th>Country</th>
                       <th>IND refs</th>
+                      <th>/yr</th>
                       <th>Years</th>
                       <th>Span</th>
                     </tr>
@@ -797,6 +806,7 @@ export default function App() {
                         <td>{r.display_name}</td>
                         <td>{r.country}</td>
                         <td>{fmtInt.format(r.n_trials)}</td>
+                        <td>{(r.n_trials / (r.last_year - r.first_year + 1)).toFixed(2)}</td>
                         <td>{r.n_years}</td>
                         <td>
                           {r.first_year}–{r.last_year}
@@ -852,8 +862,24 @@ export default function App() {
       </section>
 
       <section className="panel">
-        <h2>Leaderboard: most lifetime IND references</h2>
+        <h2>{leaderSort === 'rate' ? 'Leaderboard: highest trials/year rate' : 'Leaderboard: most lifetime IND references'}</h2>
         <div className="filters">
+          <div className="seg" role="group" aria-label="Leaderboard sort">
+            <button
+              className={leaderSort === 'total' ? 'active' : ''}
+              onClick={() => setLeaderSort('total')}
+              title="Rank by lifetime IND references"
+            >
+              Total refs
+            </button>
+            <button
+              className={leaderSort === 'rate' ? 'active' : ''}
+              onClick={() => setLeaderSort('rate')}
+              title="Rank by trials/year: lifetime refs over inclusive first-last span"
+            >
+              Trials/year
+            </button>
+          </div>
           <label>
             Board
             <select value={leaderGeo} onChange={(e) => setLeaderGeo(e.target.value)}>
@@ -882,6 +908,7 @@ export default function App() {
                   <th>State</th>
                   <th>Country</th>
                   <th>IND refs</th>
+                  <th>/yr</th>
                   <th>Years</th>
                   <th>Span</th>
                 </tr>
@@ -897,6 +924,7 @@ export default function App() {
                     <td>{r.state && r.state !== 'NG' ? r.state : ''}</td>
                     <td>{r.country}</td>
                     <td>{fmtInt.format(r.n_trials)}</td>
+                    <td>{r.tpy.toFixed(2)}</td>
                     <td>{r.n_years}</td>
                     <td>
                       {r.first_year}–{r.last_year}
@@ -1062,13 +1090,32 @@ export default function App() {
               </section>
 
               <section className="panel">
-                <h2>Top companies by lifetime receipts (global)</h2>
+                <h2>{croSort === 'rate' ? 'Top companies by trials/year rate (global)' : 'Top companies by lifetime receipts (global)'}</h2>
+                <div className="filters">
+                  <div className="seg" role="group" aria-label="Companies sort">
+                    <button
+                      className={croSort === 'total' ? 'active' : ''}
+                      onClick={() => setCroSort('total')}
+                      title="Rank by lifetime receipts"
+                    >
+                      Total refs
+                    </button>
+                    <button
+                      className={croSort === 'rate' ? 'active' : ''}
+                      onClick={() => setCroSort('rate')}
+                      title="Rank by receipts/year: lifetime refs over inclusive first-last span"
+                    >
+                      Trials/year
+                    </button>
+                  </div>
+                </div>
                 <div className="table-scroll">
                   <table>
                     <thead>
                       <tr>
                         <th>Company</th>
                         <th>Receipts</th>
+                        <th>/yr</th>
                         <th>Entities</th>
                         <th>Countries</th>
                         <th>Top country</th>
@@ -1082,6 +1129,7 @@ export default function App() {
                         <tr key={r.cro}>
                           <td>{r.cro}</td>
                           <td>{fmtInt.format(r.n_receipts)}</td>
+                          <td>{r.tpy.toFixed(2)}</td>
                           <td>{fmtInt.format(r.n_entities)}</td>
                           <td>{r.n_countries}</td>
                           <td>{r.top_country}</td>
