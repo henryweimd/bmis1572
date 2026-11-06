@@ -65,6 +65,8 @@ interface LeaderRow {
   display_name: string;
   deg: string | null;
   site: string | null;
+  city: string | null;
+  state: string | null;
   country: string;
   n_trials: number;
   n_years: number;
@@ -277,6 +279,7 @@ export default function App() {
           query<LeaderRow>(
             `SELECT CAST(rank AS INTEGER) AS rank, CAST(display_name AS VARCHAR) AS display_name,` +
               ` CAST(deg AS VARCHAR) AS deg, CAST(site AS VARCHAR) AS site,` +
+              ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
               ` CAST(country AS VARCHAR) AS country, CAST(n_trials AS DOUBLE) AS n_trials,` +
               ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
               ` CAST(last_year AS INTEGER) AS last_year FROM leaderboard WHERE version = '${v}'` +
@@ -751,6 +754,8 @@ export default function App() {
                   <th>Investigator</th>
                   <th>Deg</th>
                   <th>Site</th>
+                  <th>City</th>
+                  <th>State</th>
                   <th>Country</th>
                   <th>IND refs</th>
                   <th>Years</th>
@@ -764,6 +769,8 @@ export default function App() {
                     <td>{r.display_name}</td>
                     <td>{r.deg ?? ''}</td>
                     <td>{r.site ?? ''}</td>
+                    <td>{r.city ?? ''}</td>
+                    <td>{r.state && r.state !== 'NG' ? r.state : ''}</td>
                     <td>{r.country}</td>
                     <td>{fmtInt.format(r.n_trials)}</td>
                     <td>{r.n_years}</td>
