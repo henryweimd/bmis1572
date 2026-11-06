@@ -148,6 +148,21 @@ DEFINITIONS = {
         "cross-check caveats; multi-area studies count once per area; "
         "healthy-volunteer and unclassifiable conditions land in Other."
     ),
+    "china": (
+        "China CFDI registry extract (partial coverage, retrieved 2026-11-06): "
+        "investigators affiliated with filed drug-trial institutions. Person = "
+        "(name, institution) pair; bare names collide across institutions."
+    ),
+    "china_filing": (
+        "Filing year is the INSTITUTION's registration vintage, not "
+        "investigator activity: most institutions filed in a 2019-2020 bulk "
+        "wave. YoY reads as registry composition, never retention."
+    ),
+    "china_i18n": (
+        "ZH is authoritative. EN covers provinces, cities, roles, specialty "
+        "groups, top-30 sites (curated) and pattern-derived site/specialty "
+        "labels; investigator names stay in Chinese."
+    ),
 }
 
 

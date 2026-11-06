@@ -315,6 +315,54 @@ def chart_tightness_bands(tb: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_china_filing(fy: pd.DataFrame, out: Path) -> None:
+    d = fy.sort_values("year")
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(d["year"].astype(str), d["n_pairs"], color="#1f77b4", label="Pairs (vintage)")
+    ax.set_ylabel("Investigator-institution pairs")
+    ax2 = ax.twinx()
+    ax2.plot(d["year"].astype(str), d["cum_pairs"], marker="o", ms=4,
+             color="#d62728", label="Cumulative pairs")
+    ax2.yaxis.set_major_formatter(_comma)
+    ax.set_title("China registry by institution filing vintage")
+    ax.set_xlabel("Filing year (registration vintage, not activity)")
+    ax.yaxis.set_major_formatter(_comma)
+    ax.legend(fontsize=8, loc="upper left")
+    ax2.legend(fontsize=8, loc="upper right")
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["china"] + " " + DEFINITIONS["china_filing"])
+    fig.savefig(out / "china_filing_yoy.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_china_specialty(sy: pd.DataFrame, out: Path) -> None:
+    tot = sy.groupby("group_en")["n_pairs"].sum().sort_values(ascending=False).head(15)
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(tot.index, tot.values, color="#2ca02c")
+    ax.set_title("China registry: top specialty groups (pairs)")
+    ax.set_ylabel("Pairs")
+    ax.yaxis.set_major_formatter(_comma)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["china"] + " " + DEFINITIONS["china_i18n"])
+    fig.savefig(out / "china_specialty.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_china_province(py: pd.DataFrame, out: Path) -> None:
+    tot = py.groupby("province_en")["n_pairs"].sum().sort_values(ascending=False).head(15)
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(tot.index, tot.values, color="#ff7f0e")
+    ax.set_title("China registry: top provinces (pairs)")
+    ax.set_ylabel("Pairs")
+    ax.yaxis.set_major_formatter(_comma)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["china"] + " " + DEFINITIONS["china_i18n"])
+    fig.savefig(out / "china_province.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
@@ -330,4 +378,8 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     chart_tightness_bands(tables["tightness_band"], out)
+    if "cn_filing_year" in tables:
+        chart_china_filing(tables["cn_filing_year"], out)
+        chart_china_specialty(tables["cn_specialty_year"], out)
+        chart_china_province(tables["cn_province_year"], out)
     return sorted(p.name for p in out.glob("*.png"))

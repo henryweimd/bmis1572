@@ -5,6 +5,7 @@ import { CategoryBars, MultiLineChart, StackedBars, VintageHeatmap } from './cha
 import type { LineSeries, VintageRow } from './charts';
 import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
+import ChinaTab from './ChinaTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -135,6 +136,9 @@ const DEF_TITLES: [string, string][] = [
   ['site_xcheck', 'CT.gov cross-check (experimental)'],
   ['site_ta', 'Therapeutic-area mix (experimental)'],
   ['data_quality', 'Junk names & coverage'],
+  ['china', 'China CFDI extract'],
+  ['china_filing', 'China filing vintage'],
+  ['china_i18n', 'China translations'],
 ];
 
 function years(): number[] {
@@ -224,8 +228,8 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'about'>(() =>
-    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'about'] as const, 'inv'),
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'china' | 'about'>(() =>
+    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'china', 'about'] as const, 'inv'),
   );
 
   useEffect(() => {
@@ -243,7 +247,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : tab === 'site' ? 'Sites' : 'About'
+      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : tab === 'site' ? 'Sites' : tab === 'china' ? 'China' : 'About'
     } · Investigator Supply Explorer`;
   }, [tab]);
 
@@ -590,6 +594,14 @@ export default function App() {
           onClick={() => setTab('site')}
         >
           Sites
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'china'}
+          className={tab === 'china' ? 'active' : ''}
+          onClick={() => setTab('china')}
+        >
+          China
         </button>
         <button
           role="tab"
@@ -1145,6 +1157,8 @@ export default function App() {
       {tab === 'site' && (
         <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
       )}
+
+      {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}
 
       {tab === 'about' && <About />}
 

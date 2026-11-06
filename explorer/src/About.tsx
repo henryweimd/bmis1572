@@ -25,6 +25,12 @@ export default function About() {
             API docs
           </a>
         </li>
+        <li>
+          <strong>China:</strong> partial CFDI extract (药物临床试验机构备案管理信息系统) of
+          investigator affiliations at filed institutions, retrieved 2026-11-06. Filing year is
+          registration vintage, not activity; person = (name, institution) pair; Chinese is
+          authoritative and EN labels are curated or pattern-derived.
+        </li>
       </ul>
 
       <h3>How to read it</h3>

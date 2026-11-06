@@ -110,6 +110,10 @@ Without step 1, the explorer falls back to a committed demo CSV
   trials (1,467 strong). See `docs/linkage.md`.
 - TA mix of matched trials (experimental): oncology 32%, cardiology 9%,
   neurology 7%; Other 26% (healthy-volunteer, drug-class, unclassifiable).
+- China CFDI extract (partial): 42,159 investigator-institution pairs
+  (34,153 names, 1,818 institutions); 81% of pairs sit at 2020-vintage
+  filings (bulk registration). Internal Medicine leads specialties;
+  Guangdong/Beijing/Jiangsu lead provinces.
 
 ## Limitations
 

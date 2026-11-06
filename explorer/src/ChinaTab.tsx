@@ -1,0 +1,596 @@
+import { useEffect, useState } from 'react';
+import { escapeLiteral, query } from './duckdb';
+import { CategoryBars, MultiLineChart } from './charts';
+import type { LineSeries } from './charts';
+import { intIn, pick, readHash, writeHash } from './hash';
+import { downloadCsv } from './csv';
+
+const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const num0 = (v: unknown): number =>
+  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
+
+interface CnSiteRow {
+  id: string;
+  zh: string;
+  en: string;
+  curated: boolean;
+  prov: string;
+  prove: string;
+  pairs: number;
+  rows: number;
+  specs: number;
+  year: number;
+  topg: string;
+}
+
+interface CnLeaderRow {
+  name: string;
+  inst: number;
+  rows: number;
+  specs: number;
+  provs: number;
+  year: number;
+  prov: string;
+}
+
+interface CnHit {
+  id: number;
+  name: string;
+  inst: string;
+  inste: string;
+  prov: string;
+  prove: string;
+  rows: number;
+  year: number;
+}
+
+interface CnAffRow {
+  year: number;
+  inst: string;
+  inste: string;
+  spec: string;
+  spece: string | null;
+  group: string;
+  groupz: string;
+  role: string;
+  rolee: string;
+  prov: string;
+  prove: string;
+}
+
+export default function ChinaTab({
+  demo,
+  ready,
+}: {
+  demo: boolean;
+  ready: boolean;
+}) {
+  const [hashInit] = useState(readHash);
+  const [lang, setLang] = useState<'zh' | 'en'>(() => pick(hashInit['cn.l'], ['zh', 'en'] as const, 'zh'));
+  const [prov, setProv] = useState(() => hashInit['cn.p'] ?? 'all');
+  const [y0, setY0] = useState(() => intIn(hashInit['cn.y0'], 2019, 2025, 2019));
+  const [y1, setY1] = useState(() => intIn(hashInit['cn.y1'], 2019, 2025, 2025));
+  const [provs, setProvs] = useState<{ zh: string; en: string }[]>([]);
+  const [kpi, setKpi] = useState<{ pairs: number; names: number; insts: number; specs: number } | null>(null);
+  const [vintage, setVintage] = useState<LineSeries[]>([]);
+  const [specBars, setSpecBars] = useState<{ category: string; v: number }[]>([]);
+  const [provBars, setProvBars] = useState<{ category: string; v: number }[]>([]);
+  const [sites, setSites] = useState<CnSiteRow[]>([]);
+  const [siteSort, setSiteSort] = useState<'pairs' | 'rows'>(() =>
+    pick(hashInit['cn.o'], ['pairs', 'rows'] as const, 'pairs'),
+  );
+  const [leaders, setLeaders] = useState<CnLeaderRow[]>([]);
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState<CnHit[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [sel, setSel] = useState<{ id: number; name: string } | null>(() => {
+    const n = Number(hashInit['cn.s']);
+    return Number.isInteger(n) && n >= 0 && hashInit['cn.sn'] ? { id: n, name: hashInit['cn.sn'] } : null;
+  });
+  const [affs, setAffs] = useState<CnAffRow[]>([]);
+  const [siteSel, setSiteSel] = useState<{ id: string; name: string } | null>(null);
+  const [siteMix, setSiteMix] = useState<{ category: string; v: number }[]>([]);
+  const [siteInvs, setSiteInvs] = useState<{ name: string; n: number }[]>([]);
+  const [note, setNote] = useState('');
+
+  const zh = lang === 'zh';
+  const yearOpts = [2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
+  useEffect(() => {
+    if (!ready || demo) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pc = prov === 'all' ? '' : ` AND province_zh = '${escapeLiteral(prov)}'`;
+        const [pl, k, vy, sb, pb, st, ld] = await Promise.all([
+          query<{ zh: string; en: string }>(
+            `SELECT CAST(province_zh AS VARCHAR) AS zh, CAST(province_en AS VARCHAR) AS en` +
+              ` FROM cn_province_year GROUP BY 1, 2 ORDER BY 1`,
+          ),
+          query<{ pairs: number; names: number; insts: number; specs: number }>(
+            `SELECT (SELECT COUNT(*) FROM cn_person_index) AS pairs,` +
+              ` (SELECT COUNT(*) FROM cn_leaderboard) AS names,` +
+              ` (SELECT COUNT(*) FROM cn_site_index) AS insts,` +
+              ` (SELECT COUNT(DISTINCT group_en) FROM cn_specialty_year) AS specs`,
+          ),
+          query<{ y: number; n: number; c: number }>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_pairs) AS DOUBLE) AS n,` +
+              ` CAST(MAX(cum_pairs) AS DOUBLE) AS c FROM cn_filing_year` +
+              ` WHERE year BETWEEN ${y0} AND ${y1} GROUP BY 1 ORDER BY 1`,
+          ),
+          query<{ g: string; gz: string; n: number }>(
+            `SELECT CAST(group_en AS VARCHAR) AS g, CAST(group_zh AS VARCHAR) AS gz,` +
+              ` CAST(SUM(n_pairs) AS DOUBLE) AS n FROM cn_specialty_year` +
+              ` WHERE year BETWEEN ${y0} AND ${y1} GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15`,
+          ),
+          query<{ p: string; pe: string; n: number }>(
+            `SELECT CAST(province_zh AS VARCHAR) AS p, CAST(province_en AS VARCHAR) AS pe,` +
+              ` CAST(SUM(n_pairs) AS DOUBLE) AS n FROM cn_province_year` +
+              ` WHERE year BETWEEN ${y0} AND ${y1}${pc} GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 15`,
+          ),
+          query<CnSiteRow>(
+            `SELECT CAST(inst_id AS VARCHAR) AS id, CAST(name_zh AS VARCHAR) AS zh,` +
+              ` CAST(name_en AS VARCHAR) AS en, CAST(name_en_curated AS BOOLEAN) AS curated,` +
+              ` CAST(province_zh AS VARCHAR) AS prov, CAST(province_en AS VARCHAR) AS prove,` +
+              ` CAST(n_pairs AS INTEGER) AS pairs, CAST(n_rows AS INTEGER) AS rows,` +
+              ` CAST(n_spec AS INTEGER) AS specs, CAST(filing_year AS INTEGER) AS year,` +
+              ` CAST(top_group_en AS VARCHAR) AS topg FROM cn_site_index WHERE 1 = 1${pc}` +
+              ` AND filing_year BETWEEN ${y0} AND ${y1}` +
+              ` ORDER BY ${siteSort === 'rows' ? 'n_rows DESC' : 'n_pairs DESC'} LIMIT 25`,
+          ),
+          query<CnLeaderRow>(
+            `SELECT CAST(name_zh AS VARCHAR) AS name, CAST(n_inst AS INTEGER) AS inst,` +
+              ` CAST(n_rows AS INTEGER) AS rows, CAST(n_spec AS INTEGER) AS specs,` +
+              ` CAST(n_prov AS INTEGER) AS provs, CAST(first_year AS INTEGER) AS year,` +
+              ` CAST(province_zh AS VARCHAR) AS prov FROM cn_leaderboard WHERE 1 = 1${pc}` +
+              ` AND first_year BETWEEN ${y0} AND ${y1} ORDER BY n_rows DESC, n_inst DESC LIMIT 25`,
+          ),
+        ]);
+        if (cancelled) return;
+        setProvs(pl);
+        setKpi({ pairs: num0(k[0]?.pairs), names: num0(k[0]?.names), insts: num0(k[0]?.insts), specs: num0(k[0]?.specs) });
+        setVintage([
+          { label: 'Pairs (filing vintage)', color: '#1f77b4', points: vy.map((r) => ({ x: r.y, y: num0(r.n) })) },
+          { label: 'Cumulative pairs', color: '#d62728', points: vy.map((r) => ({ x: r.y, y: num0(r.c) })) },
+        ]);
+        setSpecBars(sb.map((r) => ({ category: zh ? `${r.gz} ${r.g}` : r.g, v: num0(r.n) })));
+        setProvBars(pb.map((r) => ({ category: zh ? r.p : r.pe, v: num0(r.n) })));
+        setSites(st);
+        setLeaders(ld);
+        setNote('');
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`China query failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, demo, prov, y0, y1, siteSort, lang]);
+
+  useEffect(() => {
+    if (!ready || demo || !sel) {
+      setAffs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await query<CnAffRow>(
+          `SELECT CAST(filing_year AS INTEGER) AS year, CAST(inst_zh AS VARCHAR) AS inst,` +
+            ` CAST(inst_en AS VARCHAR) AS inste, CAST(specialty_zh AS VARCHAR) AS spec,` +
+            ` CAST(specialty_en AS VARCHAR) AS spece, CAST(group_en AS VARCHAR) AS "group",` +
+            ` CAST(group_zh AS VARCHAR) AS groupz, CAST(role_zh AS VARCHAR) AS role,` +
+            ` CAST(role_en AS VARCHAR) AS rolee, CAST(province_zh AS VARCHAR) AS prov,` +
+            ` CAST(province_en AS VARCHAR) AS prove FROM cn_person_rows` +
+            ` WHERE pair_id = ${sel.id} ORDER BY filing_year DESC LIMIT 200`,
+        );
+        if (cancelled) return;
+        setAffs(r);
+      } catch (e) {
+        if (cancelled) return;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, sel]);
+
+  useEffect(() => {
+    if (!ready || demo || !siteSel) {
+      setSiteMix([]);
+      setSiteInvs([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [mx, iv] = await Promise.all([
+          query<{ category: string; v: number }>(
+            `SELECT CAST(r.group_en AS VARCHAR) AS category, CAST(COUNT(DISTINCT r.pair_id) AS DOUBLE) AS v` +
+              ` FROM cn_person_rows r JOIN cn_person_index i ON r.pair_id = i.pair_id` +
+              ` WHERE i.inst_id = '${escapeLiteral(siteSel.id)}' GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
+          ).catch(() => [] as { category: string; v: number }[]),
+          query<{ name: string; n: number }>(
+            `SELECT CAST(name_zh AS VARCHAR) AS name, CAST(n_rows AS INTEGER) AS n` +
+              ` FROM cn_person_index WHERE inst_id = '${escapeLiteral(siteSel.id)}'` +
+              ` ORDER BY n_rows DESC, name_zh LIMIT 100`,
+          ).catch(() => [] as { name: string; n: number }[]),
+        ]);
+        if (cancelled) return;
+        setSiteMix(mx);
+        setSiteInvs(iv);
+      } catch (e) {
+        if (cancelled) return;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, siteSel]);
+
+  useEffect(() => {
+    writeHash({
+      'cn.l': lang,
+      'cn.p': prov,
+      'cn.y0': String(y0),
+      'cn.y1': String(y1),
+      'cn.o': siteSort,
+      'cn.s': sel ? String(sel.id) : '',
+      'cn.sn': sel ? sel.name : '',
+    });
+  }, [lang, prov, y0, y1, siteSort, sel]);
+
+  async function runSearch(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!ready || demo || q.trim().length < 1) return;
+    const needle = `%${escapeLiteral(q.trim())}%`;
+    try {
+      const r = await query<CnHit>(
+        `SELECT CAST(pair_id AS INTEGER) AS id, CAST(name_zh AS VARCHAR) AS name,` +
+          ` CAST(inst_zh AS VARCHAR) AS inst, CAST(inst_en AS VARCHAR) AS inste,` +
+          ` CAST(province_zh AS VARCHAR) AS prov, CAST(province_en AS VARCHAR) AS prove,` +
+          ` CAST(n_rows AS INTEGER) AS rows, CAST(filing_year AS INTEGER) AS year` +
+          ` FROM cn_person_index WHERE name_zh LIKE '${needle}' ORDER BY n_rows DESC LIMIT 50`,
+      );
+      setHits(r);
+      setSearched(true);
+    } catch (e2) {
+      setNote(`Investigator search failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
+    }
+  }
+
+  if (demo) return <p className="muted">Run the pipeline for China data.</p>;
+
+  return (
+    <>
+      {note && <p className="banner">{note}</p>}
+      <p className="banner">
+        Partial CFDI extract (not the full registry) · filing year is institution registration vintage,
+        not investigator activity · Chinese is authoritative; EN labels are curated or pattern-derived.
+      </p>
+      <section className="panel controls">
+        <div className="filters">
+          <div className="seg" role="group" aria-label="Language">
+            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')} title="Show Chinese labels">
+              中文
+            </button>
+            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')} title="Show English labels">
+              EN
+            </button>
+          </div>
+          <label>
+            Province
+            <select value={prov} onChange={(e) => setProv(e.target.value)}>
+              <option value="all">All provinces</option>
+              {provs.map((p) => (
+                <option key={p.zh} value={p.zh}>
+                  {zh ? p.zh : p.en}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            From
+            <select
+              value={y0}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY0(v);
+                if (v > y1) setY1(v);
+              }}
+            >
+              {yearOpts.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            To
+            <select
+              value={y1}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY1(v);
+                if (v < y0) setY0(v);
+              }}
+            >
+              {yearOpts.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="muted">Names stay in Chinese in both modes.</span>
+        </div>
+      </section>
+
+      <section className="kpis">
+        <div className="kpi">
+          <span className="kpi-label">Investigator-institution pairs</span>
+          <span className="kpi-value">{kpi ? fmtInt.format(kpi.pairs) : '—'}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Distinct names · institutions</span>
+          <span className="kpi-value">
+            {kpi ? `${fmtInt.format(kpi.names)} · ${fmtInt.format(kpi.insts)}` : '—'}
+          </span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Specialty groups</span>
+          <span className="kpi-value">{kpi ? fmtInt.format(kpi.specs) : '—'}</span>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Registry by filing vintage</h2>
+        <MultiLineChart series={vintage} />
+        <p className="caption">
+          Pairs at institutions filed each year + cumulative registry. The 2020 spike is bulk
+          registration, not a surge of investigators.
+        </p>
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>Top specialty groups</h2>
+          <CategoryBars data={specBars} />
+          <p className="caption">1,937 raw specialty strings grouped (3.9% Other).</p>
+        </div>
+        <div className="panel">
+          <h2>Top provinces</h2>
+          <CategoryBars data={provBars} />
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>Top institutions{prov === 'all' ? '' : `: ${zh ? prov : provs.find((p) => p.zh === prov)?.en ?? prov}`}</h2>
+        <div className="filters">
+          <div className="seg" role="group" aria-label="Site sort">
+            <button
+              className={siteSort === 'pairs' ? 'active' : ''}
+              onClick={() => setSiteSort('pairs')}
+              title="Rank by investigator pairs"
+            >
+              Pairs
+            </button>
+            <button
+              className={siteSort === 'rows' ? 'active' : ''}
+              onClick={() => setSiteSort('rows')}
+              title="Rank by affiliation rows"
+            >
+              Rows
+            </button>
+          </div>
+          <span className="muted">Click a row for institution detail. * = curated EN; else pattern translation.</span>
+          {!!sites.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'china-top-sites.csv',
+                  ['name_zh', 'name_en', 'curated_en', 'province', 'pairs', 'rows', 'specialties', 'filing_year', 'top_group'],
+                  sites.map((r) => [r.zh, r.en, r.curated ? 'yes' : 'no', r.prov, r.pairs, r.rows, r.specs, r.year, r.topg]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Institution</th>
+                <th>Province</th>
+                <th>Pairs</th>
+                <th>Rows</th>
+                <th>Specs</th>
+                <th>Filed</th>
+                <th>Top group</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sites.map((r) => (
+                <tr
+                  key={r.id}
+                  onClick={() => setSiteSel({ id: r.id, name: zh ? r.zh : r.en })}
+                  className={siteSel?.id === r.id ? 'picked' : 'pickable'}
+                >
+                  <td>
+                    {zh ? r.zh : r.en}
+                    {!zh && !r.curated && ' *'}
+                    <br />
+                    <span className="muted">{zh ? (r.curated ? r.en : '') : r.zh}</span>
+                  </td>
+                  <td>{zh ? r.prov : r.prove}</td>
+                  <td>{fmtInt.format(r.pairs)}</td>
+                  <td>{fmtInt.format(r.rows)}</td>
+                  <td>{r.specs}</td>
+                  <td>{r.year}</td>
+                  <td>{r.topg}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {siteSel && (
+        <section className="panel">
+          <h2>{siteSel.name}</h2>
+          <h3>Specialty mix (pairs)</h3>
+          <CategoryBars data={siteMix} />
+          <h3>
+            Investigators <span className="muted">· top 100 by affiliations</span>
+          </h3>
+          {siteInvs.length ? (
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Investigator</th>
+                    <th>Affiliations</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {siteInvs.map((r, i) => (
+                    <tr key={`${r.name}-${i}`}>
+                      <td>{r.name}</td>
+                      <td>{r.n}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">No investigators found.</p>
+          )}
+        </section>
+      )}
+
+      <section className="panel">
+        <h2>Top investigators by affiliations</h2>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Investigator</th>
+                <th>Sites</th>
+                <th>Affiliations</th>
+                <th>Specialties</th>
+                <th>Provinces</th>
+                <th>First filed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaders.map((r, i) => (
+                <tr key={`${r.name}-${i}`}>
+                  <td>{r.name}</td>
+                  <td>{r.inst}</td>
+                  <td>{r.rows}</td>
+                  <td>{r.specs}</td>
+                  <td>{r.provs}</td>
+                  <td>{r.year}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="caption">
+          Name-level: common names across institutions may conflate distinct people. Click a name in
+          search results for affiliation rows.
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>Search investigators</h2>
+        <form className="filters" onSubmit={runSearch}>
+          <label>
+            Name (Chinese)
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. 张彬" size={24} />
+          </label>
+          <button type="submit" className="btn">
+            Search
+          </button>
+          {searched && <span className="muted">{hits.length} matches (top 50 by affiliations)</span>}
+        </form>
+        {!!hits.length && (
+          <div className="table-scroll short">
+            <table>
+              <thead>
+                <tr>
+                  <th>Investigator</th>
+                  <th>Institution</th>
+                  <th>Province</th>
+                  <th>Affiliations</th>
+                  <th>Filed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hits.map((r) => (
+                  <tr
+                    key={r.id}
+                    onClick={() => setSel({ id: r.id, name: r.name })}
+                    className={sel?.id === r.id ? 'picked' : 'pickable'}
+                  >
+                    <td>{r.name}</td>
+                    <td>{zh ? r.inst : r.inste}</td>
+                    <td>{zh ? r.prov : r.prove}</td>
+                    <td>{r.rows}</td>
+                    <td>{r.year}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {sel && (
+          <>
+            <h3>
+              {sel.name} <span className="muted">· affiliation rows</span>
+            </h3>
+            {affs.length ? (
+              <div className="table-scroll short">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Filed</th>
+                      <th>Institution</th>
+                      <th>Specialty</th>
+                      <th>Group</th>
+                      <th>Role</th>
+                      <th>Province</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {affs.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.year}</td>
+                        <td>{zh ? r.inst : r.inste}</td>
+                        <td>
+                          {r.spec}
+                          {!zh && r.spece && <span className="muted"> · {r.spece}</span>}
+                        </td>
+                        <td>{zh ? r.groupz : r.group}</td>
+                        <td>{zh ? r.role : r.rolee}</td>
+                        <td>{zh ? r.prov : r.prove}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted">No rows.</p>
+            )}
+          </>
+        )}
+      </section>
+    </>
+  );
+}
