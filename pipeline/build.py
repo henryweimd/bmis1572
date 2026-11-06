@@ -390,6 +390,11 @@ def verify_with_duckdb(tables) -> dict:
         "SELECT COUNT(*) FROM (SELECT DISTINCT band FROM investigators_year_geo)"
     ).fetchone()[0]
     assert gb == len(BAND_ORDER), f"expected {len(BAND_ORDER)} bands, got {gb}"
+    nb = con.execute(
+        "SELECT COUNT(*) FROM (SELECT DISTINCT bin FROM active_bins"
+        " WHERE version = 'strict')").fetchone()[0]
+    assert nb == len(agg.BIN_ORDER), \
+        f"expected {len(agg.BIN_ORDER)} trial bins, got {nb}"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
