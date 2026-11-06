@@ -127,6 +127,13 @@ DEFINITIONS = {
         "institution x city and shared across that institution's addresses; "
         "name variants split counts. Strong = token Jaccard >= 0.6."
     ),
+    "data_quality": (
+        "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given "
+        "name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict "
+        "persons (0.1%) are excluded from the search index for the same "
+        "reason. Headline counts include junk-name rows; the search index, "
+        "leaderboard, rosters, and site-detail series exclude them."
+    ),
 }
 
 
