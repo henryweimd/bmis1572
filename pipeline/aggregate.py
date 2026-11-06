@@ -73,6 +73,13 @@ DEFINITIONS = {
         "(1572 goes to the sponsor; forwarding is voluntary-ish). No devices, "
         "no CBER, no non-IND research."
     ),
+    "cro": (
+        "CRO views group BMIS TYPE=CRO rows by normalized company name: "
+        "evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, "
+        "Syneos, ICON, Parexel, Covance, Celerion, others), else first "
+        "site segment with suffixes/punctuation stripped. Residual spelling "
+        "variants stay split; cro_index lists variants per company."
+    ),
 }
 
 

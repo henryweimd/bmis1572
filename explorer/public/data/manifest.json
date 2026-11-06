@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T01:24:47.814730+00:00",
+  "generated_at": "2026-11-06T01:35:28.753728+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -680,7 +680,8 @@
     "starts_running": "Starts: trials by Study Start Date year. Running: start <= year-end AND (completion >= year-start OR still active with no completion date). CT.gov snapshot date recorded in manifest.",
     "tightness": "Tightness ratio: active investigators per running trial. Descriptive workload proxy only; supply and trial counts are not independent (a supply crunch can suppress starts), so this is not causal.",
     "partial": "2008 (file ramp-up from Oct 1) and 2026 (file through Aug 31) are partial: shown faded, excluded from growth statistics.",
-    "bmis_scope": "BMIS covers CDER IND drug/biologic investigators whose 1572/1571 was forwarded to FDA since Oct 2008. FDA: not a comprehensive list (1572 goes to the sponsor; forwarding is voluntary-ish). No devices, no CBER, no non-IND research."
+    "bmis_scope": "BMIS covers CDER IND drug/biologic investigators whose 1572/1571 was forwarded to FDA since Oct 2008. FDA: not a comprehensive list (1572 goes to the sponsor; forwarding is voluntary-ish). No devices, no CBER, no non-IND research.",
+    "cro": "CRO views group BMIS TYPE=CRO rows by normalized company name: evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, Syneos, ICON, Parexel, Covance, Celerion, others), else first site segment with suffixes/punctuation stripped. Residual spelling variants stay split; cro_index lists variants per company."
   },
   "stats": {
     "persons_ever": {
@@ -769,6 +770,43 @@
         "country",
         "invn",
         "person_id"
+      ]
+    },
+    {
+      "id": "cro_year",
+      "title": "CRO receipts/entities by year, band, company",
+      "format": "parquet",
+      "files": [
+        "data/cro_year.parquet"
+      ],
+      "row_count": 15365,
+      "columns": [
+        "year",
+        "band",
+        "cro",
+        "n_entities",
+        "n_receipts",
+        "partial"
+      ]
+    },
+    {
+      "id": "cro_index",
+      "title": "CRO company summary with site-variant audit",
+      "format": "parquet",
+      "files": [
+        "data/cro_index.parquet"
+      ],
+      "row_count": 5491,
+      "columns": [
+        "cro",
+        "n_entities",
+        "n_receipts",
+        "first_year",
+        "last_year",
+        "n_countries",
+        "top_country",
+        "n_variants",
+        "example_site"
       ]
     },
     {
