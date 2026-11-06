@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T12:50:06.547993+00:00",
+  "generated_at": "2026-11-06T12:56:59.232643+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -660,6 +660,29 @@
           "records_missing_start": 635,
           "records_total": 53523
         }
+      },
+      "bands": {
+        "records": 114278,
+        "missing_start": 1073,
+        "missing_country": 104,
+        "unmapped_countries": {
+          "Brunei": 2,
+          "Burma": 2,
+          "Palestinian Territories": 2,
+          "Montserrat": 1,
+          "Azerbaijan": 1,
+          "Aland Islands": 1,
+          "Micronesia": 1,
+          "Togo": 1,
+          "Saint Lucia": 1,
+          "Kyrgyzstan": 1,
+          "Macau": 1,
+          "Angola": 1,
+          "Faroe Islands": 1,
+          "Barbados": 1,
+          "United States Minor Outlying Islands": 1
+        },
+        "unmapped_total": 22
       }
     }
   },
@@ -689,7 +712,8 @@
     "site": "A site is a PLACE (street address): Strict matches normalized street+city+state+country exactly (suite/floor markers dropped, ZIP excluded); Merged additionally unions same-house-number addresses with street-token Jaccard >= 0.6 within a city. Branches of one org at different addresses stay split. Site rollups use strict persons.",
     "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous.",
     "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6.",
-    "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them."
+    "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them.",
+    "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio."
   },
   "stats": {
     "persons_ever": {
@@ -1143,6 +1167,21 @@
       ]
     },
     {
+      "id": "trials_band",
+      "title": "Industry starts by year and band (multi-country overlap)",
+      "format": "parquet",
+      "files": [
+        "data/trials_band.parquet"
+      ],
+      "row_count": 133,
+      "columns": [
+        "band",
+        "year",
+        "n_starts",
+        "partial"
+      ]
+    },
+    {
       "id": "tightness",
       "title": "Investigators per trial by year",
       "format": "parquet",
@@ -1159,6 +1198,24 @@
         "trials_running",
         "per_start",
         "per_running",
+        "partial"
+      ]
+    },
+    {
+      "id": "tightness_band",
+      "title": "Investigators per start by year and band",
+      "format": "parquet",
+      "files": [
+        "data/tightness_band.parquet"
+      ],
+      "row_count": 915,
+      "columns": [
+        "version",
+        "band",
+        "year",
+        "investigators",
+        "trials_starts",
+        "per_start",
         "partial"
       ]
     }

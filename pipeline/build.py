@@ -40,6 +40,7 @@ import bmis
 import charts
 import cluster
 import ctgov
+import ctgov_geo
 import ctgov_link
 import deck
 import sites
@@ -340,13 +341,15 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     return tables
 
 
-def stage_ctgov(skip: bool, refresh: bool) -> tuple[pd.DataFrame, dict]:
+def stage_ctgov(skip: bool, refresh: bool):
     starts_cache = RAW / "ctgov_starts.json"
     subset_cache = RAW / "ctgov_subset.jsonl"
     if skip:
         log("ctgov: skipped (--skip-ctgov); trials tables will be empty")
-        return pd.DataFrame(columns=["scope", "year", "n_starts", "n_running",
-                                      "partial"]), {"skipped": True}
+        return (pd.DataFrame(columns=["scope", "year", "n_starts", "n_running",
+                                      "partial"]),
+                pd.DataFrame(columns=["band", "year", "n_starts", "partial"]),
+                {"skipped": True})
     s = ctgov.session()
     meta = ctgov.api_meta(s)
     log(f"ctgov: api={meta['api_version']} total={meta['stats_size']}")
@@ -374,7 +377,13 @@ def stage_ctgov(skip: bool, refresh: bool) -> tuple[pd.DataFrame, dict]:
     trials["partial"] = trials["year"] == 2026
     trials = trials.sort_values(["scope", "year"]).reset_index(drop=True)
     trials.to_parquet(CURATED / "trials_year.parquet", index=False)
-    return trials, {"meta": meta, "diag": diag}
+    grec = ctgov_geo.fetch_global(s)
+    band_tr, bdiag = ctgov_geo.band_starts(grec, YEARS)
+    band_tr["partial"] = band_tr["year"] == 2026
+    band_tr.to_parquet(CURATED / "trials_band.parquet", index=False)
+    log(f"ctgov: band starts ({len(band_tr)} rows, "
+        f"unmapped={bdiag['unmapped_total']})")
+    return trials, band_tr, {"meta": meta, "diag": diag, "bands": bdiag}
 
 
 def stage_tightness(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -406,6 +415,25 @@ def stage_tightness(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
     tight = pd.DataFrame(rows).sort_values(["version", "scope", "year"])
     tight.to_parquet(CURATED / "tightness.parquet", index=False)
     tables["tightness"] = tight
+    band_tr = tables.get("trials_band")
+    if band_tr is not None and len(band_tr):
+        rows_b = []
+        for v in VERSIONS:
+            iv = iyg[iyg["version"] == v][["year", "band", "n_active"]]
+            m = iv.merge(band_tr[["band", "year", "n_starts"]],
+                         on=["band", "year"], how="left")
+            for _, r in m.iterrows():
+                na = int(r["n_active"])
+                ns = 0 if pd.isna(r["n_starts"]) else int(r["n_starts"])
+                rows_b.append({
+                    "version": v, "band": str(r["band"]), "year": int(r["year"]),
+                    "investigators": na, "trials_starts": ns,
+                    "per_start": (na / ns if ns else None),
+                    "partial": bool(int(r["year"]) in agg.PARTIAL_YEARS),
+                })
+        tb = pd.DataFrame(rows_b).sort_values(["version", "band", "year"])
+        tb.to_parquet(CURATED / "tightness_band.parquet", index=False)
+        tables["tightness_band"] = tb
     return tight
 
 
@@ -448,6 +476,8 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "leaderboard": "Top investigators by lifetime IND references",
         "trials_year": "Industry trials by year (starts vs running)",
         "tightness": "Investigators per trial by year",
+        "trials_band": "Industry starts by year and band (multi-country overlap)",
+        "tightness_band": "Investigators per start by year and band",
         "irb_cro_year": "IRB/CRO entities and receipts by year",
         "person_index": "Investigator search index (strict persons)",
         "person_receipts": "Per-investigator receipt history, newest first",
@@ -607,6 +637,13 @@ def verify_with_duckdb(tables) -> dict:
             " LEFT JOIN site_index s ON x.site_id = s.site_id"
             " WHERE s.site_id IS NULL").fetchone()[0]
         assert x_orph == 0, "xcheck sites missing from site_index"
+    bu, au = con.execute(
+        "SELECT (SELECT n_starts FROM trials_band"
+        " WHERE band = 'United States' AND year = 2025),"
+        " (SELECT n_starts FROM trials_year"
+        " WHERE scope = 'adjusted' AND year = 2025)").fetchone()
+    assert bu > 0 and abs(bu - au) / au < 0.02, \
+        f"band US cross-foot failed ({bu} vs {au})"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
@@ -630,8 +667,9 @@ def main() -> None:
     del df, ci_raw
     gc.collect()
 
-    trials, ctgov_info = stage_ctgov(args.skip_ctgov, args.refresh_ctgov)
+    trials, band_tr, ctgov_info = stage_ctgov(args.skip_ctgov, args.refresh_ctgov)
     tables["trials_year"] = trials
+    tables["trials_band"] = band_tr
     stage_tightness(tables)
 
     stats = headline_stats(persons, tables)
