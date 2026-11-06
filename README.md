@@ -75,6 +75,13 @@ Without step 1, the explorer falls back to a committed demo CSV
   measure, not a headcount.
 - **CRO/IRB grouping** = normalized site strings (giant aliases, stopword rules,
   state/country disambiguation); residual variants audited per org in the index tables.
+- **Site identity.** A site is a street address: Strict matches normalized
+  street+city+state+country (suite markers dropped, ZIP excluded); Merged unions
+  same-house-number addresses at street-token Jaccard ≥ 0.6 within a city.
+  Rollups use strict persons; churn = first/last receipt year per roster link.
+- **CT.gov cross-check (experimental).** US industry trials whose facility
+  fuzzy-matches the institution name in the same city, year-gated; counts are
+  institution×city, shared across addresses. See `docs/linkage.md`.
 - **Benchmark.** Unadjusted: all CI persons vs. global industry starts. Adjusted:
   US persons vs. US-site trials, counted as starts/year and running-in-year
   (start ≤ year, completion ≥ year or still active). Tightness = active per running
