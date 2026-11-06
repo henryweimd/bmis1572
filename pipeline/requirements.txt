@@ -3,3 +3,5 @@ pyarrow>=17,<22
 duckdb>=1.1,<2
 matplotlib>=3.8,<4
 requests>=2.31,<3
+python-pptx>=1.0,<2
+reportlab>=4,<7
