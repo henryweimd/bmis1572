@@ -4,6 +4,7 @@ import type { Manifest } from './duckdb';
 import { CategoryBars, MultiLineChart, StackedBars } from './charts';
 import type { LineSeries } from './charts';
 import OrgTab from './OrgTab';
+import About from './About';
 import './App.css';
 
 const BANDS = [
@@ -193,7 +194,7 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb'>('inv');
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'about'>('inv');
 
   useEffect(() => {
     let cancelled = false;
@@ -485,6 +486,14 @@ export default function App() {
         >
           IRBs
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'about'}
+          className={tab === 'about' ? 'active' : ''}
+          onClick={() => setTab('about')}
+        >
+          About
+        </button>
       </div>
 
       {tab === 'inv' && (
@@ -516,7 +525,14 @@ export default function App() {
           </label>
           <label>
             From
-            <select value={y0} onChange={(e) => setY0(Number(e.target.value))}>
+            <select
+              value={y0}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY0(v);
+                if (v > y1) setY1(v);
+              }}
+            >
               {years().map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -526,7 +542,14 @@ export default function App() {
           </label>
           <label>
             To
-            <select value={y1} onChange={(e) => setY1(Number(e.target.value))}>
+            <select
+              value={y1}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY1(v);
+                if (v < y0) setY0(v);
+              }}
+            >
               {years().map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -912,6 +935,8 @@ export default function App() {
         <OrgTab kind="irb" bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
       )}
 
+      {tab === 'about' && <About />}
+
       <section className="panel">
         <h2>Definitions</h2>
         <dl className="defs">
@@ -926,7 +951,10 @@ export default function App() {
 
       <footer className="muted">
         Queried in-browser with DuckDB-WASM · no backend · BMIS {sources.bmis_file ?? 'file'} · CT.gov
-        snapshot {ctgovTs} · {demo ? 'demo-investigators.csv' : 'parquet lake'}
+        snapshot {ctgovTs} · {demo ? 'demo-investigators.csv' : 'parquet lake'} ·{' '}
+        <a href="https://github.com/henryweimd/bmis1572" target="_blank" rel="noreferrer">
+          GitHub
+        </a>
       </footer>
     </div>
   );

@@ -3,23 +3,26 @@
 How has the supply of clinical trial investigators trended over time, and how does
 it compare against industry trial demand?
 
-- **Supply side:** FDA Bioresearch Monitoring Information System (BMIS) — investigators
-  named on Form 1572/1571 submissions forwarded to CDER (quarterly public file).
+- **Supply side:** FDA Bioresearch Monitoring Information System (BMIS) — investigators,
+  CROs, and IRBs named on Form 1572/1571 submissions forwarded to CDER (quarterly file).
 - **Demand side:** industry-led interventional trials from the clinicaltrials.gov API v2.
 
 ```
-pipeline/  →  data/ (local lake, gitignored)  →  explorer/public/data/ (served at /data/…)
+pipeline/  →  data/ (local lake, gitignored)  →  explorer/public/data/ (shipped snapshot)
                                                    ↕
 explorer/ (Vite + React + DuckDB-WASM, static)  →  Vercel (frontend only)
 charts/ (tracked static PNGs with captioned definitions)
 ```
+
+Three tabs: **Investigators** (supply trends, new/returning, distribution, search,
+leaderboards), **CROs** and **IRBs** (company/board trends, drill-downs, top tables).
 
 ## Quickstart (local)
 
 Prereqs: `uv` and Node 18+.
 
 ```sh
-# 1. Build the lake (~10 min first run: 1.86M BMIS rows + CT.gov fetch)
+# 1. Build the lake (~1 min warm: 1.86M BMIS rows + cached CT.gov)
 uv run python pipeline/build.py
 
 # 2. Serve the explorer (from the explorer/ dir)
@@ -29,7 +32,7 @@ cd explorer && npm install && npm run dev
 Open http://localhost:5173 in a browser.
 
 Faster reruns: `uv run python pipeline/build.py --from-checkpoint` (reuses parsed
-BMIS + cached CT.gov responses; ~5s). `--skip-ctgov`, `--refresh-ctgov`,
+BMIS + cached CT.gov responses; ~10s). `--skip-ctgov`, `--refresh-ctgov`,
 `--skip-charts` also available.
 
 Without step 1, the explorer falls back to a committed demo CSV
@@ -42,13 +45,17 @@ Without step 1, the explorer falls back to a committed demo CSV
 - `pipeline/bmis.py` — BMIS download/parse/clean (CRLF split, `~`-shift repair,
   garbage-year drop, geo banding).
 - `pipeline/cluster.py` — person clustering: Strict / Merged / Raw + IRB/CRO entities.
+- `pipeline/orgs.py` — CRO/IRB name normalization (evidence-based giant aliases,
+  stopword rules, state/country disambiguation of same-name orgs).
 - `pipeline/ctgov.py` — CT.gov API client: yearly starts + sparse running-subset fetch.
 - `pipeline/aggregate.py` — rollup tables + the shared `DEFINITIONS` texts.
-- `pipeline/charts.py` — 5 static PNGs, definitions captioned on every figure.
+- `pipeline/charts.py` — static PNGs, definitions captioned on every figure.
 - `pipeline/geo_bands.py`, `pipeline/geo_bands.csv` — country→band mapping (auditable).
 - `data/` — local lake: `raw/` (downloads + API caches), `curated/*.parquet`,
-  `manifest.json`. Gitignored; this is what moves to R2 later.
-- `explorer/` — static frontend. Creates one DuckDB view per Parquet URL, runs every
+  `manifest.json`. Gitignored except via the shipped explorer snapshot.
+- `explorer/src/App.tsx` — investigators tab, search, leaderboards, definitions.
+- `explorer/src/OrgTab.tsx` — shared CRO/IRB tab component.
+- `explorer/` — static frontend: one DuckDB view per Parquet URL, every
   KPI/chart/table as SQL in the browser. No backend.
 - `charts/` — tracked static figures (see below).
 
@@ -62,6 +69,10 @@ Without step 1, the explorer falls back to a committed demo CSV
   (2008–09 inflated: file starts Oct 2008). Headline window 2009–2025; 2008 (ramp-up)
   and 2026 (thru Aug 31) shown faded, excluded from growth stats.
 - **Trials per person** = collapsed rows per cluster (one row = one IND reference).
+- **Trials/year rate** = lifetime refs over the inclusive first–last span; intensity
+  measure, not a headcount.
+- **CRO/IRB grouping** = normalized site strings (giant aliases, stopword rules,
+  state/country disambiguation); residual variants audited per org in the index tables.
 - **Benchmark.** Unadjusted: all CI persons vs. global industry starts. Adjusted:
   US persons vs. US-site trials, counted as starts/year and running-in-year
   (start ≤ year, completion ≥ year or still active). Tightness = active per running
@@ -76,20 +87,22 @@ Without step 1, the explorer falls back to a committed demo CSV
 - **49.3%** of persons are one-trial (lifetime = 1 IND reference); median 2, mean 3.85.
 - No visible EU break at GDPR (May 2018); the sharp ex-US drop is 2020–21 across bands.
 - US tightness: ~3.3 investigators per running trial (2009) → ~2.5 (2025).
+- CROs: 856 active in 2025 (PPD, IQVIA, Syneos top all-time). IRBs: 3,779 active
+  in 2025 (WCG, Advarra, Copernicus top all-time).
 
 ## Limitations
 
 - BMIS is CDER IND drugs/biologics only, and FDA states it is **not comprehensive**
   (1572 goes to the sponsor; forwarding to FDA is voluntary-ish). No devices, CBER, non-IND.
 - No record-level investigator↔trial linkage exists (neither source carries the join key);
-  benchmarking is ecological (year-level ratios).
+  benchmarking is ecological (year-level ratios). Receipt rows carry date + site only.
 - BMIS has no therapeutic-area/phase fields; investigator-side TA splits need a third source.
-- Person counts are ranges across Strict/Merged/Raw, not exact headcounts.
+- Person counts are ranges across Strict/Merged/Raw, not exact headcounts. Org groupings
+  carry residual spelling splits/merges (audited via variants columns).
 
 ## Parked future work
 
-- Name-only cross-site tracking (investigators who move institutions).
-- Record-level investigator↔trial linkage via a joinable third source.
+- CT.gov site+window trial inference prototype (plausible-trials per investigator).
+- Name-only cross-site investigator tracking; curated org alias table.
 - Therapeutic-area / phase drill-downs (reserved disabled slots in the explorer).
-- Hosted deploy: push to GitHub → import `explorer/` into Vercel → point manifest at
-  R2 URLs (snapshot is ~150KB today; Vercel Hobby tolerates it, R2 later if it grows).
+- R2 object storage if the shipped snapshot outgrows comfortable git size (~25MB today).
