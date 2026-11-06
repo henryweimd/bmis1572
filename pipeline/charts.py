@@ -209,6 +209,44 @@ def chart_tightness(tight: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_org_trends(oy: pd.DataFrame, key: str, noun: str, plural: str,
+                     defn: str, filename: str, out: Path) -> None:
+    d = oy[oy["year"] >= 2008].copy()
+    top8 = (d.groupby(key)["n_receipts"].sum().sort_values(ascending=False)
+            .head(8).index.tolist())
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+              "#9467bd", "#8c564b", "#e377c2", "#7f7f7f"]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.4))
+    piv = (d[d[key].isin(top8)]
+           .pivot_table(index="year", columns=key, values="n_receipts",
+                        aggfunc="sum", observed=False).fillna(0))
+    for org, color in zip(top8, colors):
+        if org in piv:
+            a1.plot(piv.index, piv[org], label=str(org)[:24], color=color, lw=1.6)
+    _partial_shade(a1, piv.index)
+    a1.set_title(f"Top 8 {plural} by receipts")
+    a1.set_xlabel("Receipt year")
+    a1.set_ylabel("Receipts")
+    a1.yaxis.set_major_formatter(_comma)
+    a1.legend(fontsize=7, loc="upper left")
+    agg = d.groupby("year").agg(n_orgs=(key, "nunique"),
+                                n_entities=("n_entities", "sum"))
+    a2.plot(agg.index, agg["n_orgs"], marker="o", ms=3, label=f"Active {plural}",
+            color="#1f77b4")
+    a2.plot(agg.index, agg["n_entities"], marker="s", ms=3,
+            label="Active entities", color="#2ca02c")
+    _partial_shade(a2, agg.index)
+    a2.set_title(f"Active {plural} and entities")
+    a2.set_xlabel("Receipt year")
+    a2.yaxis.set_major_formatter(_comma)
+    a2.legend(fontsize=8)
+    fig.suptitle(f"{noun} trends", fontweight="bold")
+    fig.tight_layout(rect=(0, 0.16, 1, 0.92))
+    _caption(fig, "DEFINITIONS: " + defn + " " + DEFINITIONS["partial"])
+    fig.savefig(out / filename, bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
@@ -216,6 +254,10 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_distribution(tables["active_bins"], out)
     chart_retention(tables["retention"], out)
     chart_concentration(tables["concentration"], out)
+    chart_org_trends(tables["cro_year"], "cro", "CRO", "CROs",
+                     DEFINITIONS["cro"], "cro_trends.png", out)
+    chart_org_trends(tables["irb_year"], "irb", "IRB", "IRBs",
+                     DEFINITIONS["irb"], "irb_trends.png", out)
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     return sorted(p.name for p in out.glob("*.png"))
