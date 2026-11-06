@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
 import { MultiLineChart } from './charts';
 import type { LineSeries } from './charts';
+import { intIn, pick, readHash, writeHash } from './hash';
 
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -73,11 +74,27 @@ export default function OrgTab({
   ready: boolean;
 }) {
   const cfg = CONFIG[kind];
-  const [band, setBand] = useState('all');
-  const [y0, setY0] = useState(yearMin);
-  const [y1, setY1] = useState(yearMax);
-  const [sel, setSel] = useState('all');
-  const [sort, setSort] = useState<'total' | 'rate'>('total');
+  const [hashInit] = useState(readHash);
+  const [band, setBand] = useState(() => pick(hashInit[`${kind}.b`], ['all', ...bands], 'all'));
+  const [y0, setY0] = useState(() =>
+    Math.min(
+      intIn(hashInit[`${kind}.y0`], yearMin, yearMax, yearMin),
+      intIn(hashInit[`${kind}.y1`], yearMin, yearMax, yearMax),
+    ),
+  );
+  const [y1, setY1] = useState(() =>
+    Math.max(
+      intIn(hashInit[`${kind}.y0`], yearMin, yearMax, yearMin),
+      intIn(hashInit[`${kind}.y1`], yearMin, yearMax, yearMax),
+    ),
+  );
+  const [sel, setSel] = useState(() => {
+    const s = hashInit[`${kind}.s`] ?? 'all';
+    return s.length <= 80 ? s : 'all';
+  });
+  const [sort, setSort] = useState<'total' | 'rate'>(() =>
+    pick(hashInit[`${kind}.o`], ['total', 'rate'] as const, 'total'),
+  );
   const [opts, setOpts] = useState<{ org: string; n: number }[]>([]);
   const [kpi, setKpi] = useState<{ active: number; receipts: number; receipts09: number; orgs: number } | null>(null);
   const [series, setSeries] = useState<LineSeries[]>([]);
@@ -173,6 +190,16 @@ export default function OrgTab({
     // cfg.* are kind-derived constants; kind Prop change remounts via tab switch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, demo, band, y0, y1, sel, sort]);
+
+  useEffect(() => {
+    writeHash({
+      [`${kind}.b`]: band,
+      [`${kind}.y0`]: String(y0),
+      [`${kind}.y1`]: String(y1),
+      [`${kind}.s`]: sel,
+      [`${kind}.o`]: sort,
+    });
+  }, [kind, band, y0, y1, sel, sort]);
 
   if (demo) return <p className="muted">Run the pipeline for {cfg.plural} data.</p>;
 
