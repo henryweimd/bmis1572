@@ -196,7 +196,14 @@ export default function OrgTab({
           </label>
           <label>
             From
-            <select value={y0} onChange={(e) => setY0(Number(e.target.value))}>
+            <select
+              value={y0}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY0(v);
+                if (v > y1) setY1(v);
+              }}
+            >
               {yearOpts.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -206,7 +213,14 @@ export default function OrgTab({
           </label>
           <label>
             To
-            <select value={y1} onChange={(e) => setY1(Number(e.target.value))}>
+            <select
+              value={y1}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY1(v);
+                if (v < y0) setY0(v);
+              }}
+            >
               {yearOpts.map((y) => (
                 <option key={y} value={y}>
                   {y}
