@@ -40,6 +40,7 @@ import bmis
 import charts
 import cluster
 import ctgov
+from cro import normalize_cro_site
 from aggregate import DEFINITIONS
 from geo_bands import BAND_ORDER, emit_csv
 
@@ -211,6 +212,38 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["person_index"] = idx
     tables["person_receipts"] = rc.drop(columns=["pid"]).reset_index(drop=True)
 
+    # CRO company views
+    cro_rows = nonci[nonci["TYPE"] == "CRO"].reset_index(drop=True)
+    ent_cro = entities["site"].map(normalize_cro_site).to_numpy()
+    ent_band = entities["band"].to_numpy().astype(str)
+    ent_country = entities["country"].to_numpy().astype(str)
+    cro_rows = cro_rows.assign(
+        cro=ent_cro[cro_rows["epid"].to_numpy()],
+        ent_band=ent_band[cro_rows["epid"].to_numpy()],
+        ent_country=ent_country[cro_rows["epid"].to_numpy()],
+    )
+    g = cro_rows.groupby(["year", "ent_band", "cro"], observed=True)
+    cro_year = (g.agg(n_entities=("epid", "nunique"),
+                      n_receipts=("epid", "size"))
+                .reset_index().rename(columns={"ent_band": "band"}))
+    cro_year["partial"] = cro_year["year"].isin(agg.PARTIAL_YEARS)
+    gi = cro_rows.groupby("cro", observed=True)
+    cro_index = pd.DataFrame({
+        "cro": gi.size().index,
+        "n_entities": gi["epid"].nunique().to_numpy(),
+        "n_receipts": gi.size().to_numpy(),
+        "first_year": gi["year"].min().to_numpy(),
+        "last_year": gi["year"].max().to_numpy(),
+        "n_countries": gi["ent_country"].nunique().to_numpy(),
+        "top_country": gi["ent_country"].agg(
+            lambda s: s.value_counts().index[0]).to_numpy(),
+        "n_variants": gi["SITE"].nunique().to_numpy(),
+        "example_site": gi["SITE"].agg(
+            lambda s: s.value_counts().index[0]).to_numpy(),
+    })
+    tables["cro_year"] = cro_year.reset_index(drop=True)
+    tables["cro_index"] = cro_index.reset_index(drop=True)
+
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
     tables["us_state_year"] = pd.concat(sy).reset_index(drop=True)
@@ -347,6 +380,8 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "irb_cro_year": "IRB/CRO entities and receipts by year",
         "person_index": "Investigator search index (strict persons)",
         "person_receipts": "Per-investigator receipt history, newest first",
+        "cro_year": "CRO receipts/entities by year, band, company",
+        "cro_index": "CRO company summary with site-variant audit",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -439,6 +474,12 @@ def verify_with_duckdb(tables) -> dict:
         " (SELECT SUM(n_trials) FROM person_index)").fetchone()
     assert c_idx > 0 and c_rc == c_sum, \
         "person index/receipts mismatch"
+    cy_sum, ci_sum, ppd = con.execute(
+        "SELECT (SELECT SUM(n_receipts) FROM cro_year),"
+        " (SELECT SUM(n_receipts) FROM cro_index),"
+        " (SELECT COUNT(*) FROM cro_index WHERE cro = 'PPD')").fetchone()
+    assert cy_sum > 0 and cy_sum == ci_sum and ppd == 1, \
+        "CRO rollups inconsistent"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()

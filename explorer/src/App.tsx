@@ -25,6 +25,7 @@ const BAND_COLORS: Record<string, string> = {
   'Rest of world': '#7f7f7f',
   Unknown: '#bcbd22',
 };
+const CRO_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const VERSIONS = ['strict', 'merged', 'raw'] as const;
 type Version = (typeof VERSIONS)[number];
 const VERSION_LABEL: Record<Version, string> = {
@@ -118,6 +119,7 @@ const DEF_TITLES: [string, string][] = [
   ['tightness', 'Tightness ratio'],
   ['partial', 'Partial years'],
   ['bmis_scope', 'BMIS scope'],
+  ['cro', 'CRO company grouping'],
 ];
 
 function years(): number[] {
@@ -155,6 +157,17 @@ interface RcRow {
   country: string;
   invn: string;
 }
+interface CroTopRow {
+  cro: string;
+  n_entities: number;
+  n_receipts: number;
+  first_year: number;
+  last_year: number;
+  n_countries: number;
+  top_country: string;
+  n_variants: number;
+  example_site: string | null;
+}
 
 export default function App() {
   const [status, setStatus] = useState<Status>('loading');
@@ -187,6 +200,16 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
+  const [tab, setTab] = useState<'inv' | 'cro'>('inv');
+  const [croBand, setCroBand] = useState('all');
+  const [cy0, setCy0] = useState(YEAR_MIN);
+  const [cy1, setCy1] = useState(YEAR_MAX);
+  const [croSel, setCroSel] = useState('all');
+  const [croOpts, setCroOpts] = useState<{ cro: string; n: number }[]>([]);
+  const [ckpi, setCkpi] = useState<{ active: number; receipts: number; receipts09: number; companies: number } | null>(null);
+  const [cseries, setCseries] = useState<LineSeries[]>([]);
+  const [cEnt, setCEnt] = useState<LineSeries[]>([]);
+  const [ctop, setCtop] = useState<CroTopRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -357,6 +380,86 @@ export default function App() {
     };
   }, [status, version, band, y0, y1, scope, leaderGeo, demo]);
 
+  useEffect(() => {
+    if (status !== 'ready' || tab !== 'cro' || demo) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const bc = croBand === 'all' ? '' : ` AND band = '${escapeLiteral(croBand)}'`;
+        const cc = croSel === 'all' ? '' : ` AND cro = '${escapeLiteral(croSel)}'`;
+        const [opts, k, nco, top, entRows] = await Promise.all([
+          query<{ cro: string; n: number }>(
+            `SELECT CAST(cro AS VARCHAR) AS cro, CAST(n_receipts AS DOUBLE) AS n FROM cro_index ORDER BY n DESC LIMIT 200`,
+          ),
+          query<{ active: number; r25: number; r09: number }>(
+            `SELECT COUNT(DISTINCT CASE WHEN year = ${LATEST_FULL} THEN cro END) AS active,` +
+              ` CAST(SUM(CASE WHEN year = ${LATEST_FULL} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
+              ` CAST(SUM(CASE WHEN year = 2009 THEN n_receipts ELSE 0 END) AS DOUBLE) AS r09` +
+              ` FROM cro_year WHERE 1 = 1${bc}${cc}`,
+          ),
+          query<{ n: number }>(`SELECT COUNT(*) AS n FROM cro_index`),
+          query<CroTopRow>(
+            `SELECT CAST(cro AS VARCHAR) AS cro, CAST(n_entities AS INTEGER) AS n_entities,` +
+              ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
+              ` CAST(last_year AS INTEGER) AS last_year, CAST(n_countries AS INTEGER) AS n_countries,` +
+              ` CAST(top_country AS VARCHAR) AS top_country, CAST(n_variants AS INTEGER) AS n_variants,` +
+              ` CAST(example_site AS VARCHAR) AS example_site FROM cro_index ORDER BY n_receipts DESC LIMIT 25`,
+          ),
+          query<{ y: number; n: number }>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_entities) AS DOUBLE) AS n FROM cro_year` +
+              ` WHERE year BETWEEN ${cy0} AND ${cy1}${bc}${cc} GROUP BY 1 ORDER BY 1`,
+          ),
+        ]);
+        if (cancelled) return;
+        setCroOpts(opts.map((r) => ({ cro: r.cro, n: num0(r.n) })));
+        setCkpi({ active: num0(k[0]?.active), receipts: num0(k[0]?.r25), receipts09: num0(k[0]?.r09), companies: num0(nco[0]?.n) });
+        setCtop(top);
+        setCEnt([
+          {
+            label: croSel === 'all' ? 'Active entities' : croSel,
+            color: '#2ca02c',
+            points: entRows.map((r) => ({ x: r.y, y: num0(r.n) })),
+          },
+        ]);
+        const names =
+          croSel === 'all'
+            ? (
+                await query<{ cro: string }>(
+                  `SELECT CAST(cro AS VARCHAR) AS cro FROM cro_year WHERE year BETWEEN ${cy0} AND ${cy1}${bc}` +
+                    ` GROUP BY 1 ORDER BY SUM(n_receipts) DESC LIMIT 8`,
+                )
+              ).map((r) => r.cro)
+            : [croSel];
+        if (cancelled) return;
+        const sr =
+          names.length === 0
+            ? []
+            : await query<{ y: number; cro: string; n: number }>(
+                `SELECT CAST(year AS INTEGER) AS y, CAST(cro AS VARCHAR) AS cro,` +
+                  ` CAST(SUM(n_receipts) AS DOUBLE) AS n FROM cro_year` +
+                  ` WHERE year BETWEEN ${cy0} AND ${cy1}${bc}` +
+                  ` AND cro IN (${names.map((n) => `'${escapeLiteral(n)}'`).join(',')})` +
+                  ` GROUP BY 1, 2 ORDER BY 1, 2`,
+              );
+        if (cancelled) return;
+        setCseries(
+          names.map((n, i) => ({
+            label: n,
+            color: CRO_COLORS[i % CRO_COLORS.length],
+            points: sr.filter((r) => r.cro === n).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
+        );
+        setNote('');
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`CRO query failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, tab, croBand, cy0, cy1, croSel, demo]);
+
   const runSearch = async () => {
     if (demo) return;
     const needle = normName(q);
@@ -451,6 +554,27 @@ export default function App() {
       )}
       {note && <p className="banner">{note}</p>}
 
+      <div className="tabs" role="tablist" aria-label="Views">
+        <button
+          role="tab"
+          aria-selected={tab === 'inv'}
+          className={tab === 'inv' ? 'active' : ''}
+          onClick={() => setTab('inv')}
+        >
+          Investigators
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'cro'}
+          className={tab === 'cro' ? 'active' : ''}
+          onClick={() => setTab('cro')}
+        >
+          CROs
+        </button>
+      </div>
+
+      {tab === 'inv' && (
+        <>
       <section className="panel controls">
         <div className="filters">
           <div className="seg" role="group" aria-label="Person version">
@@ -842,6 +966,144 @@ export default function App() {
           )}
         </div>
       </section>
+
+        </>
+      )}
+
+      {tab === 'cro' && (
+        <>
+          {demo ? (
+            <p className="muted">Run the pipeline for CRO data.</p>
+          ) : (
+            <>
+              <section className="panel controls">
+                <div className="filters">
+                  <label>
+                    Geography
+                    <select value={croBand} onChange={(e) => setCroBand(e.target.value)}>
+                      <option value="all">All bands</option>
+                      {BANDS.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    From
+                    <select value={cy0} onChange={(e) => setCy0(Number(e.target.value))}>
+                      {years().map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    To
+                    <select value={cy1} onChange={(e) => setCy1(Number(e.target.value))}>
+                      {years().map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Company
+                    <select value={croSel} onChange={(e) => setCroSel(e.target.value)}>
+                      <option value="all">All (top 8 in chart)</option>
+                      {croOpts.map((o) => (
+                        <option key={o.cro} value={o.cro}>
+                          {o.cro} ({fmtInt.format(o.n)})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="muted">
+                    {ckpi ? `${fmtInt.format(ckpi.companies)} companies; dropdown shows top 200` : ''}
+                  </span>
+                </div>
+              </section>
+
+              <section className="kpis">
+                <div className="kpi">
+                  <span className="kpi-label">Active CROs, {LATEST_FULL}</span>
+                  <span className="kpi-value">{ckpi ? fmtInt.format(ckpi.active) : '—'}</span>
+                </div>
+                <div className="kpi">
+                  <span className="kpi-label">CRO receipts, {LATEST_FULL}</span>
+                  <span className="kpi-value">{ckpi ? fmtInt.format(ckpi.receipts) : '—'}</span>
+                  <span className="kpi-label">
+                    {ckpi && ckpi.receipts09 > 0
+                      ? `${(((ckpi.receipts - ckpi.receipts09) / ckpi.receipts09) * 100).toFixed(1)}% vs 2009`
+                      : ' '}
+                  </span>
+                </div>
+                <div className="kpi">
+                  <span className="kpi-label">Companies ever (in file)</span>
+                  <span className="kpi-value">{ckpi ? fmtInt.format(ckpi.companies) : '—'}</span>
+                </div>
+              </section>
+
+              <section className="panel">
+                <h2>CRO receipts per year{croSel === 'all' ? ' (top 8)' : `: ${croSel}`}</h2>
+                <MultiLineChart series={cseries} />
+                <p className="caption">
+                  Receipts naming the company (normalized site strings) · 2008 (ramp-up) and 2026
+                  (thru Aug) are partial.
+                </p>
+              </section>
+
+              <section className="panel">
+                <h2>Active CRO entities per year{croSel === 'all' ? '' : `: ${croSel}`}</h2>
+                <MultiLineChart series={cEnt} />
+                <p className="caption">Distinct CRO site entities with ≥1 receipt that year.</p>
+              </section>
+
+              <section className="panel">
+                <h2>Top companies by lifetime receipts (global)</h2>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th>Receipts</th>
+                        <th>Entities</th>
+                        <th>Countries</th>
+                        <th>Top country</th>
+                        <th>Span</th>
+                        <th>Variants</th>
+                        <th>Top filing name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ctop.map((r) => (
+                        <tr key={r.cro}>
+                          <td>{r.cro}</td>
+                          <td>{fmtInt.format(r.n_receipts)}</td>
+                          <td>{fmtInt.format(r.n_entities)}</td>
+                          <td>{r.n_countries}</td>
+                          <td>{r.top_country}</td>
+                          <td>
+                            {r.first_year}–{r.last_year}
+                          </td>
+                          <td>{r.n_variants}</td>
+                          <td>{r.example_site ?? ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="caption">
+                  Variants = distinct raw site strings merged into the company key; top filing name is
+                  the most frequent raw string. Residual splits remain (see Definitions).
+                </p>
+              </section>
+            </>
+          )}
+        </>
+      )}
 
       <section className="panel">
         <h2>Definitions</h2>
