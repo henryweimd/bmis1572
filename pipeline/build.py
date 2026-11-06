@@ -175,6 +175,42 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     ci_raw_disp["SITE"] = "?"
     lb.append(agg.leaderboard(p, ci_raw_disp, pid, "raw"))
 
+    # Investigator search (strict persons only, v1)
+    sp = persons["strict"]
+    spid = ci["pid_strict"].to_numpy()
+    idx = pd.DataFrame({
+        "person_id": sp["person_id"].to_numpy(),
+        "display_name": sp["display_name"].to_numpy(),
+        "country": sp["country"].to_numpy(),
+        "band": sp["band"].to_numpy(),
+        "state": sp["state"].to_numpy(),
+        "n_trials": sp["n_trials"].to_numpy(),
+        "n_years": sp["n_years"].to_numpy(),
+        "first_year": sp["first_year"].to_numpy(),
+        "last_year": sp["last_year"].to_numpy(),
+    })
+    idx["name_key"] = (
+        idx["display_name"].str.normalize("NFKD")
+        .str.encode("ascii", "ignore").str.decode("ascii").str.upper()
+        .str.replace(r"[^A-Z ]", "", regex=True)
+        .str.replace(r"\s+", " ", regex=True).str.strip())
+    keep = ~idx["name_key"].isin(["", "NG", "NG NG"])
+    idx = idx[keep].reset_index(drop=True)
+    keep_rows = keep.to_numpy()[spid]
+    rc = pd.DataFrame({
+        "pid": spid[keep_rows],
+        "rcvd": pd.to_datetime(ci["RCVD_DT"][keep_rows]).dt.date,
+        "site": ci["SITE"].to_numpy()[keep_rows],
+        "city": ci["CITY"].to_numpy()[keep_rows],
+        "state": ci["STATE"].astype(str).to_numpy()[keep_rows],
+        "zip": ci["ZIP"].astype(str).to_numpy()[keep_rows],
+        "country": ci["COUNTRY"].astype(str).to_numpy()[keep_rows],
+        "invn": ci["INVN"].to_numpy()[keep_rows],
+    }).sort_values(["pid", "rcvd"], ascending=[True, False])
+    rc["person_id"] = sp["person_id"].to_numpy()[rc["pid"].to_numpy()]
+    tables["person_index"] = idx
+    tables["person_receipts"] = rc.drop(columns=["pid"]).reset_index(drop=True)
+
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
     tables["us_state_year"] = pd.concat(sy).reset_index(drop=True)
@@ -309,6 +345,8 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "trials_year": "Industry trials by year (starts vs running)",
         "tightness": "Investigators per trial by year",
         "irb_cro_year": "IRB/CRO entities and receipts by year",
+        "person_index": "Investigator search index (strict persons)",
+        "person_receipts": "Per-investigator receipt history, newest first",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -395,6 +433,12 @@ def verify_with_duckdb(tables) -> dict:
         " WHERE version = 'strict')").fetchone()[0]
     assert nb == len(agg.BIN_ORDER), \
         f"expected {len(agg.BIN_ORDER)} trial bins, got {nb}"
+    c_idx, c_rc, c_sum = con.execute(
+        "SELECT (SELECT COUNT(*) FROM person_index),"
+        " (SELECT COUNT(*) FROM person_receipts),"
+        " (SELECT SUM(n_trials) FROM person_index)").fetchone()
+    assert c_idx > 0 and c_rc == c_sum, \
+        "person index/receipts mismatch"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
