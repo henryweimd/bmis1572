@@ -126,4 +126,4 @@ Without step 1, the explorer falls back to a committed demo CSV
 - CT.gov site+window trial inference prototype (plausible-trials per investigator).
 - Name-only cross-site investigator tracking; curated org alias table.
 - Therapeutic-area / phase drill-downs (reserved disabled slots in the explorer).
-- R2 object storage if the shipped snapshot outgrows comfortable git size (~53MB today).
+- R2 object storage if the shipped snapshot outgrows comfortable git size (~36MB today after zstd).

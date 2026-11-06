@@ -195,6 +195,16 @@ def org_tables(nonci, entities, org_type, normalize_fn, key):
     return year.reset_index(drop=True), index.reset_index(drop=True)
 
 
+def downcast(t: pd.DataFrame) -> pd.DataFrame:
+    """Slim int64 columns to int32 where values fit (snapshot diet)."""
+    for c in t.columns:
+        if t[c].dtype == np.int64 and len(t):
+            lo, hi = t[c].min(), t[c].max()
+            if lo >= -(2 ** 31) and hi < 2 ** 31:
+                t[c] = t[c].astype("int32")
+    return t
+
+
 def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     if "site_strict" not in df.columns:
         log("site clustering (strict + merged) ...")
@@ -341,7 +351,10 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["irb_cro_year"] = ent.sort_values(["year", "type"]).reset_index(drop=True)
 
     for name, t in tables.items():
-        t.to_parquet(CURATED / f"{name}.parquet", index=False)
+        t = downcast(t)
+        tables[name] = t
+        t.to_parquet(CURATED / f"{name}.parquet", index=False,
+                     compression="zstd", compression_level=9)
         log(f"curated/{name}.parquet: {len(t):,} rows")
     return tables
 
@@ -381,10 +394,12 @@ def stage_ctgov(skip: bool, refresh: bool):
     trials.loc[trials["scope"] != "adjusted", "n_running"] = pd.NA
     trials["partial"] = trials["year"] == 2026
     trials = trials.sort_values(["scope", "year"]).reset_index(drop=True)
+    trials = downcast(trials)
     trials.to_parquet(CURATED / "trials_year.parquet", index=False)
     grec = ctgov_geo.fetch_global(s)
     band_tr, bdiag = ctgov_geo.band_starts(grec, YEARS)
     band_tr["partial"] = band_tr["year"] == 2026
+    band_tr = downcast(band_tr)
     band_tr.to_parquet(CURATED / "trials_band.parquet", index=False)
     log(f"ctgov: band starts ({len(band_tr)} rows, "
         f"unmapped={bdiag['unmapped_total']})")
@@ -418,6 +433,7 @@ def stage_tightness(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
                     "partial": bool(int(r["year"]) in agg.PARTIAL_YEARS),
                 })
     tight = pd.DataFrame(rows).sort_values(["version", "scope", "year"])
+    tight = downcast(tight)
     tight.to_parquet(CURATED / "tightness.parquet", index=False)
     tables["tightness"] = tight
     band_tr = tables.get("trials_band")
@@ -437,6 +453,7 @@ def stage_tightness(tables: dict[str, pd.DataFrame]) -> pd.DataFrame:
                     "partial": bool(int(r["year"]) in agg.PARTIAL_YEARS),
                 })
         tb = pd.DataFrame(rows_b).sort_values(["version", "band", "year"])
+        tb = downcast(tb)
         tb.to_parquet(CURATED / "tightness_band.parquet", index=False)
         tables["tightness_band"] = tb
     return tight
