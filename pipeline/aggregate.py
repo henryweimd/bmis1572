@@ -95,6 +95,11 @@ DEFINITIONS = {
         "spanning states are state-qualified; aliases stay global. "
         "Residual variants stay split; irb_index lists variants."
     ),
+    "retention": (
+        "Cohort retention: share of a first-seen cohort active again k "
+        "years later. Right-censored (recent cohorts show fewer years); "
+        "2008-09 cohorts' first-seen year is inflated by the file start."
+    ),
 }
 
 
@@ -171,6 +176,21 @@ def active_bins(py: pd.DataFrame, version: str) -> pd.DataFrame:
     out["version"] = version
     out["bin"] = pd.Categorical(out["bin"], categories=BIN_ORDER, ordered=True)
     return out.sort_values(["year", "bin"]).reset_index(drop=True)
+
+
+def retention(persons: pd.DataFrame, py: pd.DataFrame,
+              version: str) -> pd.DataFrame:
+    """Cohort retention: share of first-seen cohort active k years later."""
+    k = py["year"].to_numpy() - py["first_year"].to_numpy()
+    df = pd.DataFrame({"cohort": py["first_year"].to_numpy(), "k": k})
+    df = df[df["cohort"] >= 2008]
+    n_cohort = (persons[persons["first_year"] >= 2008]
+                .groupby("first_year").size())
+    act = df.groupby(["cohort", "k"]).size().rename("n_active").reset_index()
+    act["n_cohort"] = act["cohort"].map(n_cohort)
+    act["retention"] = (act["n_active"] / act["n_cohort"]).round(4)
+    act["version"] = version
+    return act[["version", "cohort", "k", "n_cohort", "n_active", "retention"]]
 
 
 def leaderboard(persons: pd.DataFrame, rows: pd.DataFrame,

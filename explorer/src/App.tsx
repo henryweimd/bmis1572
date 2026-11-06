@@ -37,6 +37,8 @@ const VERSION_LABEL: Record<Version, string> = {
 const YEAR_MIN = 2008;
 const YEAR_MAX = 2026;
 const LATEST_FULL = 2025;
+const RET_COHORTS = [2009, 2013, 2017, 2021];
+const RET_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
 
 interface GeoRow {
   y: number;
@@ -116,6 +118,7 @@ const DEF_TITLES: [string, string][] = [
   ['active', 'Active / new / returning'],
   ['one_trial', 'One-trial'],
   ['trials_per_year', 'Trials/year rate'],
+  ['retention', 'Cohort retention'],
   ['scope_unadjusted', 'Unadjusted benchmark'],
   ['scope_adjusted', 'Adjusted benchmark'],
   ['starts_running', 'Starts vs. running'],
@@ -184,6 +187,7 @@ export default function App() {
   const [trials, setTrials] = useState<LineSeries[]>([]);
   const [tight, setTight] = useState<LineSeries[]>([]);
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
+  const [ret, setRet] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [countries, setCountries] = useState<{ category: string; v: number }[]>([]);
   const [states, setStates] = useState<{ category: string; v: number }[]>([]);
@@ -261,7 +265,7 @@ export default function App() {
           return;
         }
         const s = escapeLiteral(scope);
-        const [ot, ti, tr, tser, bn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tr, tser, bn, rt, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -284,6 +288,11 @@ export default function App() {
           query<BinRow>(
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
               ` FROM active_bins WHERE version = '${v}' GROUP BY 1`,
+          ),
+          query<{ cohort: number; k: number; v: number }>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
+              ` CAST(retention AS DOUBLE) AS v FROM retention WHERE version = '${v}'` +
+              ` AND cohort IN (2009, 2013, 2017, 2021) ORDER BY 1, 2`,
           ),
           query<LeaderRow>(
             `SELECT CAST(rank AS INTEGER) AS rank, CAST(display_name AS VARCHAR) AS display_name,` +
@@ -344,6 +353,13 @@ export default function App() {
           bn
             .map((r) => ({ category: r.bin, v: num0(r.n) }))
             .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
+        );
+        setRet(
+          RET_COHORTS.map((c, i) => ({
+            label: `${c} cohort`,
+            color: RET_COLORS[i % RET_COLORS.length],
+            points: rt.filter((r) => r.cohort === c).map((r) => ({ x: r.k, y: num0(r.v) * 100 })),
+          })),
         );
         setLeaders(lb);
         setCountries(cy.map((r) => ({ category: r.name, v: num0(r.n) })));
@@ -927,6 +943,20 @@ export default function App() {
         </div>
       </section>
 
+          <section className="panel">
+            <h2>Cohort retention</h2>
+            {demo ? (
+              <p className="muted">Run the pipeline for retention data.</p>
+            ) : (
+              <>
+                <MultiLineChart series={ret} />
+                <p className="caption">
+                  Share of each first-seen cohort still active k years later (percent). Right-censored:
+                  recent cohorts show fewer years.
+                </p>
+              </>
+            )}
+          </section>
         </>
       )}
 

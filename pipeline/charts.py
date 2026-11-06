@@ -10,7 +10,7 @@ import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
 
 from aggregate import BIN_ORDER, DEFINITIONS
 from geo_bands import BAND_ORDER
@@ -119,6 +119,27 @@ def chart_distribution(abins: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_retention(ret: pd.DataFrame, out: Path) -> None:
+    d = ret[ret["version"] == "strict"]
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    for c, color in zip([2009, 2013, 2017, 2021],
+                        ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]):
+        s = d[d["cohort"] == c].sort_values("k")
+        ax.plot(s["k"], s["retention"] * 100, marker="o", ms=3,
+                label=f"{c} cohort (n={int(s['n_cohort'].iloc[0]):,})",
+                color=color)
+    ax.set_title("Cohort retention: % still active k years after first seen (Strict)")
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xlabel("Years since first receipt (k)")
+    ax.set_ylabel("% of cohort active")
+    ax.legend(fontsize=8)
+    fig.tight_layout(rect=(0, 0.14, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["retention"] + " " +
+             DEFINITIONS["person_strict"])
+    fig.savefig(out / "retention.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def chart_trials(trials: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(figsize=(10, 4.6))
     adj = trials[trials["scope"] == "adjusted"].set_index("year").sort_index()
@@ -171,6 +192,7 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_investigators_geo(tables["investigators_year_geo"], out)
     chart_new_returning(tables["investigators_year_geo"], out)
     chart_distribution(tables["active_bins"], out)
+    chart_retention(tables["retention"], out)
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     return sorted(p.name for p in out.glob("*.png"))
