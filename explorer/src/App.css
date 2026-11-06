@@ -250,6 +250,20 @@ h3 {
   margin: 14px 0 8px;
 }
 
+.about-list {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.about-list a,
+footer a {
+  color: var(--accent);
+}
+
 .table-scroll {
   overflow-x: auto;
 }
