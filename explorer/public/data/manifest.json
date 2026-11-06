@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T02:40:57.546782+00:00",
+  "generated_at": "2026-11-06T02:43:33.062242+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -688,7 +688,8 @@
     "concentration": "Annual concentration: share of each year's receipts going to the year's top 1%/10% investigators by receipts, plus the Gini of per-investigator yearly receipts. Higher means work concentrated in fewer hands.",
     "site": "A site is a PLACE (street address): Strict matches normalized street+city+state+country exactly (suite/floor markers dropped, ZIP excluded); Merged additionally unions same-house-number addresses with street-token Jaccard >= 0.6 within a city. Branches of one org at different addresses stay split. Site rollups use strict persons.",
     "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous.",
-    "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6."
+    "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6.",
+    "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them."
   },
   "stats": {
     "persons_ever": {
