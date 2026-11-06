@@ -5,6 +5,7 @@ import { CategoryBars, MultiLineChart, StackedBars } from './charts';
 import type { LineSeries } from './charts';
 import OrgTab from './OrgTab';
 import About from './About';
+import { intIn, pick, readHash, writeHash } from './hash';
 import './App.css';
 
 const BANDS = [
@@ -174,13 +175,28 @@ export default function App() {
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [demo, setDemo] = useState(false);
 
-  const [version, setVersion] = useState<Version>('strict');
-  const [band, setBand] = useState('all');
-  const [y0, setY0] = useState(YEAR_MIN);
-  const [y1, setY1] = useState(YEAR_MAX);
-  const [scope, setScope] = useState<'adjusted' | 'unadjusted'>('adjusted');
-  const [leaderGeo, setLeaderGeo] = useState('ALL');
-  const [leaderSort, setLeaderSort] = useState<'total' | 'rate'>('total');
+  const [hashInit] = useState(readHash);
+  const [version, setVersion] = useState<Version>(() => pick(hashInit.v, VERSIONS, 'strict'));
+  const [band, setBand] = useState(() => pick(hashInit.b, ['all', ...BANDS], 'all'));
+  const [y0, setY0] = useState(() =>
+    Math.min(
+      intIn(hashInit.y0, YEAR_MIN, YEAR_MAX, YEAR_MIN),
+      intIn(hashInit.y1, YEAR_MIN, YEAR_MAX, YEAR_MAX),
+    ),
+  );
+  const [y1, setY1] = useState(() =>
+    Math.max(
+      intIn(hashInit.y0, YEAR_MIN, YEAR_MAX, YEAR_MIN),
+      intIn(hashInit.y1, YEAR_MIN, YEAR_MAX, YEAR_MAX),
+    ),
+  );
+  const [scope, setScope] = useState<'adjusted' | 'unadjusted'>(() =>
+    pick(hashInit.s, ['adjusted', 'unadjusted'] as const, 'adjusted'),
+  );
+  const [leaderGeo, setLeaderGeo] = useState(() => pick(hashInit.lg, ['ALL', ...BANDS], 'ALL'));
+  const [leaderSort, setLeaderSort] = useState<'total' | 'rate'>(() =>
+    pick(hashInit.ls, ['total', 'rate'] as const, 'total'),
+  );
 
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [geo, setGeo] = useState<LineSeries[]>([]);
@@ -201,7 +217,28 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'about'>('inv');
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'about'>(() =>
+    pick(hashInit.t, ['inv', 'cro', 'irb', 'about'] as const, 'inv'),
+  );
+
+  useEffect(() => {
+    writeHash({
+      t: tab,
+      v: version,
+      b: band,
+      y0: String(y0),
+      y1: String(y1),
+      s: scope,
+      lg: leaderGeo,
+      ls: leaderSort,
+    });
+  }, [tab, version, band, y0, y1, scope, leaderGeo, leaderSort]);
+
+  useEffect(() => {
+    document.title = `${
+      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : 'About'
+    } · Investigator Supply Explorer`;
+  }, [tab]);
 
   useEffect(() => {
     let cancelled = false;
