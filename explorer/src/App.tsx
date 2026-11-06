@@ -290,7 +290,7 @@ export default function App() {
           { label: 'Active per running trial', color: '#d62728', points: tser.map((r) => ({ x: r.y, y: num(r.pr) })) },
           { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
         ]);
-        const binOrder = ['1', '2', '3-5', '6-10', '11+'];
+        const binOrder = [...Array.from({ length: 14 }, (_, i) => String(i + 1)), '15+'];
         setBins(
           bn
             .map((r) => ({ category: r.bin, v: num0(r.n) }))

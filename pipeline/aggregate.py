@@ -79,16 +79,12 @@ DEFINITIONS = {
 def trial_bin(n: int) -> str:
     if n <= 1:
         return "1"
-    if n == 2:
-        return "2"
-    if n <= 5:
-        return "3-5"
-    if n <= 10:
-        return "6-10"
-    return "11+"
+    if n >= 15:
+        return "15+"
+    return str(n)
 
 
-BIN_ORDER = ["1", "2", "3-5", "6-10", "11+"]
+BIN_ORDER = [str(i) for i in range(1, 15)] + ["15+"]
 
 
 def person_years(persons: pd.DataFrame, row_pid: np.ndarray,

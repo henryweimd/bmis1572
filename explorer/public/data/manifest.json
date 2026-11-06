@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-05T13:10:13.937365+00:00",
+  "generated_at": "2026-11-06T01:19:55.428919+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -804,7 +804,7 @@
       "files": [
         "data/active_bins.parquet"
       ],
-      "row_count": 621,
+      "row_count": 2031,
       "columns": [
         "year",
         "bin",
