@@ -96,9 +96,9 @@ DEFINITIONS = {
         "Residual variants stay split; irb_index lists variants."
     ),
     "retention": (
-        "Cohort retention: share of a first-seen cohort active again k "
-        "years later. Right-censored (recent cohorts show fewer years); "
-        "2008-09 cohorts' first-seen year is inflated by the file start."
+        "Vintage attrition: share of a first-seen vintage (cohort) active "
+        "again k years later. Right-censored (recent vintages show fewer "
+        "years); 2008 excluded (file ramp-up distorts the base)."
     ),
     "concentration": (
         "Annual concentration: share of each year's receipts going to the "

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T02:43:33.062242+00:00",
+  "generated_at": "2026-11-06T12:39:53.870261+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -684,7 +684,7 @@
     "cro": "CRO views group BMIS TYPE=CRO rows by normalized company name: evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, Syneos, ICON, Parexel, Covance, Celerion, others), else first site segment with suffixes/punctuation stripped. Same-name companies materially spanning states are state-qualified; aliases stay global. Residual variants stay split; cro_index lists variants.",
     "trials_per_year": "Trials/year rate: lifetime IND references divided by the inclusive first-to-last receipt span in calendar years. Intensity measure, not a headcount; single-year bursts rank high by construction.",
     "irb": "IRB views group BMIS TYPE=IRB rows by normalized board name: evidence-based aliases for known boards (Advarra, WCG/Western, Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), else first non-empty site segment with IRB stopwords, room markers, and numbers stripped. Same-name boards materially spanning states are state-qualified; aliases stay global. Residual variants stay split; irb_index lists variants.",
-    "retention": "Cohort retention: share of a first-seen cohort active again k years later. Right-censored (recent cohorts show fewer years); 2008-09 cohorts' first-seen year is inflated by the file start.",
+    "retention": "Vintage attrition: share of a first-seen vintage (cohort) active again k years later. Right-censored (recent vintages show fewer years); 2008 excluded (file ramp-up distorts the base).",
     "concentration": "Annual concentration: share of each year's receipts going to the year's top 1%/10% investigators by receipts, plus the Gini of per-investigator yearly receipts. Higher means work concentrated in fewer hands.",
     "site": "A site is a PLACE (street address): Strict matches normalized street+city+state+country exactly (suite/floor markers dropped, ZIP excluded); Merged additionally unions same-house-number addresses with street-token Jaccard >= 0.6 within a city. Branches of one org at different addresses stay split. Site rollups use strict persons.",
     "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous.",

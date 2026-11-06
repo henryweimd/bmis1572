@@ -273,3 +273,55 @@ export function CategoryBars({ data }: { data: { category: string; v: number }[]
     </ul>
   );
 }
+
+export interface VintageRow {
+  cohort: number;
+  n: number;
+  cells: (number | null)[];
+}
+
+function vintageColor(v: number): string {
+  const t = Math.min(1, Math.max(0, v / 100));
+  const r = Math.round(255 - t * 232);
+  const g = Math.round(255 - t * 207);
+  const b = Math.round(255 - t * 149);
+  return `rgb(${r},${g},${b})`;
+}
+
+export function VintageHeatmap({ rows, kMax }: { rows: VintageRow[]; kMax: number }) {
+  if (!rows.length) return <p className="muted">No data.</p>;
+  const ks: number[] = [];
+  for (let k = 0; k <= kMax; k++) ks.push(k);
+  return (
+    <div className="table-scroll">
+      <table className="vintage">
+        <thead>
+          <tr>
+            <th>Vintage (first-seen year)</th>
+            {ks.map((k) => (
+              <th key={k}>+{k}y</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.cohort}>
+              <td>
+                {r.cohort} <span className="muted">n={r.n.toLocaleString('en-US')}</span>
+              </td>
+              {r.cells.map((c, i) => (
+                <td
+                  key={i}
+                  style={c === null ? { background: '#f0f0f0', color: '#999' } : { background: vintageColor(c) }}
+                  title={c === null ? `${r.cohort} vintage: censored` : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% active`}
+                >
+                  {c === null ? '·' : c.toFixed(1)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
