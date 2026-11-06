@@ -7,6 +7,7 @@ import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
+import { downloadCsv } from './csv';
 import './App.css';
 
 const BANDS = [
@@ -170,6 +171,7 @@ interface RcRow {
   state: string | null;
   country: string;
   invn: string;
+  site_n: number;
 }
 
 export default function App() {
@@ -477,7 +479,8 @@ export default function App() {
         query<RcRow>(
           `SELECT CAST(rcvd AS VARCHAR) AS rcvd, CAST(site AS VARCHAR) AS site,` +
             ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
-            ` CAST(country AS VARCHAR) AS country, CAST(invn AS VARCHAR) AS invn` +
+            ` CAST(country AS VARCHAR) AS country, CAST(invn AS VARCHAR) AS invn,` +
+            ` CAST(site_strict AS INTEGER) AS site_n` +
             ` FROM person_receipts WHERE person_id = '${pid}' ORDER BY rcvd DESC LIMIT 1000`,
         ),
         query<{ n: number }>(`SELECT COUNT(*) AS n FROM person_receipts WHERE person_id = '${pid}'`),
@@ -487,6 +490,11 @@ export default function App() {
     } catch (e) {
       setNote(`Receipts query failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+  };
+
+  const jumpToSite = (n: number) => {
+    writeHash({ t: 'site', 'site.v': 'strict', 'site.s': `strict:${n}` });
+    setTab('site');
   };
 
   if (status === 'loading') {
@@ -795,6 +803,29 @@ export default function App() {
                 Search
               </button>
               <span className="muted">Strict persons · top 50 by IND references · names as published</span>
+              {!!hits.length && (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    downloadCsv(
+                      'investigator-search.csv',
+                      ['investigator', 'site', 'country', 'ind_refs', 'per_year', 'years', 'first_year', 'last_year'],
+                      hits.map((r) => [
+                        r.display_name,
+                        r.site ?? '',
+                        r.country,
+                        r.n_trials,
+                        (r.n_trials / (r.last_year - r.first_year + 1)).toFixed(2),
+                        r.n_years,
+                        r.first_year,
+                        r.last_year,
+                      ]),
+                    )
+                  }
+                >
+                  CSV
+                </button>
+              )}
             </div>
             {searched && !hits.length && <p className="muted">No investigators match.</p>}
             {!!hits.length && (
@@ -836,7 +867,21 @@ export default function App() {
             {sel && (
               <>
                 <h3>
-                  {sel.name} <span className="muted">· {fmtInt.format(rcTotal)} receipts, newest first</span>
+                  {sel.name} <span className="muted">· {fmtInt.format(rcTotal)} receipts, newest first</span>{' '}
+                  {!!receipts.length && (
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        downloadCsv(
+                          'investigator-receipts.csv',
+                          ['receipt_date', 'site', 'city', 'state', 'country', 'reviewer_id'],
+                          receipts.map((r) => [r.rcvd, r.site ?? '', r.city ?? '', r.state ?? '', r.country, r.invn]),
+                        )
+                      }
+                    >
+                      CSV
+                    </button>
+                  )}
                 </h3>
                 <div className="table-scroll short">
                   <table>
@@ -844,6 +889,7 @@ export default function App() {
                       <tr>
                         <th>Receipt date</th>
                         <th>Site</th>
+                        <th title="Open this address in the Sites tab">Site detail</th>
                         <th>City</th>
                         <th>State</th>
                         <th>Country</th>
@@ -855,6 +901,11 @@ export default function App() {
                         <tr key={i}>
                           <td>{r.rcvd}</td>
                           <td>{r.site ?? ''}</td>
+                          <td>
+                            <button className="btn" title="Open this address in the Sites tab" onClick={() => jumpToSite(r.site_n)}>
+                              →
+                            </button>
+                          </td>
                           <td>{r.city ?? ''}</td>
                           <td>{r.state ?? ''}</td>
                           <td>{r.country}</td>
@@ -908,6 +959,33 @@ export default function App() {
             </select>
           </label>
           <span className="muted">Names exactly as published in BMIS. Counts are IND references, not confirmed distinct trials.</span>
+          {!!leaders.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'leaderboard.csv',
+                  ['rank', 'investigator', 'degree', 'site', 'city', 'state', 'country', 'ind_refs', 'per_year', 'years', 'first_year', 'last_year'],
+                  leaders.map((r) => [
+                    r.rank,
+                    r.display_name,
+                    r.deg ?? '',
+                    r.site ?? '',
+                    r.city ?? '',
+                    r.state ?? '',
+                    r.country,
+                    r.n_trials,
+                    r.tpy.toFixed(2),
+                    r.n_years,
+                    r.first_year,
+                    r.last_year,
+                  ]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </div>
         {demo ? (
           <p className="muted">Run the pipeline for leaderboard data.</p>

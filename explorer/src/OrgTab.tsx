@@ -3,6 +3,7 @@ import { escapeLiteral, query } from './duckdb';
 import { MultiLineChart } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
+import { downloadCsv } from './csv';
 
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -371,7 +372,21 @@ export default function OrgTab({
         </div>
         <p className="caption">
           Variants = distinct raw site strings merged into the key; top filing name is the most frequent
-          raw string. Residual splits remain (see Definitions).
+          raw string. Residual splits remain (see Definitions).{' '}
+          {!!top.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `${kind}-top.csv`,
+                  [cfg.selector.toLowerCase(), 'receipts', 'per_year', 'entities', 'countries', 'top_country', 'first_year', 'last_year', 'variants', 'top_filing_name'],
+                  top.map((r) => [r.org, r.n_receipts, r.tpy.toFixed(2), r.n_entities, r.n_countries, r.top_country, r.first_year, r.last_year, r.n_variants, r.example_site ?? '']),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
     </>
