@@ -100,6 +100,12 @@ DEFINITIONS = {
         "years later. Right-censored (recent cohorts show fewer years); "
         "2008-09 cohorts' first-seen year is inflated by the file start."
     ),
+    "concentration": (
+        "Annual concentration: share of each year's receipts going to the "
+        "year's top 1%/10% investigators by receipts, plus the Gini of "
+        "per-investigator yearly receipts. Higher means work concentrated "
+        "in fewer hands."
+    ),
 }
 
 
@@ -191,6 +197,29 @@ def retention(persons: pd.DataFrame, py: pd.DataFrame,
     act["retention"] = (act["n_active"] / act["n_cohort"]).round(4)
     act["version"] = version
     return act[["version", "cohort", "k", "n_cohort", "n_active", "retention"]]
+
+
+def concentration(row_pid: np.ndarray, row_year: np.ndarray,
+                  version: str) -> pd.DataFrame:
+    """Annual concentration: top receipt shares + Gini per active year."""
+    counts = (pd.DataFrame({"pid": row_pid, "year": row_year})
+              .groupby(["year", "pid"]).size().rename("n").reset_index())
+    recs = []
+    for y, g in counts.groupby("year"):
+        v = np.sort(g["n"].to_numpy().astype(float))
+        n = len(v)
+        tot = v.sum()
+        k1 = max(1, int(np.ceil(n * 0.01)))
+        k10 = max(1, int(np.ceil(n * 0.10)))
+        i = np.arange(1, n + 1)
+        gini = (2 * (i * v).sum() / (n * tot)) - (n + 1) / n
+        recs.append({"version": version, "year": int(y), "n_active": n,
+                     "top1_share": round(float(v[-k1:].sum() / tot), 4),
+                     "top10_share": round(float(v[-k10:].sum() / tot), 4),
+                     "gini": round(float(gini), 4)})
+    out = pd.DataFrame(recs).sort_values("year").reset_index(drop=True)
+    out["partial"] = out["year"].isin(PARTIAL_YEARS)
+    return out
 
 
 def leaderboard(persons: pd.DataFrame, rows: pd.DataFrame,
