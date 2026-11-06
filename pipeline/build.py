@@ -443,9 +443,9 @@ def verify_with_duckdb(tables) -> dict:
         " FROM investigators_year_geo").fetchone()
     assert ya == yn + yr, "active != new + returning"
     lb = con.execute(
-        "SELECT version, scope, scope_value, COUNT(*), MIN(rank), MAX(rank)"
-        " FROM leaderboard GROUP BY 1, 2, 3").fetchall()
-    assert all(mn == 1 and mx == n for _, _, _, n, mn, mx in lb), \
+        "SELECT version, metric, scope, scope_value, COUNT(*), MIN(rank), MAX(rank)"
+        " FROM leaderboard GROUP BY 1, 2, 3, 4").fetchall()
+    assert all(mn == 1 and mx == n for _, _, _, _, n, mn, mx in lb), \
         "leaderboard ranks not contiguous"
     ng = con.execute(
         "SELECT COUNT(*) FROM leaderboard "

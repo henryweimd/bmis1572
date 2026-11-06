@@ -80,6 +80,11 @@ DEFINITIONS = {
         "site segment with suffixes/punctuation stripped. Residual spelling "
         "variants stay split; cro_index lists variants per company."
     ),
+    "trials_per_year": (
+        "Trials/year rate: lifetime IND references divided by the inclusive "
+        "first-to-last receipt span in calendar years. Intensity measure, "
+        "not a headcount; single-year bursts rank high by construction."
+    ),
 }
 
 
@@ -161,50 +166,67 @@ def active_bins(py: pd.DataFrame, version: str) -> pd.DataFrame:
 def leaderboard(persons: pd.DataFrame, rows: pd.DataFrame,
                 row_pid: np.ndarray, version: str,
                 top_global: int = 100, top_band: int = 50) -> pd.DataFrame:
-    """Top investigators by lifetime IND references (display refined by mode)."""
+    """Top investigators by lifetime IND references AND by trials/year rate.
+
+    Two metric boards (display refined by mode in both): 'receipts' ranks by
+    lifetime total, 'rate' by trials/year = n_trials / inclusive first-last
+    span. Separate boards because top-by-total is not top-by-rate.
+    """
     persons = persons.copy()
     persons["_pos"] = np.arange(len(persons))
+    persons["tpy"] = (persons["n_trials"]
+                      / (persons["last_year"] - persons["first_year"] + 1))
     ok = ~persons["display_name"].str.match(r"^(NG,|,$|\?\?|,?\s*$)", na=False)
     elig = persons[ok]
 
-    picks: dict[int, list[tuple[str, str, int]]] = {}
+    frames = []
+    for metric, keys in [("receipts", ["n_trials", "n_years"]),
+                         ("rate", ["tpy", "n_trials"])]:
+        picks: dict[int, list[tuple[str, str, int]]] = {}
 
-    def take(df: pd.DataFrame, scope: str, scope_value: str, k: int) -> None:
-        top = df.nlargest(k, ["n_trials", "n_years"])
-        for rank, (_, r) in enumerate(top.iterrows(), 1):
-            picks.setdefault(int(r["_pos"]), []).append((scope, scope_value, rank))
+        def take(df: pd.DataFrame, scope: str, scope_value: str, k: int,
+                 _keys: list = keys,
+                 _picks: dict = picks) -> None:
+            top = df.nlargest(k, _keys)
+            for rank, (_, r) in enumerate(top.iterrows(), 1):
+                _picks.setdefault(int(r["_pos"]), []).append(
+                    (scope, scope_value, rank))
 
-    take(elig, "global", "ALL", top_global)
-    for band, dfb in elig.groupby("band", observed=True):
-        take(dfb, "band", str(band), top_band)
+        take(elig, "global", "ALL", top_global)
+        for band, dfb in elig.groupby("band", observed=True):
+            take(dfb, "band", str(band), top_band)
 
-    # Refine display name/site by mode over each picked person's rows.
-    cand = np.array(sorted(picks))
-    rdf = pd.DataFrame({"pid": row_pid,
-                        "name": rows["disp_name"].to_numpy(),
-                        "site": rows["SITE"].to_numpy()})
-    rdf = rdf[rdf["pid"].isin(cand)]
-    mode_name = rdf.groupby("pid")["name"].agg(
-        lambda s: s.value_counts().index[0])
-    mode_site = rdf.groupby("pid")["site"].agg(
-        lambda s: s.value_counts().index[0])
+        # Refine display name/site by mode over each picked person's rows.
+        cand = np.array(sorted(picks))
+        rdf = pd.DataFrame({"pid": row_pid,
+                            "name": rows["disp_name"].to_numpy(),
+                            "site": rows["SITE"].to_numpy()})
+        rdf = rdf[rdf["pid"].isin(cand)]
+        mode_name = rdf.groupby("pid")["name"].agg(
+            lambda s: s.value_counts().index[0])
+        mode_site = rdf.groupby("pid")["site"].agg(
+            lambda s: s.value_counts().index[0])
 
-    recs = []
-    for pos, scopes in picks.items():
-        r = persons.iloc[pos]
-        for scope, scope_value, rank in scopes:
-            recs.append({
-                "version": version, "scope": scope,
-                "scope_value": scope_value, "rank": rank,
-                "display_name": mode_name.get(pos, r["display_name"]),
-                "deg": r["deg"], "site": mode_site.get(pos, r["site"]),
-                "city": r["city"], "state": r["state"],
-                "country": r["country"], "band": r["band"],
-                "n_trials": int(r["n_trials"]), "n_years": int(r["n_years"]),
-                "first_year": int(r["first_year"]),
-                "last_year": int(r["last_year"]),
-            })
-    out = pd.DataFrame(recs).sort_values(["scope", "scope_value", "rank"])
+        recs = []
+        for pos, scopes in picks.items():
+            r = persons.iloc[pos]
+            for scope, scope_value, rank in scopes:
+                recs.append({
+                    "version": version, "metric": metric, "scope": scope,
+                    "scope_value": scope_value, "rank": rank,
+                    "display_name": mode_name.get(pos, r["display_name"]),
+                    "deg": r["deg"], "site": mode_site.get(pos, r["site"]),
+                    "city": r["city"], "state": r["state"],
+                    "country": r["country"], "band": r["band"],
+                    "n_trials": int(r["n_trials"]),
+                    "n_years": int(r["n_years"]),
+                    "first_year": int(r["first_year"]),
+                    "last_year": int(r["last_year"]),
+                    "tpy": round(float(r["tpy"]), 4),
+                })
+        frames.append(pd.DataFrame(recs))
+    out = pd.concat(frames)
+    out = out.sort_values(["metric", "scope", "scope_value", "rank"])
     return out.reset_index(drop=True)
 
 
