@@ -233,6 +233,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     idx = pd.DataFrame({
         "person_id": sp["person_id"].to_numpy(),
         "display_name": sp["display_name"].to_numpy(),
+        "site": sp["site"].to_numpy(),
         "country": sp["country"].to_numpy(),
         "band": sp["band"].to_numpy(),
         "state": sp["state"].to_numpy(),
