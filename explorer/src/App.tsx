@@ -1101,15 +1101,17 @@ export default function App() {
       </section>
 
           <section className="panel">
-            <h2>Vintage attrition</h2>
+            <h2>Investigator vintage attrition</h2>
             {demo ? (
               <p className="muted">Run the pipeline for retention data.</p>
             ) : (
               <>
                 <VintageHeatmap rows={ret} kMax={VINTAGE_KMAX} />
                 <p className="caption">
-                  Share of each first-seen vintage still active k years later (percent). Gray cells are
-                  right-censored (vintage too recent to observe). 2008 excluded: file ramp-up distorts the base.
+                  Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in
+                  that year (n = investigators). Cells show the share of that vintage still active k years
+                  later (percent). Gray cells are right-censored (vintage too recent to observe). 2008
+                  excluded: file ramp-up distorts the base.
                 </p>
               </>
             )}

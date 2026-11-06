@@ -297,7 +297,7 @@ export function VintageHeatmap({ rows, kMax }: { rows: VintageRow[]; kMax: numbe
       <table className="vintage">
         <thead>
           <tr>
-            <th>Vintage (first-seen year)</th>
+            <th>CI vintage (year investigators first filed)</th>
             {ks.map((k) => (
               <th key={k}>+{k}y</th>
             ))}
@@ -313,7 +313,7 @@ export function VintageHeatmap({ rows, kMax }: { rows: VintageRow[]; kMax: numbe
                 <td
                   key={i}
                   style={c === null ? { background: '#f0f0f0', color: '#999' } : { background: vintageColor(c) }}
-                  title={c === null ? `${r.cohort} vintage: censored` : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% active`}
+                  title={c === null ? `${r.cohort} CI vintage: censored` : `${r.cohort} CI vintage, +${i}y: ${c.toFixed(1)}% of investigators active`}
                 >
                   {c === null ? '·' : c.toFixed(1)}
                 </td>
