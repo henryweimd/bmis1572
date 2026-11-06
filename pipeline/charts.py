@@ -143,7 +143,8 @@ def chart_retention(ret: pd.DataFrame, out: Path) -> None:
     ax.set_xticks(range(11), [f"+{k}y" for k in range(11)])
     ax.set_yticks(range(len(piv.index)),
                   [f"{c} (n={int(nmap.get(c, 0)):,})" for c in piv.index])
-    ax.set_title("Vintage attrition: % of each first-seen vintage still active (Strict)")
+    ax.set_title("Investigator vintage attrition: % of CIs first seen each year still active (Strict)")
+    ax.set_ylabel("CI vintage (first-seen year)")
     fig.colorbar(im, ax=ax, label="% active", shrink=0.85)
     fig.tight_layout(rect=(0, 0.13, 1, 1))
     _caption(fig, "DEFINITIONS: " + DEFINITIONS["retention"] + " " +
