@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T12:56:59.232643+00:00",
+  "generated_at": "2026-11-06T13:04:53.447274+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -713,7 +713,8 @@
     "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous.",
     "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6.",
     "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them.",
-    "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio."
+    "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio.",
+    "site_ta": "Therapeutic-area mix (experimental, US only): the matched institution's CT.gov studies bucketed by conditions text into ~15 areas via keyword rules (first match wins). Counts inherit all cross-check caveats; multi-area studies count once per area; healthy-volunteer and unclassifiable conditions land in Other."
   },
   "stats": {
     "persons_ever": {
@@ -988,6 +989,22 @@
         "sample",
         "sample_fac",
         "n_sibling_sites"
+      ]
+    },
+    {
+      "id": "site_ta_mix",
+      "title": "Therapeutic-area mix of matched trials per site (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/site_ta_mix.parquet"
+      ],
+      "row_count": 422540,
+      "columns": [
+        "version",
+        "site_n",
+        "site_id",
+        "ta",
+        "n_trials"
       ]
     },
     {

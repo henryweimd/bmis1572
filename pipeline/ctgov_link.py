@@ -72,7 +72,7 @@ def flatten(records: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame) -> list[dict]:
+def _build_loc_index(locs: pd.DataFrame):
     locs = locs.reset_index(drop=True)
     ftok = [frozenset(f.split()) for f in locs["fac"]]
     fidx = [idx_tokens(f) for f in locs["fac"]]
@@ -81,34 +81,47 @@ def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame) -> list[dict]:
         for t in fidx[i]:
             post.setdefault(locs["city"][i], {}).setdefault(t, []).append(i)
     big = set(locs["city"].value_counts().loc[lambda v: v > _BIG_CITY].index)
+    return locs, ftok, post, big
+
+
+def match_one(key: str, city: str, first_y: int, last_y: int,
+              locs: pd.DataFrame, ftok: list, post: dict, big: set) -> dict:
+    """Match one institution query; return {nct: (jaccard, fac_raw)}."""
+    stok = set(key.split())
+    if not stok:
+        return {}
+    block = post.get(city, {})
+    counts: dict[int, int] = {}
+    for t in idx_tokens(key):
+        for i in block.get(t, []):
+            counts[i] = counts.get(i, 0) + 1
+    need = 2 if city in big else 1
+    best: dict[str, tuple] = {}
+    for i, c in counts.items():
+        if c < need:
+            continue
+        sy = locs["start_y"][i]
+        if sy is not None and not (first_y - 1 <= sy <= last_y + 1):
+            continue
+        inter = len(stok & ftok[i])
+        if inter < 2:
+            continue
+        j = inter / len(stok | ftok[i])
+        if j < 0.34:
+            continue
+        nct = locs["nct"][i]
+        prev = best.get(nct)
+        if prev is None or j > prev[0]:
+            best[nct] = (j, locs["fac_raw"][i])
+    return best
+
+
+def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame) -> list[dict]:
+    locs, ftok, post, big = _build_loc_index(locs)
     out = []
     for _, s in insts.iterrows():
-        stok = set(s["key"].split())
-        if not stok:
-            continue
-        block = post.get(s["city"], {})
-        counts: dict[int, int] = {}
-        for t in idx_tokens(s["key"]):
-            for i in block.get(t, []):
-                counts[i] = counts.get(i, 0) + 1
-        need = 2 if s["city"] in big else 1
-        best: dict[str, tuple] = {}
-        for i, c in counts.items():
-            if c < need:
-                continue
-            sy = locs["start_y"][i]
-            if sy is not None and not (s["first_y"] - 1 <= sy <= s["last_y"] + 1):
-                continue
-            inter = len(stok & ftok[i])
-            if inter < 2:
-                continue
-            j = inter / len(stok | ftok[i])
-            if j < 0.34:
-                continue
-            nct = locs["nct"][i]
-            prev = best.get(nct)
-            if prev is None or j > prev[0]:
-                best[nct] = (j, locs["fac_raw"][i])
+        best = match_one(s["key"], s["city"], s["first_y"], s["last_y"],
+                         locs, ftok, post, big)
         if best:
             strong = sorted([n for n, (j, _) in best.items() if j >= 0.6])
             weak = sorted([n for n, (j, _) in best.items() if j < 0.6])
