@@ -295,6 +295,26 @@ def chart_site_trends(syg: pd.DataFrame, ssz: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_tightness_bands(tb: pd.DataFrame, out: Path) -> None:
+    d = tb[(tb["version"] == "strict") & (tb["year"] >= 2008)]
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    for b in BAND_ORDER:
+        s = d[(d["band"] == b) & (d["per_start"].notna())].sort_values("year")
+        if len(s):
+            ax.plot(s["year"], s["per_start"], marker="o", ms=3,
+                    label=b, color=BAND_COLORS[b])
+    _partial_shade(ax, d["year"])
+    ax.set_title("Investigators per trial start by band (Strict, starts-only)")
+    ax.set_xlabel("Receipt year")
+    ax.set_ylabel("Active investigators / industry starts")
+    ax.legend(fontsize=7, loc="upper left")
+    fig.tight_layout(rect=(0, 0.14, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["tightness_band"] + " " +
+             DEFINITIONS["partial"])
+    fig.savefig(out / "tightness_bands.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
@@ -309,4 +329,5 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_site_trends(tables["sites_year_geo"], tables["site_size_year"], out)
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
+    chart_tightness_bands(tables["tightness_band"], out)
     return sorted(p.name for p in out.glob("*.png"))

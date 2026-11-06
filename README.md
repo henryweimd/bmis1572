@@ -96,6 +96,8 @@ Without step 1, the explorer falls back to a committed demo CSV
 - **49.3%** of persons are one-trial (lifetime = 1 IND reference); median 2, mean 3.85.
 - No visible EU break at GDPR (May 2018); the sharp ex-US drop is 2020–21 across bands.
 - US tightness: ~3.3 investigators per running trial (2009) → ~2.5 (2025).
+- Tightness by band (starts-only, Strict 2025): US 9.5 investigators/start vs
+  0.6–1.4 ex-US; multi-country trials count in every band they touch.
 - CROs: 856 active in 2025 (PPD, IQVIA, Syneos top all-time). IRBs: 3,779 active
   in 2025 (WCG, Advarra, Copernicus top all-time).
 - Retention is steep then flat: ~19% of a cohort is active the next year, ~5% a

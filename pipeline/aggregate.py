@@ -135,6 +135,12 @@ DEFINITIONS = {
         "reason. Headline counts include junk-name rows; the search index, "
         "leaderboard, rosters, and site-detail series exclude them."
     ),
+    "tightness_band": (
+        "Investigators per industry start by band (starts-only; running "
+        "stays US-only). Multi-country trials count in every band they "
+        "touch, so bands do not sum to global. Unknown band has no trial "
+        "geography and no ratio."
+    ),
 }
 
 
