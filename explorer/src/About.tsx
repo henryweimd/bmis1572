@@ -56,6 +56,13 @@ export default function About() {
         <li>BMIS has no therapeutic-area or phase fields; rows carry date + site only.</li>
       </ul>
 
+      <h3>Slide deck export</h3>
+      <p>
+        Download the pre-built deck (same charts and numbers, caveated on every slide):{' '}
+        <a href="data/exports/bmis-supply-deck.pptx">PowerPoint</a> ·{' '}
+        <a href="data/exports/bmis-supply-deck.pdf">PDF</a>. Rebuilt by the pipeline on every run.
+      </p>
+
       <h3>Reproduce &amp; contribute</h3>
       <p>
         Pipeline, methods, and full definitions:{' '}

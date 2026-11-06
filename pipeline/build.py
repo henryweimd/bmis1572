@@ -41,6 +41,7 @@ import charts
 import cluster
 import ctgov
 import ctgov_link
+import deck
 import sites
 from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
 from aggregate import DEFINITIONS
@@ -434,7 +435,8 @@ def headline_stats(persons, tables) -> dict:
     }
 
 
-def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
+def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
+                   exports: list | None = None) -> dict:
     titles = {
         "investigators_year_geo": "Active investigators by year, band, version",
         "country_year": "Active investigators by year and country",
@@ -476,6 +478,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         },
         "definitions": DEFINITIONS,
         "stats": stats,
+        "exports": exports or [],
         "datasets": [
             {"id": name, "title": titles[name], "format": "parquet",
              "files": [f"data/{name}.parquet"],
@@ -495,6 +498,11 @@ def write_snapshot(tables, manifest) -> None:
     for name in tables:
         shutil.copy2(CURATED / f"{name}.parquet", SNAPSHOT / f"{name}.parquet")
     (SNAPSHOT / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    exp_src = ROOT / "exports"
+    if exp_src.exists():
+        (SNAPSHOT / "exports").mkdir(exist_ok=True)
+        for p in sorted(exp_src.glob(f"{deck.SLUG}.*")):
+            shutil.copy2(p, SNAPSHOT / "exports" / p.name)
     demo = tables["investigators_year_geo"]
     demo = demo[(demo["version"] == "strict") & (demo["year"] >= 2008)].drop(columns=["version"])
     demo_path = SNAPSHOT / "demo-investigators.csv"
@@ -635,8 +643,16 @@ def main() -> None:
     if not args.skip_charts:
         names = charts.build_all(tables, CHARTS)
         log(f"charts: {names}")
+        dinfo = deck.build_all(stats)
+        log(f"deck: {dinfo['slides']} slides")
 
-    manifest = write_manifest(tables, persons, ingest_stats, ctgov_info, stats)
+    manifest = write_manifest(
+        tables, persons, ingest_stats, ctgov_info, stats,
+        exports=[{"id": "pptx", "file": f"data/exports/{deck.SLUG}.pptx",
+                  "title": "Slide deck (PowerPoint)"},
+                 {"id": "pdf", "file": f"data/exports/{deck.SLUG}.pdf",
+                  "title": "Slide deck (PDF)"}]
+        if not args.skip_charts else None)
     write_snapshot(tables, manifest)
     check = verify_with_duckdb(tables)
     log(f"verified with duckdb: {check}")

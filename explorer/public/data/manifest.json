@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T12:43:36.695999+00:00",
+  "generated_at": "2026-11-06T12:50:06.547993+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -739,6 +739,18 @@
       "raw": 29.3
     }
   },
+  "exports": [
+    {
+      "id": "pptx",
+      "file": "data/exports/bmis-supply-deck.pptx",
+      "title": "Slide deck (PowerPoint)"
+    },
+    {
+      "id": "pdf",
+      "file": "data/exports/bmis-supply-deck.pdf",
+      "title": "Slide deck (PDF)"
+    }
+  ],
   "datasets": [
     {
       "id": "person_index",
