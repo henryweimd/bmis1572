@@ -119,6 +119,14 @@ DEFINITIONS = {
         "receipt year at the site, ended = last receipt year. Right edge "
         "is censored (2026 links look ended); gaps read as continuous."
     ),
+    "site_xcheck": (
+        "CT.gov cross-check (experimental, US only): industry-interventional "
+        "studies whose facility fuzzy-matches the site's institution name in "
+        "the same city, with start year overlapping the site's BMIS span. "
+        "CT.gov facilities carry no street address, so counts are "
+        "institution x city and shared across that institution's addresses; "
+        "name variants split counts. Strong = token Jaccard >= 0.6."
+    ),
 }
 
 

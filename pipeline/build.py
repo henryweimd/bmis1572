@@ -40,6 +40,7 @@ import bmis
 import charts
 import cluster
 import ctgov
+import ctgov_link
 import sites
 from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
 from aggregate import DEFINITIONS
@@ -303,6 +304,10 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["sites_year_geo"] = pd.concat(_syg).reset_index(drop=True)
     tables["site_size_year"] = pd.concat(_ssz).reset_index(drop=True)
     tables["site_churn"] = pd.concat(_sch).reset_index(drop=True)
+    if ctgov_link.LOC_CACHE.exists():
+        xc = ctgov_link.run(audit_n=0)
+        if xc is not None and len(xc):
+            tables["site_ctgov_xcheck"] = xc.reset_index(drop=True)
 
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
@@ -452,6 +457,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "sites_year_geo": "Active sites by year, band, site version",
         "site_size_year": "Sites by investigator headcount bin and year",
         "site_churn": "Site roster churn: links, joins, ends by year",
+        "site_ctgov_xcheck": "CT.gov institution cross-check per site (experimental)",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -587,6 +593,12 @@ def verify_with_duckdb(tables) -> dict:
         " (SELECT COUNT(*) FROM site_index"
         " WHERE version = 'merged')").fetchone()
     assert n_m <= n_s, "merged sites exceed strict sites"
+    if "site_ctgov_xcheck" in tables:
+        x_orph = con.execute(
+            "SELECT COUNT(*) FROM site_ctgov_xcheck x"
+            " LEFT JOIN site_index s ON x.site_id = s.site_id"
+            " WHERE s.site_id IS NULL").fetchone()[0]
+        assert x_orph == 0, "xcheck sites missing from site_index"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()

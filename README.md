@@ -96,6 +96,9 @@ Without step 1, the explorer falls back to a committed demo CSV
   0.24 → 0.34 from 2009 to 2025.
 - Sites (address-first clustering): **137,049 strict → 111,480 merged**; MD
   Anderson leads (847 investigators, 5,390 refs, 143 spelling variants absorbed).
+- CT.gov cross-check (experimental, US, institution×city): 27,060/47,655 strict
+  institutions match ≥1 industry trial; MD Anderson flagship ≈ 2,900 plausible
+  trials (1,467 strong). See `docs/linkage.md`.
 
 ## Limitations
 
