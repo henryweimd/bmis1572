@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T01:59:53.769475+00:00",
+  "generated_at": "2026-11-06T02:01:52.966563+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -683,7 +683,8 @@
     "bmis_scope": "BMIS covers CDER IND drug/biologic investigators whose 1572/1571 was forwarded to FDA since Oct 2008. FDA: not a comprehensive list (1572 goes to the sponsor; forwarding is voluntary-ish). No devices, no CBER, no non-IND research.",
     "cro": "CRO views group BMIS TYPE=CRO rows by normalized company name: evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, Syneos, ICON, Parexel, Covance, Celerion, others), else first site segment with suffixes/punctuation stripped. Same-name companies materially spanning states are state-qualified; aliases stay global. Residual variants stay split; cro_index lists variants.",
     "trials_per_year": "Trials/year rate: lifetime IND references divided by the inclusive first-to-last receipt span in calendar years. Intensity measure, not a headcount; single-year bursts rank high by construction.",
-    "irb": "IRB views group BMIS TYPE=IRB rows by normalized board name: evidence-based aliases for known boards (Advarra, WCG/Western, Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), else first non-empty site segment with IRB stopwords, room markers, and numbers stripped. Same-name boards materially spanning states are state-qualified; aliases stay global. Residual variants stay split; irb_index lists variants."
+    "irb": "IRB views group BMIS TYPE=IRB rows by normalized board name: evidence-based aliases for known boards (Advarra, WCG/Western, Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), else first non-empty site segment with IRB stopwords, room markers, and numbers stripped. Same-name boards materially spanning states are state-qualified; aliases stay global. Residual variants stay split; irb_index lists variants.",
+    "retention": "Cohort retention: share of a first-seen cohort active again k years later. Right-censored (recent cohorts show fewer years); 2008-09 cohorts' first-seen year is inflated by the file start."
   },
   "stats": {
     "persons_ever": {
@@ -928,6 +929,23 @@
         "bin",
         "n_active",
         "version"
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "Cohort retention: active share k years after first seen",
+      "format": "parquet",
+      "files": [
+        "data/retention.parquet"
+      ],
+      "row_count": 570,
+      "columns": [
+        "version",
+        "cohort",
+        "k",
+        "n_cohort",
+        "n_active",
+        "retention"
       ]
     },
     {

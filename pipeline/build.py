@@ -195,7 +195,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     nonci = df[df["TYPE"] != "CI"].reset_index(drop=True)
     ci_disp = cluster.add_display_cols(ci)
     tables: dict[str, pd.DataFrame] = {}
-    iyg, cy, sy, coh, ab, lb = [], [], [], [], [], []
+    iyg, cy, sy, coh, ab, lb, rt = [], [], [], [], [], [], []
 
     receipts = (ci.groupby(["year", "band"], observed=True).size()
                 .rename("n_receipts").reset_index())
@@ -212,6 +212,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         sy.append(agg.us_state_year(py, v))
         coh.append(agg.cohort_summary(p, v))
         ab.append(agg.active_bins(py, v))
+        rt.append(agg.retention(p, py, v))
         lb.append(agg.leaderboard(p, ci_disp, pid, v))
     # raw version runs over uncollapsed rows
     p = persons["raw"]
@@ -222,6 +223,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     sy.append(agg.us_state_year(py, "raw"))
     coh.append(agg.cohort_summary(p, "raw"))
     ab.append(agg.active_bins(py, "raw"))
+    rt.append(agg.retention(p, py, "raw"))
     ci_raw_disp = ci_raw.copy()
     ci_raw_disp["disp_name"] = "?"
     ci_raw_disp["SITE"] = "?"
@@ -275,6 +277,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["us_state_year"] = pd.concat(sy).reset_index(drop=True)
     tables["cohort_summary"] = pd.concat(coh).reset_index(drop=True)
     tables["active_bins"] = pd.concat(ab).reset_index(drop=True)
+    tables["retention"] = pd.concat(rt).reset_index(drop=True)
     tables["leaderboard"] = pd.concat(lb).reset_index(drop=True)
 
     # IRB/CRO context
@@ -400,6 +403,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "us_state_year": "Active US investigators by year and state",
         "cohort_summary": "Trials-per-person by first-seen cohort",
         "active_bins": "Active investigators by lifetime-trial bin",
+        "retention": "Cohort retention: active share k years after first seen",
         "leaderboard": "Top investigators by lifetime IND references",
         "trials_year": "Industry trials by year (starts vs running)",
         "tightness": "Investigators per trial by year",
@@ -514,6 +518,12 @@ def verify_with_duckdb(tables) -> dict:
         " (SELECT COUNT(*) FROM irb_index WHERE irb = 'ADVARRA')").fetchone()
     assert iy_sum > 0 and iy_sum == ii_sum and adv == 1, \
         "IRB rollups inconsistent"
+    r0lo, r0hi, rmax = con.execute(
+        "SELECT MIN(retention), MAX(retention), "
+        "(SELECT MAX(retention) FROM retention)"
+        " FROM retention WHERE k = 0").fetchone()
+    assert r0lo == 1.0 and r0hi == 1.0 and rmax <= 1.0, \
+        "retention out of bounds"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
