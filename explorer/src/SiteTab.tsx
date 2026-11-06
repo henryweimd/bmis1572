@@ -228,12 +228,12 @@ export default function SiteTab({
               ` CAST(best_j AS DOUBLE) AS j, CAST(sample AS VARCHAR) AS samp,` +
               ` CAST(sample_fac AS VARCHAR) AS fac, CAST(n_sibling_sites AS INTEGER) AS sib` +
               ` FROM site_ctgov_xcheck WHERE version = '${ver}' AND site_n = ${sel.n}`,
-          ),
+          ).catch(() => []),
           query<{ category: string; v: number }>(
             `SELECT CAST(ta AS VARCHAR) AS category, CAST(SUM(n_trials) AS DOUBLE) AS v` +
               ` FROM site_ta_mix WHERE version = '${ver}' AND site_n = ${sel.n}` +
               ` GROUP BY 1 ORDER BY 2 DESC`,
-          ),
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setInfo(inf[0] ?? null);
@@ -328,8 +328,15 @@ export default function SiteTab({
       {note && <p className="banner">{note}</p>}
       <p className="banner">
         CT.gov trial matches are institution×city estimates shared across that institution&apos;s
-        addresses — not confirmed site trials. Preliminary analysis only; see docs/linkage.md and
-        Definitions: site_xcheck.
+        addresses — not confirmed site trials. Preliminary analysis only; see{' '}
+        <a
+          href="https://github.com/henryweimd/bmis1572/blob/main/docs/linkage.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          docs/linkage.md
+        </a>{' '}
+        and Definitions: site_xcheck.
       </p>
       <section className="panel controls">
         <div className="filters">
