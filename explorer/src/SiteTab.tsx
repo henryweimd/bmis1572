@@ -3,6 +3,7 @@ import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, MultiLineChart } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
+import { downloadCsv } from './csv';
 
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -462,6 +463,20 @@ export default function SiteTab({
             </button>
           </div>
           <span className="muted">Click a row for the site detail.</span>
+          {!!top.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'top-sites.csv',
+                  ['site', 'city', 'country', 'investigators', 'receipts', 'per_year', 'first_year', 'last_year', 'variants'],
+                  top.map((r) => [r.name, r.city, r.country, r.n_inv, r.n_receipts, r.tpy.toFixed(2), r.first_year, r.last_year, r.n_variants]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </div>
         <div className="table-scroll">
           <table>
@@ -514,6 +529,21 @@ export default function SiteTab({
           </label>
           <button type="submit" className="btn">Search</button>
           {searched && <span className="muted">{hits.length} matches (top 50 by receipts)</span>}
+          {!!hits.length && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'site-search.csv',
+                  ['site', 'address', 'city', 'country', 'investigators', 'receipts', 'first_year', 'last_year'],
+                  hits.map((r) => [r.name, r.addr, r.city, r.country, r.n_inv, r.n_receipts, r.first_year, r.last_year]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </form>
         {!!hits.length && (
           <div className="table-scroll short">
@@ -606,7 +636,21 @@ export default function SiteTab({
                 </option>
               ))}
             </select>{' '}
-            <span className="muted">· top 200 by receipts</span>
+            <span className="muted">· top 200 by receipts</span>{' '}
+            {!!roster.length && (
+              <button
+                className="btn"
+                onClick={() =>
+                  downloadCsv(
+                    `site-roster-${ry}.csv`,
+                    ['investigator', 'country', 'receipts'],
+                    roster.map((r) => [r.name, r.country, r.n]),
+                  )
+                }
+              >
+                CSV
+              </button>
+            )}
           </h3>
           {roster.length ? (
             <div className="table-scroll short">
