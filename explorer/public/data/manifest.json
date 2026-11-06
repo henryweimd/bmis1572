@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T02:04:27.536243+00:00",
+  "generated_at": "2026-11-06T02:12:20.516138+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -685,7 +685,9 @@
     "trials_per_year": "Trials/year rate: lifetime IND references divided by the inclusive first-to-last receipt span in calendar years. Intensity measure, not a headcount; single-year bursts rank high by construction.",
     "irb": "IRB views group BMIS TYPE=IRB rows by normalized board name: evidence-based aliases for known boards (Advarra, WCG/Western, Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), else first non-empty site segment with IRB stopwords, room markers, and numbers stripped. Same-name boards materially spanning states are state-qualified; aliases stay global. Residual variants stay split; irb_index lists variants.",
     "retention": "Cohort retention: share of a first-seen cohort active again k years later. Right-censored (recent cohorts show fewer years); 2008-09 cohorts' first-seen year is inflated by the file start.",
-    "concentration": "Annual concentration: share of each year's receipts going to the year's top 1%/10% investigators by receipts, plus the Gini of per-investigator yearly receipts. Higher means work concentrated in fewer hands."
+    "concentration": "Annual concentration: share of each year's receipts going to the year's top 1%/10% investigators by receipts, plus the Gini of per-investigator yearly receipts. Higher means work concentrated in fewer hands.",
+    "site": "A site is a PLACE (street address): Strict matches normalized street+city+state+country exactly (suite/floor markers dropped, ZIP excluded); Merged additionally unions same-house-number addresses with street-token Jaccard >= 0.6 within a city. Branches of one org at different addresses stay split. Site rollups use strict persons.",
+    "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous."
   },
   "stats": {
     "persons_ever": {
@@ -774,6 +776,8 @@
         "zip",
         "country",
         "invn",
+        "site_strict",
+        "site_merged",
         "person_id"
       ]
     },
@@ -849,6 +853,82 @@
         "top_country",
         "n_variants",
         "example_site"
+      ]
+    },
+    {
+      "id": "site_index",
+      "title": "Site summary: display, geo, investigators, span",
+      "format": "parquet",
+      "files": [
+        "data/site_index.parquet"
+      ],
+      "row_count": 248529,
+      "columns": [
+        "site_n",
+        "site_id",
+        "display_name",
+        "display_addr",
+        "city",
+        "state",
+        "zip",
+        "country",
+        "band",
+        "n_inv_ever",
+        "n_receipts",
+        "first_year",
+        "last_year",
+        "n_years",
+        "n_variants",
+        "version"
+      ]
+    },
+    {
+      "id": "sites_year_geo",
+      "title": "Active sites by year, band, site version",
+      "format": "parquet",
+      "files": [
+        "data/sites_year_geo.parquet"
+      ],
+      "row_count": 610,
+      "columns": [
+        "version",
+        "year",
+        "band",
+        "n_sites",
+        "n_receipts",
+        "partial"
+      ]
+    },
+    {
+      "id": "site_size_year",
+      "title": "Sites by investigator headcount bin and year",
+      "format": "parquet",
+      "files": [
+        "data/site_size_year.parquet"
+      ],
+      "row_count": 332,
+      "columns": [
+        "version",
+        "year",
+        "bin",
+        "n_sites"
+      ]
+    },
+    {
+      "id": "site_churn",
+      "title": "Site roster churn: links, joins, ends by year",
+      "format": "parquet",
+      "files": [
+        "data/site_churn.parquet"
+      ],
+      "row_count": 94,
+      "columns": [
+        "version",
+        "year",
+        "n_links",
+        "n_new",
+        "n_ended",
+        "partial"
       ]
     },
     {

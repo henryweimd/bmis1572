@@ -14,8 +14,10 @@ explorer/ (Vite + React + DuckDB-WASM, static)  →  Vercel (frontend only)
 charts/ (tracked static PNGs with captioned definitions)
 ```
 
-Three tabs: **Investigators** (supply trends, new/returning, distribution, search,
-leaderboards), **CROs** and **IRBs** (company/board trends, drill-downs, top tables).
+Four tabs: **Investigators** (supply trends, new/returning, distribution, retention,
+concentration, search, leaderboards), **CROs** and **IRBs** (company/board trends,
+drill-downs, top tables), **About** (data, methods, limitations). Filter state syncs
+to the URL hash, so any view is shareable and bookmarkable.
 
 ## Quickstart (local)
 
@@ -89,6 +91,11 @@ Without step 1, the explorer falls back to a committed demo CSV
 - US tightness: ~3.3 investigators per running trial (2009) → ~2.5 (2025).
 - CROs: 856 active in 2025 (PPD, IQVIA, Syneos top all-time). IRBs: 3,779 active
   in 2025 (WCG, Advarra, Copernicus top all-time).
+- Retention is steep then flat: ~19% of a cohort is active the next year, ~5% a
+  decade later. Work is concentrating: top-10% receipt share 27% → 32% and Gini
+  0.24 → 0.34 from 2009 to 2025.
+- Sites (address-first clustering): **137,049 strict → 111,480 merged**; MD
+  Anderson leads (847 investigators, 5,390 refs, 143 spelling variants absorbed).
 
 ## Limitations
 
@@ -105,4 +112,4 @@ Without step 1, the explorer falls back to a committed demo CSV
 - CT.gov site+window trial inference prototype (plausible-trials per investigator).
 - Name-only cross-site investigator tracking; curated org alias table.
 - Therapeutic-area / phase drill-downs (reserved disabled slots in the explorer).
-- R2 object storage if the shipped snapshot outgrows comfortable git size (~25MB today).
+- R2 object storage if the shipped snapshot outgrows comfortable git size (~53MB today).

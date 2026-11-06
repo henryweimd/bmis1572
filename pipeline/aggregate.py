@@ -106,6 +106,19 @@ DEFINITIONS = {
         "per-investigator yearly receipts. Higher means work concentrated "
         "in fewer hands."
     ),
+    "site": (
+        "A site is a PLACE (street address): Strict matches normalized "
+        "street+city+state+country exactly (suite/floor markers dropped, "
+        "ZIP excluded); Merged additionally unions same-house-number "
+        "addresses with street-token Jaccard >= 0.6 within a city. Branches "
+        "of one org at different addresses stay split. Site rollups use "
+        "strict persons."
+    ),
+    "site_churn": (
+        "Site roster churn: per investigator-site link, joined = first "
+        "receipt year at the site, ended = last receipt year. Right edge "
+        "is censored (2026 links look ended); gaps read as continuous."
+    ),
 }
 
 

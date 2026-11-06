@@ -40,6 +40,7 @@ import bmis
 import charts
 import cluster
 import ctgov
+import sites
 from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
 from aggregate import DEFINITIONS
 from geo_bands import BAND_ORDER, emit_csv
@@ -191,6 +192,16 @@ def org_tables(nonci, entities, org_type, normalize_fn, key):
 
 
 def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
+    if "site_strict" not in df.columns:
+        log("site clustering (strict + merged) ...")
+        _ci = df[df["TYPE"] == "CI"]
+        s_codes, m_codes, sdiag = sites.cluster_sites(_ci)
+        df["site_strict"] = np.int64(-1)
+        df["site_merged"] = np.int64(-1)
+        df.loc[_ci.index, "site_strict"] = s_codes
+        df.loc[_ci.index, "site_merged"] = m_codes
+        df.to_parquet(CURATED / "bmis_clean.parquet", index=False)
+        log(f"site checkpoints updated: {sdiag}")
     ci = df[df["TYPE"] == "CI"].reset_index(drop=True)
     nonci = df[df["TYPE"] != "CI"].reset_index(drop=True)
     ci_disp = cluster.add_display_cols(ci)
@@ -263,6 +274,8 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         "zip": ci["ZIP"].astype(str).to_numpy()[keep_rows],
         "country": ci["COUNTRY"].astype(str).to_numpy()[keep_rows],
         "invn": ci["INVN"].to_numpy()[keep_rows],
+        "site_strict": ci["site_strict"].to_numpy()[keep_rows],
+        "site_merged": ci["site_merged"].to_numpy()[keep_rows],
     }).sort_values(["pid", "rcvd"], ascending=[True, False])
     rc["person_id"] = sp["person_id"].to_numpy()[rc["pid"].to_numpy()]
     tables["person_index"] = idx
@@ -273,6 +286,23 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         nonci, entities, "CRO", normalize_cro_site, "cro")
     tables["irb_year"], tables["irb_index"] = org_tables(
         nonci, entities, "IRB", normalize_irb_site, "irb")
+
+    # Site rollups (strict persons; strict + merged site versions)
+    _si, _syg, _ssz, _sch = [], [], [], []
+    _pid_s = ci["pid_strict"].to_numpy()
+    _yr = ci["year"].to_numpy()
+    _bd = ci["band"].to_numpy().astype(str)
+    for _sv, _sc in [("strict", "site_strict"), ("merged", "site_merged")]:
+        _codes = ci[_sc].to_numpy()
+        _si.append(sites.build_site_index(ci, _codes, _pid_s, _sv))
+        _a, _b, _c = sites.site_year_stats(_codes, _pid_s, _yr, _bd, _sv)
+        _syg.append(_a)
+        _ssz.append(_b)
+        _sch.append(_c)
+    tables["site_index"] = pd.concat(_si).reset_index(drop=True)
+    tables["sites_year_geo"] = pd.concat(_syg).reset_index(drop=True)
+    tables["site_size_year"] = pd.concat(_ssz).reset_index(drop=True)
+    tables["site_churn"] = pd.concat(_sch).reset_index(drop=True)
 
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
@@ -418,6 +448,10 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "cro_index": "CRO company summary with site-variant audit",
         "irb_year": "IRB receipts/entities by year, band, board",
         "irb_index": "IRB board summary with site-variant audit",
+        "site_index": "Site summary: display, geo, investigators, span",
+        "sites_year_geo": "Active sites by year, band, site version",
+        "site_size_year": "Sites by investigator headcount bin and year",
+        "site_churn": "Site roster churn: links, joins, ends by year",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -533,6 +567,26 @@ def verify_with_duckdb(tables) -> dict:
         " OR top1_share > top10_share OR top10_share > 1"
         " OR gini < 0 OR gini > 1").fetchone()[0]
     assert bad_conc == 0, "concentration out of bounds"
+    s_idx, s_rc, s_yr = con.execute(
+        "SELECT (SELECT SUM(n_receipts) FROM site_index"
+        " WHERE version = 'strict'),"
+        " (SELECT COUNT(*) FROM person_receipts),"
+        " (SELECT SUM(n_receipts) FROM sites_year_geo"
+        " WHERE version = 'strict')").fetchone()
+    assert s_idx > 0 and s_idx == s_yr and s_rc <= s_idx, \
+        "site rollups inconsistent (strict)"
+    s_idx_m, s_yr_m = con.execute(
+        "SELECT (SELECT SUM(n_receipts) FROM site_index"
+        " WHERE version = 'merged'),"
+        " (SELECT SUM(n_receipts) FROM sites_year_geo"
+        " WHERE version = 'merged')").fetchone()
+    assert s_idx_m == s_idx == s_yr_m, \
+        "site rollups inconsistent (merged)"
+    n_s, n_m = con.execute(
+        "SELECT (SELECT COUNT(*) FROM site_index WHERE version = 'strict'),"
+        " (SELECT COUNT(*) FROM site_index"
+        " WHERE version = 'merged')").fetchone()
+    assert n_m <= n_s, "merged sites exceed strict sites"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
