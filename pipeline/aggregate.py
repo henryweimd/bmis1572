@@ -77,13 +77,23 @@ DEFINITIONS = {
         "CRO views group BMIS TYPE=CRO rows by normalized company name: "
         "evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, "
         "Syneos, ICON, Parexel, Covance, Celerion, others), else first "
-        "site segment with suffixes/punctuation stripped. Residual spelling "
-        "variants stay split; cro_index lists variants per company."
+        "site segment with suffixes/punctuation stripped. Same-name "
+        "companies materially spanning states are state-qualified; aliases "
+        "stay global. Residual variants stay split; cro_index lists variants."
     ),
     "trials_per_year": (
         "Trials/year rate: lifetime IND references divided by the inclusive "
         "first-to-last receipt span in calendar years. Intensity measure, "
         "not a headcount; single-year bursts rank high by construction."
+    ),
+    "irb": (
+        "IRB views group BMIS TYPE=IRB rows by normalized board name: "
+        "evidence-based aliases for known boards (Advarra, WCG/Western, "
+        "Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), "
+        "else first non-empty site segment with IRB stopwords, room "
+        "markers, and numbers stripped. Same-name boards materially "
+        "spanning states are state-qualified; aliases stay global. "
+        "Residual variants stay split; irb_index lists variants."
     ),
 }
 

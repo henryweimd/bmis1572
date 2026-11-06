@@ -40,7 +40,7 @@ import bmis
 import charts
 import cluster
 import ctgov
-from cro import normalize_cro_site
+from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
 from aggregate import DEFINITIONS
 from geo_bands import BAND_ORDER, emit_csv
 
@@ -139,6 +139,57 @@ def stage_ingest(use_checkpoint: bool):
     return df, ci_raw, persons, e.persons, stats
 
 
+def org_tables(nonci, entities, org_type, normalize_fn, key):
+    """Year + index rollups for one BMIS org type (CRO/IRB).
+
+    Light-rule keys materially spanning geographies (second geo >= 5%
+    of receipts) are qualified by US state, or by country where state is
+    NG (all foreign rows); city strings are too noisy (ST LOUIS vs SAINT
+    LOUIS vs ST. LOUIS). Known-giant aliases stay global. UNKNOWN
+    therefore always qualifies by state/country.
+    """
+    rows = nonci[nonci["TYPE"] == org_type].reset_index(drop=True)
+    ent_org = entities["site"].map(normalize_fn).to_numpy()
+    ent_band = entities["band"].to_numpy().astype(str)
+    ent_country = entities["country"].to_numpy().astype(str)
+    ent_state = entities["state"].astype(str).to_numpy()
+    rows = rows.assign(
+        org=ent_org[rows["epid"].to_numpy()],
+        ent_band=ent_band[rows["epid"].to_numpy()],
+        ent_country=ent_country[rows["epid"].to_numpy()],
+        ent_state=ent_state[rows["epid"].to_numpy()],
+    )
+    rows["ent_geo"] = rows["ent_state"].where(
+        rows["ent_state"] != "NG", rows["ent_country"])
+    st_counts = rows.groupby(["org", "ent_geo"]).size()
+    second_share = 1 - (st_counts.groupby("org").max()
+                        / st_counts.groupby("org").sum())
+    multi = set(second_share[second_share >= 0.05].index) - ALIAS_CANONICALS
+    mask = rows["org"].isin(multi).to_numpy()
+    rows.loc[mask, "org"] = (rows.loc[mask, "org"] + " x "
+                             + rows.loc[mask, "ent_geo"])
+    g = rows.groupby(["year", "ent_band", "org"], observed=True)
+    year = (g.agg(n_entities=("epid", "nunique"),
+                  n_receipts=("epid", "size"))
+            .reset_index().rename(columns={"ent_band": "band", "org": key}))
+    year["partial"] = year["year"].isin(agg.PARTIAL_YEARS)
+    gi = rows.groupby("org", observed=True)
+    index = pd.DataFrame({
+        key: gi.size().index,
+        "n_entities": gi["epid"].nunique().to_numpy(),
+        "n_receipts": gi.size().to_numpy(),
+        "first_year": gi["year"].min().to_numpy(),
+        "last_year": gi["year"].max().to_numpy(),
+        "n_countries": gi["ent_country"].nunique().to_numpy(),
+        "top_country": gi["ent_country"].agg(
+            lambda s: s.value_counts().index[0]).to_numpy(),
+        "n_variants": gi["SITE"].nunique().to_numpy(),
+        "example_site": gi["SITE"].agg(
+            lambda s: s.value_counts().index[0]).to_numpy(),
+    })
+    return year.reset_index(drop=True), index.reset_index(drop=True)
+
+
 def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     ci = df[df["TYPE"] == "CI"].reset_index(drop=True)
     nonci = df[df["TYPE"] != "CI"].reset_index(drop=True)
@@ -212,37 +263,11 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["person_index"] = idx
     tables["person_receipts"] = rc.drop(columns=["pid"]).reset_index(drop=True)
 
-    # CRO company views
-    cro_rows = nonci[nonci["TYPE"] == "CRO"].reset_index(drop=True)
-    ent_cro = entities["site"].map(normalize_cro_site).to_numpy()
-    ent_band = entities["band"].to_numpy().astype(str)
-    ent_country = entities["country"].to_numpy().astype(str)
-    cro_rows = cro_rows.assign(
-        cro=ent_cro[cro_rows["epid"].to_numpy()],
-        ent_band=ent_band[cro_rows["epid"].to_numpy()],
-        ent_country=ent_country[cro_rows["epid"].to_numpy()],
-    )
-    g = cro_rows.groupby(["year", "ent_band", "cro"], observed=True)
-    cro_year = (g.agg(n_entities=("epid", "nunique"),
-                      n_receipts=("epid", "size"))
-                .reset_index().rename(columns={"ent_band": "band"}))
-    cro_year["partial"] = cro_year["year"].isin(agg.PARTIAL_YEARS)
-    gi = cro_rows.groupby("cro", observed=True)
-    cro_index = pd.DataFrame({
-        "cro": gi.size().index,
-        "n_entities": gi["epid"].nunique().to_numpy(),
-        "n_receipts": gi.size().to_numpy(),
-        "first_year": gi["year"].min().to_numpy(),
-        "last_year": gi["year"].max().to_numpy(),
-        "n_countries": gi["ent_country"].nunique().to_numpy(),
-        "top_country": gi["ent_country"].agg(
-            lambda s: s.value_counts().index[0]).to_numpy(),
-        "n_variants": gi["SITE"].nunique().to_numpy(),
-        "example_site": gi["SITE"].agg(
-            lambda s: s.value_counts().index[0]).to_numpy(),
-    })
-    tables["cro_year"] = cro_year.reset_index(drop=True)
-    tables["cro_index"] = cro_index.reset_index(drop=True)
+    # CRO company + IRB board views
+    tables["cro_year"], tables["cro_index"] = org_tables(
+        nonci, entities, "CRO", normalize_cro_site, "cro")
+    tables["irb_year"], tables["irb_index"] = org_tables(
+        nonci, entities, "IRB", normalize_irb_site, "irb")
 
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
@@ -382,6 +407,8 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats) -> dict:
         "person_receipts": "Per-investigator receipt history, newest first",
         "cro_year": "CRO receipts/entities by year, band, company",
         "cro_index": "CRO company summary with site-variant audit",
+        "irb_year": "IRB receipts/entities by year, band, board",
+        "irb_index": "IRB board summary with site-variant audit",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -480,6 +507,12 @@ def verify_with_duckdb(tables) -> dict:
         " (SELECT COUNT(*) FROM cro_index WHERE cro = 'PPD')").fetchone()
     assert cy_sum > 0 and cy_sum == ci_sum and ppd == 1, \
         "CRO rollups inconsistent"
+    iy_sum, ii_sum, adv = con.execute(
+        "SELECT (SELECT SUM(n_receipts) FROM irb_year),"
+        " (SELECT SUM(n_receipts) FROM irb_index),"
+        " (SELECT COUNT(*) FROM irb_index WHERE irb = 'ADVARRA')").fetchone()
+    assert iy_sum > 0 and iy_sum == ii_sum and adv == 1, \
+        "IRB rollups inconsistent"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()

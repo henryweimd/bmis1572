@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T01:43:23.544486+00:00",
+  "generated_at": "2026-11-06T01:52:34.949733+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -681,8 +681,9 @@
     "tightness": "Tightness ratio: active investigators per running trial. Descriptive workload proxy only; supply and trial counts are not independent (a supply crunch can suppress starts), so this is not causal.",
     "partial": "2008 (file ramp-up from Oct 1) and 2026 (file through Aug 31) are partial: shown faded, excluded from growth statistics.",
     "bmis_scope": "BMIS covers CDER IND drug/biologic investigators whose 1572/1571 was forwarded to FDA since Oct 2008. FDA: not a comprehensive list (1572 goes to the sponsor; forwarding is voluntary-ish). No devices, no CBER, no non-IND research.",
-    "cro": "CRO views group BMIS TYPE=CRO rows by normalized company name: evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, Syneos, ICON, Parexel, Covance, Celerion, others), else first site segment with suffixes/punctuation stripped. Residual spelling variants stay split; cro_index lists variants per company.",
-    "trials_per_year": "Trials/year rate: lifetime IND references divided by the inclusive first-to-last receipt span in calendar years. Intensity measure, not a headcount; single-year bursts rank high by construction."
+    "cro": "CRO views group BMIS TYPE=CRO rows by normalized company name: evidence-based aliases for known giants (PPD, Medpace, IQVIA, PRA, Syneos, ICON, Parexel, Covance, Celerion, others), else first site segment with suffixes/punctuation stripped. Same-name companies materially spanning states are state-qualified; aliases stay global. Residual variants stay split; cro_index lists variants.",
+    "trials_per_year": "Trials/year rate: lifetime IND references divided by the inclusive first-to-last receipt span in calendar years. Intensity measure, not a headcount; single-year bursts rank high by construction.",
+    "irb": "IRB views group BMIS TYPE=IRB rows by normalized board name: evidence-based aliases for known boards (Advarra, WCG/Western, Copernicus, IntegReview, Schulman, Quorum, Sterling, Chesapeake), else first non-empty site segment with IRB stopwords, room markers, and numbers stripped. Same-name boards materially spanning states are state-qualified; aliases stay global. Residual variants stay split; irb_index lists variants."
   },
   "stats": {
     "persons_ever": {
@@ -780,7 +781,7 @@
       "files": [
         "data/cro_year.parquet"
       ],
-      "row_count": 15365,
+      "row_count": 16170,
       "columns": [
         "year",
         "band",
@@ -797,9 +798,46 @@
       "files": [
         "data/cro_index.parquet"
       ],
-      "row_count": 5491,
+      "row_count": 6187,
       "columns": [
         "cro",
+        "n_entities",
+        "n_receipts",
+        "first_year",
+        "last_year",
+        "n_countries",
+        "top_country",
+        "n_variants",
+        "example_site"
+      ]
+    },
+    {
+      "id": "irb_year",
+      "title": "IRB receipts/entities by year, band, board",
+      "format": "parquet",
+      "files": [
+        "data/irb_year.parquet"
+      ],
+      "row_count": 147594,
+      "columns": [
+        "year",
+        "band",
+        "irb",
+        "n_entities",
+        "n_receipts",
+        "partial"
+      ]
+    },
+    {
+      "id": "irb_index",
+      "title": "IRB board summary with site-variant audit",
+      "format": "parquet",
+      "files": [
+        "data/irb_index.parquet"
+      ],
+      "row_count": 32288,
+      "columns": [
+        "irb",
         "n_entities",
         "n_receipts",
         "first_year",
