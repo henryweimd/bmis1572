@@ -147,6 +147,7 @@ function normName(s: string): string {
 interface HitRow {
   person_id: string;
   display_name: string;
+  site: string | null;
   country: string;
   n_trials: number;
   n_years: number;
@@ -378,7 +379,7 @@ export default function App() {
     try {
       const r = await query<HitRow>(
         `SELECT CAST(person_id AS VARCHAR) AS person_id, CAST(display_name AS VARCHAR) AS display_name,` +
-          ` CAST(country AS VARCHAR) AS country, CAST(n_trials AS INTEGER) AS n_trials,` +
+          ` CAST(site AS VARCHAR) AS site, CAST(country AS VARCHAR) AS country, CAST(n_trials AS INTEGER) AS n_trials,` +
           ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
           ` CAST(last_year AS INTEGER) AS last_year FROM person_index` +
           ` WHERE name_key LIKE '%${needle}%' ORDER BY n_trials DESC LIMIT 50`,
@@ -718,6 +719,7 @@ export default function App() {
                   <thead>
                     <tr>
                       <th>Investigator</th>
+                      <th>Site</th>
                       <th>Country</th>
                       <th>IND refs</th>
                       <th>/yr</th>
@@ -733,6 +735,7 @@ export default function App() {
                         onClick={() => selectPerson(r.person_id, r.display_name)}
                       >
                         <td>{r.display_name}</td>
+                        <td>{r.site ?? ''}</td>
                         <td>{r.country}</td>
                         <td>{fmtInt.format(r.n_trials)}</td>
                         <td>{(r.n_trials / (r.last_year - r.first_year + 1)).toFixed(2)}</td>

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T01:52:34.949733+00:00",
+  "generated_at": "2026-11-06T01:59:53.769475+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -745,6 +745,7 @@
       "columns": [
         "person_id",
         "display_name",
+        "site",
         "country",
         "band",
         "state",
