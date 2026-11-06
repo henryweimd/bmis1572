@@ -141,6 +141,13 @@ DEFINITIONS = {
         "touch, so bands do not sum to global. Unknown band has no trial "
         "geography and no ratio."
     ),
+    "site_ta": (
+        "Therapeutic-area mix (experimental, US only): the matched "
+        "institution's CT.gov studies bucketed by conditions text into ~15 "
+        "areas via keyword rules (first match wins). Counts inherit all "
+        "cross-check caveats; multi-area studies count once per area; "
+        "healthy-volunteer and unclassifiable conditions land in Other."
+    ),
 }
 
 

@@ -105,6 +105,7 @@ export default function SiteTab({
   const [detail, setDetail] = useState<{ y: number; invs: number; joins: number; ends: number }[]>([]);
   const [roster, setRoster] = useState<{ name: string; country: string; n: number }[]>([]);
   const [xc, setXc] = useState<{ n: number; ns: number; j: number; samp: string; fac: string; sib: number } | null>(null);
+  const [tamix, setTamix] = useState<{ category: string; v: number }[]>([]);
   const [note, setNote] = useState('');
 
   const yearOpts: number[] = [];
@@ -196,6 +197,7 @@ export default function SiteTab({
       setInfo(null);
       setDetail([]);
       setXc(null);
+      setTamix([]);
       return;
     }
     let cancelled = false;
@@ -203,7 +205,7 @@ export default function SiteTab({
       try {
         const col = ver === 'strict' ? 'site_strict' : 'site_merged';
         const yr = 'EXTRACT(YEAR FROM CAST(rcvd AS DATE))';
-        const [inf, yy, pr, xq] = await Promise.all([
+        const [inf, yy, pr, xq, tq] = await Promise.all([
           query<SiteInfo>(
             `SELECT CAST(display_name AS VARCHAR) AS name, CAST(display_addr AS VARCHAR) AS addr,` +
               ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
@@ -227,6 +229,11 @@ export default function SiteTab({
               ` CAST(sample_fac AS VARCHAR) AS fac, CAST(n_sibling_sites AS INTEGER) AS sib` +
               ` FROM site_ctgov_xcheck WHERE version = '${ver}' AND site_n = ${sel.n}`,
           ),
+          query<{ category: string; v: number }>(
+            `SELECT CAST(ta AS VARCHAR) AS category, CAST(SUM(n_trials) AS DOUBLE) AS v` +
+              ` FROM site_ta_mix WHERE version = '${ver}' AND site_n = ${sel.n}` +
+              ` GROUP BY 1 ORDER BY 2 DESC`,
+          ),
         ]);
         if (cancelled) return;
         setInfo(inf[0] ?? null);
@@ -238,6 +245,7 @@ export default function SiteTab({
         }
         setDetail(yy.map((r) => ({ y: r.y, invs: num0(r.invs), joins: joins.get(r.y) ?? 0, ends: ends.get(r.y) ?? 0 })));
         setXc(xq[0] ? { n: num0(xq[0].n), ns: num0(xq[0].ns), j: num0(xq[0].j), samp: xq[0].samp, fac: xq[0].fac, sib: num0(xq[0].sib) } : null);
+        setTamix(tq.map((r) => ({ category: r.category, v: num0(r.v) })));
       } catch (e) {
         if (cancelled) return;
         setNote(`Site detail failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -318,6 +326,11 @@ export default function SiteTab({
   return (
     <>
       {note && <p className="banner">{note}</p>}
+      <p className="banner">
+        CT.gov trial matches are institution×city estimates shared across that institution&apos;s
+        addresses — not confirmed site trials. Preliminary analysis only; see docs/linkage.md and
+        Definitions: site_xcheck.
+      </p>
       <section className="panel controls">
         <div className="filters">
           <label>
@@ -626,6 +639,18 @@ export default function SiteTab({
             </p>
           ) : (
             <p className="muted">No CT.gov facility match for this site (non-US, generic, or unmatched name).</p>
+          )}
+          <h3>Therapeutic-area mix (experimental)</h3>
+          {tamix.length ? (
+            <>
+              <CategoryBars data={tamix} />
+              <p className="caption">
+                Matched trials bucketed by CT.gov conditions text (~15 keyword areas; multi-area
+                studies count once per area). Inherits all cross-check caveats; see Definitions: site_ta.
+              </p>
+            </>
+          ) : (
+            <p className="muted">No therapeutic-area data (no CT.gov match for this site).</p>
           )}
           <h3>
             Roster,{' '}

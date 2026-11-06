@@ -46,3 +46,14 @@ Two count probes + field probes (< 2KB) during design; one 53-page sparse
 fetch (~5 min with rate sleeps, cached forever). No bulk full-record fetch.
 Join runs offline from cache in ~75s inside `build.py` (skipped if cache
 is absent).
+
+## Therapeutic-area mix (pipeline/ctgov_ta.py)
+
+Same matches, one more cached sparse fetch (`NCTId` + conditions path,
+53,530 US studies, ~8MB). Each study's conditions map to ~15 areas via
+ordered keyword rules (first match wins; oncology first so "lung cancer"
+beats "lung"). Counts roll to member sites as `site_ta_mix`. Multi-area
+studies count once per area; studies without conditions contribute nothing;
+healthy-volunteer and drug-class conditions land in Other. All cross-check
+caveats inherit, plus classifier error (audited by sampling the Other
+bucket; misses patched as found).

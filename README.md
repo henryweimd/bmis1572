@@ -108,6 +108,8 @@ Without step 1, the explorer falls back to a committed demo CSV
 - CT.gov cross-check (experimental, US, institution×city): 27,060/47,655 strict
   institutions match ≥1 industry trial; MD Anderson flagship ≈ 2,900 plausible
   trials (1,467 strong). See `docs/linkage.md`.
+- TA mix of matched trials (experimental): oncology 32%, cardiology 9%,
+  neurology 7%; Other 26% (healthy-volunteer, drug-class, unclassifiable).
 
 ## Limitations
 

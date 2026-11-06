@@ -42,6 +42,7 @@ import cluster
 import ctgov
 import ctgov_geo
 import ctgov_link
+import ctgov_ta
 import deck
 import sites
 from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
@@ -310,6 +311,10 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         xc = ctgov_link.run(audit_n=0)
         if xc is not None and len(xc):
             tables["site_ctgov_xcheck"] = xc.reset_index(drop=True)
+    if ctgov_ta.COND_CACHE.exists() and ctgov_link.LOC_CACHE.exists():
+        tm = ctgov_ta.run()
+        if tm is not None and len(tm):
+            tables["site_ta_mix"] = tm.reset_index(drop=True)
 
     tables["investigators_year_geo"] = agg.reorder_bands(pd.concat(iyg))
     tables["country_year"] = pd.concat(cy).reset_index(drop=True)
@@ -490,6 +495,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "site_size_year": "Sites by investigator headcount bin and year",
         "site_churn": "Site roster churn: links, joins, ends by year",
         "site_ctgov_xcheck": "CT.gov institution cross-check per site (experimental)",
+        "site_ta_mix": "Therapeutic-area mix of matched trials per site (experimental)",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -637,6 +643,12 @@ def verify_with_duckdb(tables) -> dict:
             " LEFT JOIN site_index s ON x.site_id = s.site_id"
             " WHERE s.site_id IS NULL").fetchone()[0]
         assert x_orph == 0, "xcheck sites missing from site_index"
+    if "site_ta_mix" in tables:
+        t_orph = con.execute(
+            "SELECT COUNT(*) FROM site_ta_mix x"
+            " LEFT JOIN site_index s ON x.site_id = s.site_id"
+            " WHERE s.site_id IS NULL").fetchone()[0]
+        assert t_orph == 0, "TA-mix sites missing from site_index"
     bu, au = con.execute(
         "SELECT (SELECT n_starts FROM trials_band"
         " WHERE band = 'United States' AND year = 2025),"
