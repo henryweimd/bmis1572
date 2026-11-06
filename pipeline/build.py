@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aggregate as agg
 import bmis
 import charts
+import china
 import cluster
 import ctgov
 import ctgov_geo
@@ -359,6 +360,21 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     return tables
 
 
+def stage_china() -> dict[str, pd.DataFrame]:
+    if not china.RAW_FILE.exists():
+        log("china: raw extract absent; skipping")
+        return {}
+    df = china.load_china()
+    tables = china.build_china_tables(df)
+    for name, t in tables.items():
+        t = downcast(t)
+        tables[name] = t
+        t.to_parquet(CURATED / f"{name}.parquet", index=False,
+                     compression="zstd", compression_level=9)
+        log(f"curated/{name}.parquet: {len(t):,} rows")
+    return tables
+
+
 def stage_ctgov(skip: bool, refresh: bool):
     starts_cache = RAW / "ctgov_starts.json"
     subset_cache = RAW / "ctgov_subset.jsonl"
@@ -500,6 +516,13 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "tightness": "Investigators per trial by year",
         "trials_band": "Industry starts by year and band (multi-country overlap)",
         "tightness_band": "Investigators per start by year and band",
+        "cn_filing_year": "China registry by institution filing vintage",
+        "cn_province_year": "China registry by province and vintage",
+        "cn_specialty_year": "China registry by specialty group and vintage",
+        "cn_leaderboard": "China investigators by affiliations (name-level)",
+        "cn_site_index": "China institution rollup with EN names",
+        "cn_person_index": "China investigator search index (pairs)",
+        "cn_person_rows": "China per-investigator affiliation rows",
         "irb_cro_year": "IRB/CRO entities and receipts by year",
         "person_index": "Investigator search index (strict persons)",
         "person_receipts": "Per-investigator receipt history, newest first",
@@ -523,6 +546,9 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
             "bmis_parse": ingest_stats.get("parse"),
             "bmis_clean": ingest_stats.get("clean"),
             "ctgov": ctgov_info,
+            "china": {"extract": "investigator_affiliations_2026-11-06_FINAL.csv",
+                      "retrieved": "2026-11-06",
+                      "coverage": "Partial, with defined scope"},
         },
         "versions": {
             "strict": DEFINITIONS["person_strict"],
@@ -673,6 +699,19 @@ def verify_with_duckdb(tables) -> dict:
         " WHERE scope = 'adjusted' AND year = 2025)").fetchone()
     assert bu > 0 and abs(bu - au) / au < 0.02, \
         f"band US cross-foot failed ({bu} vs {au})"
+    if "cn_person_rows" in tables:
+        cn = con.execute(
+            "SELECT (SELECT COUNT(*) FROM cn_person_rows),"
+            " (SELECT SUM(n_rows) FROM cn_leaderboard),"
+            " (SELECT SUM(n_rows) FROM cn_site_index),"
+            " (SELECT COUNT(*) FROM cn_person_index),"
+            " (SELECT SUM(n_pairs) FROM cn_site_index)").fetchone()
+        assert cn[0] > 0 and cn[0] == cn[1] == cn[2], \
+            "china row conservation failed"
+        assert cn[4] == cn[3], "china pair conservation failed"
+        cn_cum = con.execute(
+            "SELECT MAX(cum_pairs) FROM cn_filing_year").fetchone()[0]
+        assert cn_cum == cn[3], "china cumulative mismatch"
     check = con.execute(
         "SELECT version, SUM(n_active) FROM investigators_year_geo "
         "GROUP BY 1 ORDER BY 1").fetchall()
@@ -699,6 +738,7 @@ def main() -> None:
     trials, band_tr, ctgov_info = stage_ctgov(args.skip_ctgov, args.refresh_ctgov)
     tables["trials_year"] = trials
     tables["trials_band"] = band_tr
+    tables.update(stage_china())
     stage_tightness(tables)
 
     stats = headline_stats(persons, tables)

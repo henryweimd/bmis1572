@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T13:10:52.478181+00:00",
+  "generated_at": "2026-11-06T22:59:20.043873+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -24,11 +24,11 @@
       "meta": {
         "api_version": {
           "apiVersion": "2.0.5",
-          "dataTimestamp": "2026-11-05T10:00:06"
+          "dataTimestamp": "2026-11-06T10:00:05"
         },
         "stats_size": {
-          "totalStudies": 610511,
-          "averageSizeBytes": 17320,
+          "totalStudies": 610756,
+          "averageSizeBytes": 17319,
           "percentiles": {
             "5%": 4574,
             "10%": 5324,
@@ -36,41 +36,41 @@
             "20%": 6467,
             "25%": 6991,
             "30%": 7514,
-            "35%": 8050,
-            "40%": 8617,
-            "45%": 9219,
-            "50%": 9879,
-            "55%": 10629,
-            "60%": 11480,
-            "65%": 12488,
-            "70%": 13736,
-            "75%": 15337,
-            "80%": 17599,
-            "85%": 21164,
-            "90%": 28355,
-            "95%": 49773,
-            "99%": 149717
+            "35%": 8051,
+            "40%": 8618,
+            "45%": 9221,
+            "50%": 9880,
+            "55%": 10630,
+            "60%": 11481,
+            "65%": 12489,
+            "70%": 13738,
+            "75%": 15338,
+            "80%": 17600,
+            "85%": 21163,
+            "90%": 28354,
+            "95%": 49764,
+            "99%": 149679
           },
           "ranges": [
             {
               "sizeRange": "0 - 10 kb",
-              "studiesCount": 320581
+              "studiesCount": 320688
             },
             {
               "sizeRange": "10 - 20 kb",
-              "studiesCount": 193705
+              "studiesCount": 193816
             },
             {
               "sizeRange": "20 - 30 kb",
-              "studiesCount": 40966
+              "studiesCount": 40978
             },
             {
               "sizeRange": "30 - 40 kb",
-              "studiesCount": 16485
+              "studiesCount": 16486
             },
             {
               "sizeRange": "40 - 50 kb",
-              "studiesCount": 9337
+              "studiesCount": 9345
             },
             {
               "sizeRange": "50 - 60 kb",
@@ -78,15 +78,15 @@
             },
             {
               "sizeRange": "60 - 70 kb",
-              "studiesCount": 4360
+              "studiesCount": 4362
             },
             {
               "sizeRange": "70 - 80 kb",
-              "studiesCount": 3265
+              "studiesCount": 3266
             },
             {
               "sizeRange": "80 - 90 kb",
-              "studiesCount": 2467
+              "studiesCount": 2468
             },
             {
               "sizeRange": "90 - 100 kb",
@@ -94,7 +94,7 @@
             },
             {
               "sizeRange": "100 - 110 kb",
-              "studiesCount": 1591
+              "studiesCount": 1592
             },
             {
               "sizeRange": "110 - 120 kb",
@@ -102,7 +102,7 @@
             },
             {
               "sizeRange": "120 - 130 kb",
-              "studiesCount": 1041
+              "studiesCount": 1042
             },
             {
               "sizeRange": "130 - 140 kb",
@@ -110,7 +110,7 @@
             },
             {
               "sizeRange": "140 - 150 kb",
-              "studiesCount": 736
+              "studiesCount": 735
             },
             {
               "sizeRange": "150 - 160 kb",
@@ -118,7 +118,7 @@
             },
             {
               "sizeRange": "160 - 170 kb",
-              "studiesCount": 557
+              "studiesCount": 558
             },
             {
               "sizeRange": "170 - 180 kb",
@@ -130,15 +130,15 @@
             },
             {
               "sizeRange": "190 - 200 kb",
-              "studiesCount": 360
+              "studiesCount": 361
             },
             {
               "sizeRange": "200 - 210 kb",
-              "studiesCount": 322
+              "studiesCount": 321
             },
             {
               "sizeRange": "210 - 220 kb",
-              "studiesCount": 288
+              "studiesCount": 287
             },
             {
               "sizeRange": "220 - 230 kb",
@@ -146,7 +146,7 @@
             },
             {
               "sizeRange": "230 - 240 kb",
-              "studiesCount": 225
+              "studiesCount": 226
             },
             {
               "sizeRange": "240 - 250 kb",
@@ -162,11 +162,11 @@
             },
             {
               "sizeRange": "270 - 280 kb",
-              "studiesCount": 163
+              "studiesCount": 162
             },
             {
               "sizeRange": "280 - 290 kb",
-              "studiesCount": 127
+              "studiesCount": 128
             },
             {
               "sizeRange": "290 - 300 kb",
@@ -326,11 +326,11 @@
             },
             {
               "sizeRange": "680 - 690 kb",
-              "studiesCount": 9
+              "studiesCount": 8
             },
             {
               "sizeRange": "690 - 700 kb",
-              "studiesCount": 12
+              "studiesCount": 13
             },
             {
               "sizeRange": "700 - 710 kb",
@@ -684,6 +684,11 @@
         },
         "unmapped_total": 22
       }
+    },
+    "china": {
+      "extract": "investigator_affiliations_2026-11-06_FINAL.csv",
+      "retrieved": "2026-11-06",
+      "coverage": "Partial, with defined scope"
     }
   },
   "versions": {
@@ -714,7 +719,10 @@
     "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6.",
     "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them.",
     "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio.",
-    "site_ta": "Therapeutic-area mix (experimental, US only): the matched institution's CT.gov studies bucketed by conditions text into ~15 areas via keyword rules (first match wins). Counts inherit all cross-check caveats; multi-area studies count once per area; healthy-volunteer and unclassifiable conditions land in Other."
+    "site_ta": "Therapeutic-area mix (experimental, US only): the matched institution's CT.gov studies bucketed by conditions text into ~15 areas via keyword rules (first match wins). Counts inherit all cross-check caveats; multi-area studies count once per area; healthy-volunteer and unclassifiable conditions land in Other.",
+    "china": "China CFDI registry extract (partial coverage, retrieved 2026-11-06): investigators affiliated with filed drug-trial institutions. Person = (name, institution) pair; bare names collide across institutions.",
+    "china_filing": "Filing year is the INSTITUTION's registration vintage, not investigator activity: most institutions filed in a 2019-2020 bulk wave. YoY reads as registry composition, never retention.",
+    "china_i18n": "ZH is authoritative. EN covers provinces, cities, roles, specialty groups, top-30 sites (curated) and pattern-derived site/specialty labels; investigator names stay in Chinese."
   },
   "stats": {
     "persons_ever": {
@@ -1196,6 +1204,144 @@
         "year",
         "n_starts",
         "partial"
+      ]
+    },
+    {
+      "id": "cn_filing_year",
+      "title": "China registry by institution filing vintage",
+      "format": "parquet",
+      "files": [
+        "data/cn_filing_year.parquet"
+      ],
+      "row_count": 7,
+      "columns": [
+        "year",
+        "n_rows",
+        "n_pairs",
+        "n_institutions",
+        "cum_pairs",
+        "cum_institutions"
+      ]
+    },
+    {
+      "id": "cn_province_year",
+      "title": "China registry by province and vintage",
+      "format": "parquet",
+      "files": [
+        "data/cn_province_year.parquet"
+      ],
+      "row_count": 190,
+      "columns": [
+        "province_zh",
+        "province_en",
+        "year",
+        "n_rows",
+        "n_pairs",
+        "n_institutions"
+      ]
+    },
+    {
+      "id": "cn_specialty_year",
+      "title": "China registry by specialty group and vintage",
+      "format": "parquet",
+      "files": [
+        "data/cn_specialty_year.parquet"
+      ],
+      "row_count": 205,
+      "columns": [
+        "group_en",
+        "group_zh",
+        "year",
+        "n_rows",
+        "n_pairs"
+      ]
+    },
+    {
+      "id": "cn_leaderboard",
+      "title": "China investigators by affiliations (name-level)",
+      "format": "parquet",
+      "files": [
+        "data/cn_leaderboard.parquet"
+      ],
+      "row_count": 34153,
+      "columns": [
+        "name_zh",
+        "n_rows",
+        "n_inst",
+        "n_spec",
+        "n_prov",
+        "first_year",
+        "province_zh",
+        "province_en"
+      ]
+    },
+    {
+      "id": "cn_site_index",
+      "title": "China institution rollup with EN names",
+      "format": "parquet",
+      "files": [
+        "data/cn_site_index.parquet"
+      ],
+      "row_count": 1818,
+      "columns": [
+        "inst_id",
+        "name_zh",
+        "province_zh",
+        "city_zh",
+        "filing_year",
+        "filing_year_max",
+        "n_pairs",
+        "n_rows",
+        "n_spec",
+        "top_group_en",
+        "name_en",
+        "name_en_curated",
+        "province_en",
+        "city_en"
+      ]
+    },
+    {
+      "id": "cn_person_index",
+      "title": "China investigator search index (pairs)",
+      "format": "parquet",
+      "files": [
+        "data/cn_person_index.parquet"
+      ],
+      "row_count": 42159,
+      "columns": [
+        "pair_id",
+        "name_zh",
+        "inst_id",
+        "inst_zh",
+        "province_zh",
+        "n_rows",
+        "n_spec",
+        "filing_year",
+        "inst_en",
+        "province_en"
+      ]
+    },
+    {
+      "id": "cn_person_rows",
+      "title": "China per-investigator affiliation rows",
+      "format": "parquet",
+      "files": [
+        "data/cn_person_rows.parquet"
+      ],
+      "row_count": 76764,
+      "columns": [
+        "pair_id",
+        "filing_year",
+        "inst_zh",
+        "specialty_zh",
+        "specialty_en",
+        "group_en",
+        "group_zh",
+        "role_zh",
+        "role_en",
+        "province_zh",
+        "province_en",
+        "inst_en"
       ]
     },
     {
