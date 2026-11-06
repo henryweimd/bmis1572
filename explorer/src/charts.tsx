@@ -1,4 +1,8 @@
+import { useState } from 'react';
+
 const fmtCompact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const fmtVal = (v: number): string => (Number.isInteger(v) ? fmtInt.format(v) : v.toFixed(2));
 
 export function TrendChart({ data }: { data: { d: string; v: number }[] }) {
   const W = 720;
@@ -53,19 +57,23 @@ export interface LineSeries {
 export function MultiLineChart({ series }: { series: LineSeries[] }) {
   const W = 720;
   const H = 240;
-  const P = { l: 52, r: 12, t: 12, b: 26 };
+  const P = { l: 52, r: 12, t: 12, b: 30 };
+  const [hover, setHover] = useState<number | null>(null);
   const all = series.flatMap((s) => s.points).filter((p) => p.y !== null) as { x: number; y: number }[];
   if (!all.length) return <p className="muted">No data.</p>;
-  const xs = all.map((p) => p.x);
+  const yearSet = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
+  const step = yearSet.length > 10 ? 2 : 1;
+  const yearTicks = yearSet.filter((_, i) => i % step === 0);
+  const x0 = Math.min(...yearSet);
+  const x1 = Math.max(...yearSet);
   const vs = all.map((p) => p.y);
-  const x0 = Math.min(...xs);
-  const x1 = Math.max(...xs);
   const min = Math.min(0, ...vs);
   const max = Math.max(...vs);
   const span = max - min || 1;
   const x = (v: number) => P.l + ((v - x0) / (x1 - x0 || 1)) * (W - P.l - P.r);
   const y = (v: number) => P.t + (1 - (v - min) / span) * (H - P.t - P.b);
   const ticks = [0, 1, 2, 3].map((i) => min + (span * i) / 3);
+  const showDots = series.every((s) => s.points.length <= 30);
 
   const runs = (pts: LinePoint[]): string[] => {
     const out: string[] = [];
@@ -83,32 +91,86 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
     return out;
   };
 
+  const onMove = (e: React.MouseEvent<SVGRectElement>) => {
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (W / rect.width);
+    const year = Math.round(x0 + ((px - P.l) / (W - P.l - P.r)) * (x1 - x0));
+    const clamped = Math.min(x1, Math.max(x0, year));
+    setHover(yearSet.includes(clamped) ? clamped : null);
+  };
+
+  const flip = hover !== null && (x(hover) - P.l) / (W - P.l - P.r) > 0.62;
+
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${series.length} series over time`}>
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-              {fmtCompact.format(t)}
+      <div className="chart-wrap">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${series.length} series over time`}>
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
+              <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
+                {fmtCompact.format(t)}
+              </text>
+            </g>
+          ))}
+          {yearSet.map((yr) => (
+            <line key={`g${yr}`} x1={x(yr)} x2={x(yr)} y1={P.t} y2={H - P.b} className="grid grid-x" />
+          ))}
+          {yearTicks.map((yr) => (
+            <text key={`t${yr}`} x={x(yr)} y={H - 8} textAnchor="middle" className="tick tick-x">
+              {yr}
             </text>
-          </g>
-        ))}
-        {series.map((s) =>
-          runs(s.points).map((pts, j) => (
-            <polyline key={`${s.label}-${j}`} points={pts} fill="none" stroke={s.color} strokeWidth={2} />
-          )),
+          ))}
+          {series.map((s) =>
+            runs(s.points).map((pts, j) => (
+              <polyline key={`${s.label}-${j}`} points={pts} fill="none" stroke={s.color} strokeWidth={2} />
+            )),
+          )}
+          {showDots &&
+            series.map((s) =>
+              s.points
+                .filter((p) => p.y !== null)
+                .map((p) => (
+                  <circle key={`${s.label}-${p.x}`} cx={x(p.x)} cy={y(p.y as number)} r={2.6} fill={s.color} />
+                )),
+            )}
+          {hover !== null && (
+            <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} className="crosshair" />
+          )}
+          <rect
+            x={P.l}
+            y={P.t}
+            width={W - P.l - P.r}
+            height={H - P.t - P.b}
+            fill="transparent"
+            onMouseMove={onMove}
+            onMouseLeave={() => setHover(null)}
+          />
+        </svg>
+        {hover !== null && (
+          <div
+            className="tooltip"
+            style={{
+              left: `${(x(hover) / W) * 100}%`,
+              transform: flip ? 'translate(-105%, 0)' : 'translate(5%, 0)',
+            }}
+          >
+            <strong>{hover}</strong>
+            {series.map((s) => {
+              const p = s.points.find((pt) => pt.x === hover);
+              return (
+                <div key={s.label} className="tooltip-row">
+                  <span className="swatch" style={{ background: s.color }} />
+                  <span className="tooltip-label">{s.label}</span>
+                  <span className="tooltip-val">{p?.y == null ? '—' : fmtVal(p.y)}</span>
+                </div>
+              );
+            })}
+          </div>
         )}
-        <text x={P.l} y={H - 8} className="tick">
-          {x0}
-        </text>
-        <text x={(P.l + W - P.r) / 2} y={H - 8} textAnchor="middle" className="tick">
-          {Math.round((x0 + x1) / 2)}
-        </text>
-        <text x={W - P.r} y={H - 8} textAnchor="end" className="tick">
-          {x1}
-        </text>
-      </svg>
+      </div>
       <div className="legend">
         {series.map((s) => (
           <span key={s.label} className="legend-item">
@@ -138,13 +200,14 @@ export function StackedBars({
 }) {
   const W = 720;
   const H = 240;
-  const P = { l: 52, r: 12, t: 12, b: 26 };
+  const P = { l: 52, r: 12, t: 12, b: 30 };
   if (!data.length) return <p className="muted">No data.</p>;
   const [cBottom, cTop] = colors ?? ['#1f77b4', '#ff7f0e'];
   const max = Math.max(...data.map((d) => d.bottom + d.top)) || 1;
   const bw = (W - P.l - P.r) / data.length;
   const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
   const ticks = [0, 1, 2, 3].map((i) => (max * i) / 3);
+  const step = data.length > 10 ? 2 : 1;
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Stacked bars, ${data.length} years`}>
@@ -164,17 +227,20 @@ export function StackedBars({
           const yBase = y(0);
           return (
             <g key={d.x}>
-              <rect x={bx} y={yMid} width={w} height={Math.max(0, yBase - yMid)} fill={cBottom} />
-              <rect x={bx} y={yTop} width={w} height={Math.max(0, yMid - yTop)} fill={cTop} />
+              <rect x={bx} y={yMid} width={w} height={Math.max(0, yBase - yMid)} fill={cBottom}>
+                <title>{`${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)}, ${labels[1]} ${fmtInt.format(d.top)}`}</title>
+              </rect>
+              <rect x={bx} y={yTop} width={w} height={Math.max(0, yMid - yTop)} fill={cTop}>
+                <title>{`${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)}, ${labels[1]} ${fmtInt.format(d.top)}`}</title>
+              </rect>
+              {i % step === 0 && (
+                <text x={bx + w / 2} y={H - 8} textAnchor="middle" className="tick tick-x">
+                  {d.x}
+                </text>
+              )}
             </g>
           );
         })}
-        <text x={P.l} y={H - 8} className="tick">
-          {data[0].x}
-        </text>
-        <text x={W - P.r} y={H - 8} textAnchor="end" className="tick">
-          {data[data.length - 1].x}
-        </text>
       </svg>
       <div className="legend">
         <span className="legend-item">

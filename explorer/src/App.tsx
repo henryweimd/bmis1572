@@ -412,6 +412,25 @@ export default function App() {
               ))}
             </select>
           </label>
+          <div className="seg" role="group" aria-label="Year zoom presets">
+            {[
+              { label: 'Full', from: 2008, to: 2026 },
+              { label: '2015+', from: 2015, to: 2026 },
+              { label: '2020+', from: 2020, to: 2026 },
+            ].map((p) => (
+              <button
+                key={p.label}
+                className={y0 === p.from && y1 === p.to ? 'active' : ''}
+                onClick={() => {
+                  setY0(p.from);
+                  setY1(p.to);
+                }}
+                title={`Zoom years to ${p.from}–${p.to}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <div className="seg" role="group" aria-label="Trial scope">
             {(['adjusted', 'unadjusted'] as const).map((s) => (
               <button key={s} className={scope === s ? 'active' : ''} onClick={() => setScope(s)}>
