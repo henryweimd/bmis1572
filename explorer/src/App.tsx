@@ -119,6 +119,7 @@ const DEF_TITLES: [string, string][] = [
   ['one_trial', 'One-trial'],
   ['trials_per_year', 'Trials/year rate'],
   ['retention', 'Cohort retention'],
+  ['concentration', 'Work concentration'],
   ['scope_unadjusted', 'Unadjusted benchmark'],
   ['scope_adjusted', 'Adjusted benchmark'],
   ['starts_running', 'Starts vs. running'],
@@ -188,6 +189,7 @@ export default function App() {
   const [tight, setTight] = useState<LineSeries[]>([]);
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
   const [ret, setRet] = useState<LineSeries[]>([]);
+  const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [countries, setCountries] = useState<{ category: string; v: number }[]>([]);
   const [states, setStates] = useState<{ category: string; v: number }[]>([]);
@@ -265,7 +267,7 @@ export default function App() {
           return;
         }
         const s = escapeLiteral(scope);
-        const [ot, ti, tr, tser, bn, rt, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tr, tser, bn, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -293,6 +295,11 @@ export default function App() {
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
               ` CAST(retention AS DOUBLE) AS v FROM retention WHERE version = '${v}'` +
               ` AND cohort IN (2009, 2013, 2017, 2021) ORDER BY 1, 2`,
+          ),
+          query<{ y: number; t1: number; t10: number; g: number }>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(top1_share AS DOUBLE) AS t1,` +
+              ` CAST(top10_share AS DOUBLE) AS t10, CAST(gini AS DOUBLE) AS g` +
+              ` FROM concentration WHERE version = '${v}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
           query<LeaderRow>(
             `SELECT CAST(rank AS INTEGER) AS rank, CAST(display_name AS VARCHAR) AS display_name,` +
@@ -359,6 +366,18 @@ export default function App() {
             label: `${c} cohort`,
             color: RET_COLORS[i % RET_COLORS.length],
             points: rt.filter((r) => r.cohort === c).map((r) => ({ x: r.k, y: num0(r.v) * 100 })),
+          })),
+        );
+        const concDefs: { label: string; color: string; key: 't1' | 't10' | 'g' }[] = [
+          { label: 'Top 1% share', color: '#d62728', key: 't1' },
+          { label: 'Top 10% share', color: '#1f77b4', key: 't10' },
+          { label: 'Gini ×100', color: '#2ca02c', key: 'g' },
+        ];
+        setConc(
+          concDefs.map((s) => ({
+            label: s.label,
+            color: s.color,
+            points: cn.map((r) => ({ x: r.y, y: num0(r[s.key]) * 100 })),
           })),
         );
         setLeaders(lb);
@@ -953,6 +972,20 @@ export default function App() {
                 <p className="caption">
                   Share of each first-seen cohort still active k years later (percent). Right-censored:
                   recent cohorts show fewer years.
+                </p>
+              </>
+            )}
+          </section>
+          <section className="panel">
+            <h2>Work concentration</h2>
+            {demo ? (
+              <p className="muted">Run the pipeline for concentration data.</p>
+            ) : (
+              <>
+                <MultiLineChart series={conc} />
+                <p className="caption">
+                  Yearly share of receipts going to the top 1%/10% investigators, plus Gini ×100
+                  (percent scale). Rising lines mean work concentrating in fewer hands.
                 </p>
               </>
             )}

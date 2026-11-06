@@ -140,6 +140,28 @@ def chart_retention(ret: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_concentration(cc: pd.DataFrame, out: Path) -> None:
+    d = cc[(cc["version"] == "strict") & (cc["year"] >= 2008)].set_index("year").sort_index()
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.4))
+    a1.plot(d.index, d["top1_share"] * 100, marker="o", ms=3, label="Top 1%", color="#d62728")
+    a1.plot(d.index, d["top10_share"] * 100, marker="s", ms=3, label="Top 10%", color="#1f77b4")
+    _partial_shade(a1, d.index)
+    a1.set_title("Top shares of yearly receipts")
+    a1.set_xlabel("Receipt year")
+    a1.set_ylabel("% of receipts")
+    a1.legend(fontsize=8)
+    a2.plot(d.index, d["gini"], marker="o", ms=3, color="#2ca02c")
+    _partial_shade(a2, d.index)
+    a2.set_title("Gini of per-investigator yearly receipts")
+    a2.set_xlabel("Receipt year")
+    a2.set_ylabel("Gini")
+    fig.suptitle("Work concentration (Strict)", fontweight="bold")
+    fig.tight_layout(rect=(0, 0.16, 1, 0.92))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["concentration"])
+    fig.savefig(out / "concentration.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def chart_trials(trials: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots(figsize=(10, 4.6))
     adj = trials[trials["scope"] == "adjusted"].set_index("year").sort_index()
@@ -193,6 +215,7 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_new_returning(tables["investigators_year_geo"], out)
     chart_distribution(tables["active_bins"], out)
     chart_retention(tables["retention"], out)
+    chart_concentration(tables["concentration"], out)
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     return sorted(p.name for p in out.glob("*.png"))
