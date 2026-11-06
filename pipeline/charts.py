@@ -247,6 +247,41 @@ def chart_org_trends(oy: pd.DataFrame, key: str, noun: str, plural: str,
     plt.close(fig)
 
 
+def chart_site_trends(syg: pd.DataFrame, ssz: pd.DataFrame, out: Path) -> None:
+    d = syg[(syg["version"] == "strict") & (syg["year"] >= 2008)].copy()
+    us = d[d["band"] == "United States"].set_index("year")["n_sites"].sort_index()
+    ex = d[d["band"] != "United States"].groupby("year")["n_sites"].sum().sort_index()
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(10, 4.4))
+    a1.plot(us.index, us.values, marker="o", ms=3, label="United States", color="#1f77b4")
+    a1.plot(ex.index, ex.values, marker="s", ms=3, label="Ex-US", color="#ff7f0e")
+    _partial_shade(a1, us.index)
+    a1.set_title("Active sites per year")
+    a1.set_xlabel("Receipt year")
+    a1.set_ylabel("Sites")
+    a1.yaxis.set_major_formatter(_comma)
+    a1.legend(fontsize=8)
+    z = ssz[(ssz["version"] == "strict") & (ssz["year"] >= 2008)]
+    piv = (z.pivot_table(index="year", columns="bin", values="n_sites",
+                         aggfunc="sum", observed=False).fillna(0)
+           .reindex(columns=["1", "2-5", "6-20", "21+"]))
+    acc = pd.Series(0.0, index=piv.index)
+    for b, color in zip(["1", "2-5", "6-20", "21+"],
+                        ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728"]):
+        a2.bar(piv.index, piv[b].to_numpy(), bottom=acc.to_numpy(),
+               label=f"{b} invs", color=color)
+        acc = acc + piv[b]
+    _partial_shade(a2, piv.index)
+    a2.set_title("Site size mix (investigators/site)")
+    a2.set_xlabel("Receipt year")
+    a2.yaxis.set_major_formatter(_comma)
+    a2.legend(fontsize=7, loc="upper left")
+    fig.suptitle("Site trends", fontweight="bold")
+    fig.tight_layout(rect=(0, 0.16, 1, 0.92))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["site"] + " " + DEFINITIONS["partial"])
+    fig.savefig(out / "sites_trends.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
@@ -258,6 +293,7 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
                      DEFINITIONS["cro"], "cro_trends.png", out)
     chart_org_trends(tables["irb_year"], "irb", "IRB", "IRBs",
                      DEFINITIONS["irb"], "irb_trends.png", out)
+    chart_site_trends(tables["sites_year_geo"], tables["site_size_year"], out)
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     return sorted(p.name for p in out.glob("*.png"))
