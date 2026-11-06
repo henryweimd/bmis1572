@@ -4,6 +4,7 @@ import type { Manifest } from './duckdb';
 import { CategoryBars, MultiLineChart, StackedBars } from './charts';
 import type { LineSeries } from './charts';
 import OrgTab from './OrgTab';
+import SiteTab from './SiteTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
 import './App.css';
@@ -129,6 +130,8 @@ const DEF_TITLES: [string, string][] = [
   ['bmis_scope', 'BMIS scope'],
   ['cro', 'CRO company grouping'],
   ['irb', 'IRB board grouping'],
+  ['site', 'Site definition'],
+  ['site_churn', 'Site roster churn'],
 ];
 
 function years(): number[] {
@@ -217,8 +220,8 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'about'>(() =>
-    pick(hashInit.t, ['inv', 'cro', 'irb', 'about'] as const, 'inv'),
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'about'>(() =>
+    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'about'] as const, 'inv'),
   );
 
   useEffect(() => {
@@ -236,7 +239,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : 'About'
+      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : tab === 'site' ? 'Sites' : 'About'
     } · Investigator Supply Explorer`;
   }, [tab]);
 
@@ -558,6 +561,14 @@ export default function App() {
           onClick={() => setTab('irb')}
         >
           IRBs
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'site'}
+          className={tab === 'site' ? 'active' : ''}
+          onClick={() => setTab('site')}
+        >
+          Sites
         </button>
         <button
           role="tab"
@@ -1036,6 +1047,10 @@ export default function App() {
 
       {tab === 'irb' && (
         <OrgTab kind="irb" bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
+      )}
+
+      {tab === 'site' && (
+        <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
       )}
 
       {tab === 'about' && <About />}
