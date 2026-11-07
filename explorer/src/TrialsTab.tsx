@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, TrendChart } from './charts';
-import { downloadCsv } from './csv';
+import { downloadCsv, trendCsv } from './csv';
 
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num0 = (v: unknown): number =>
@@ -240,7 +240,15 @@ export default function TrialsTab({
         <TrendChart data={triYoy} />
         <p className="caption">
           Industry trial starts per year in range (CT.gov Start Date; unknown-start trials
-          excluded).
+          excluded).{' '}
+          {!!triYoy.length && (
+            <button
+              className="btn"
+              onClick={() => trendCsv(`trials-by-start-year-${y0}-${y1}.csv`, triYoy)}
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
 

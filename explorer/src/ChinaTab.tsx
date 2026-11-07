@@ -5,7 +5,7 @@ import { CategoryBars, MultiLineChart, StackedMultiBars } from './charts';
 const CN_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#7f7f7f'];
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
-import { downloadCsv } from './csv';
+import { downloadCsv, stackedCsv } from './csv';
 
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num0 = (v: unknown): number =>
@@ -427,7 +427,15 @@ export default function ChinaTab({
           Investigator-institution pairs at institutions filed each year (2021+), top 6 provinces
           plus others. Toggle 100% for yearly share. The 2020 bulk-registration spike (
           {kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the graph; cumulative
-          registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.
+          registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.{' '}
+          {!!vintStack.length && (
+            <button
+              className="btn"
+              onClick={() => stackedCsv('china-vintage-by-province.csv', vintStack)}
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
 
