@@ -469,6 +469,34 @@ def chart_trial_sponsors(tr: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_who(wy: pd.DataFrame, wc: pd.DataFrame, out: Path) -> None:
+    g = wy.sort_values("year")
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.plot(g["year"], g["trials"], marker="o", color="#1f77b4", label="Trials")
+    ax.plot(g["year"], g["records"], marker="o", color="#ff7f0e", label="Records")
+    ax.legend(fontsize=8)
+    ax.set_title("WHO ICTRP registrations by year (global, ALL statuses)")
+    ax.set_xlabel("Registration year")
+    ax.set_ylabel("Count")
+    ax.yaxis.set_major_formatter(_comma)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["who"] + " " + DEFINITIONS["who_records"])
+    fig.savefig(out / "who_global_yoy.png", bbox_inches="tight")
+    plt.close(fig)
+
+    tot = wc.sort_values("trials", ascending=False).head(12).iloc[::-1]
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.barh(tot["country"], tot["trials"], color="#2ca02c")
+    ax.set_title("WHO ICTRP trials by country (top 12, all years)")
+    ax.set_xlabel("Trials")
+    ax.xaxis.set_major_formatter(_comma)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "Multi-country trials repeat in every listed country; "
+                  "do not sum. DEFINITIONS: " + DEFINITIONS["who_records"])
+    fig.savefig(out / "who_top_countries.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def chart_linkage_coverage(lk: pd.DataFrame, pi: pd.DataFrame, out: Path) -> None:
     linked = set(lk["person_id"].unique().tolist())
     cov = (pi.assign(linked=pi["person_id"].isin(linked))
@@ -540,6 +568,8 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
                                tables["person_index"], out)
     if "site_retention" in tables:
         chart_site_retention(tables["site_retention"], out)
+    if "who_year" in tables and "who_country" in tables:
+        chart_who(tables["who_year"], tables["who_country"], out)
     if "cn_filing_year" in tables:
         chart_china_filing(tables["cn_filing_year"], out)
         chart_china_specialty(tables["cn_specialty_year"], out)
