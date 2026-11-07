@@ -301,6 +301,12 @@ footer {
   .kpis {
     grid-template-columns: 1fr;
   }
+  header {
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-size: 20px;
+  }
 }
 
 .kpis.four {
@@ -329,6 +335,9 @@ footer {
   display: flex;
   gap: 8px;
   margin-bottom: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tabs button {
@@ -341,6 +350,8 @@ footer {
   background: var(--surface);
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tabs button.active {
@@ -472,7 +483,7 @@ footer {
   font-size: 12.5px;
   pointer-events: none;
   min-width: 150px;
-  max-width: 260px;
+  max-width: min(260px, 70vw);
 }
 
 .tooltip-row {
