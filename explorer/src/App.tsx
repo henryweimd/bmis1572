@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createViews, escapeLiteral, loadManifest, query } from './duckdb';
 import type { Manifest } from './duckdb';
-import { CategoryBars, MultiLineChart, StackedBars, StackedMultiBars, VintageHeatmap } from './charts';
+import { CategoryBars, MultiLineChart, StackedBars, StackedMultiBars, TrendChart, VintageHeatmap } from './charts';
 import type { LineSeries, VintageRow } from './charts';
 import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
@@ -225,6 +225,7 @@ export default function App() {
   const [pbins, setPbins] = useState<{ category: string; v: number }[]>([]);
   const [oadBand, setOadBand] = useState<{ b: string; n: number; s: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
+  const [ret5, setRet5] = useState<{ d: string; v: number }[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [countries, setCountries] = useState<{ category: string; v: number }[]>([]);
@@ -326,7 +327,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const [ot, ti, tser, bn, pb, ob, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, pb, ob, rt, r5, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -361,6 +362,10 @@ export default function App() {
               ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
               ` CAST(n_active AS INTEGER) AS na FROM retention` +
               ` WHERE version = '${v}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX} ORDER BY 1, 2`,
+          ),
+          query<{ c: number; v: number }>(
+            `SELECT CAST(cohort AS INTEGER) AS c, CAST(100 * retention AS DOUBLE) AS v` +
+              ` FROM retention WHERE version = '${v}' AND k = 5 AND cohort BETWEEN 2009 AND 2020 ORDER BY 1`,
           ),
           query<{ y: number; t1: number; t10: number; g: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(top1_share AS DOUBLE) AS t1,` +
@@ -453,6 +458,7 @@ export default function App() {
               counts: Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
             })),
         );
+        setRet5(r5.map((r) => ({ d: String(r.c), v: num0(r.v) })));
         const concDefs: { label: string; color: string; key: 't1' | 't10' | 'g' }[] = [
           { label: 'Top 1% share', color: '#d62728', key: 't1' },
           { label: 'Top 10% share', color: '#1f77b4', key: 't10' },
@@ -1418,6 +1424,13 @@ export default function App() {
             ) : (
               <>
                 <VintageHeatmap rows={ret} kMax={VINTAGE_KMAX} />
+                <h3>Five-year retention by vintage</h3>
+                <TrendChart data={ret5} />
+                <p className="caption">
+                  Share of each vintage still active 5 years later (percent). Cohorts 2009–2020
+                  only — later vintages cannot be fully observed yet. Newer vintages retain
+                  worse at five years.
+                </p>
                 <p className="caption">
                   Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in
                   that year (n = investigators). Cells show the share of that vintage still active k years
