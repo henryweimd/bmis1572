@@ -34,6 +34,7 @@ FDA_URL = ("https://www.fda.gov/drugs/drug-approvals-and-databases/"
            "bioresearch-monitoring-information-system-bmis")
 CTGOV_URL = "https://clinicaltrials.gov/data-api/api"
 REPO_URL = "https://github.com/henryweimd/bmis1572"
+CFDI_URL = "https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
 
 
 def load_numbers(stats: dict) -> dict:
@@ -48,6 +49,12 @@ def load_numbers(stats: dict) -> dict:
     iyg = pd.read_parquet(CURATED / "investigators_year_geo.parquet")
     s25 = iyg[(iyg["version"] == "strict") & (iyg["year"] == 2025)]
     n["newshare"] = s25["n_new"].sum() / s25["n_active"].sum() * 100
+    eu = iyg[(iyg["version"] == "strict") & (iyg["band"] == "Europe (EU+UK)") &
+             (iyg["year"].isin([2019, 2021]))].set_index("year")["n_active"]
+    tot = iyg[(iyg["version"] == "strict") & (iyg["year"].isin([2019, 2021]))].groupby(
+        "year")["n_active"].sum()
+    n["eu19"] = eu.loc[2019] / tot.loc[2019] * 100
+    n["eu21"] = eu.loc[2021] / tot.loc[2021] * 100
     ret = pd.read_parquet(CURATED / "retention.parquet")
     r09 = ret[(ret["version"] == "strict") & (ret["cohort"] == 2009)].set_index("k")["retention"]
     n["r1"], n["r10"] = r09.loc[1] * 100, r09.loc[10] * 100
@@ -77,13 +84,29 @@ def load_numbers(stats: dict) -> dict:
     top = sx[sx["site_id"].str.startswith("strict:")].sort_values(
         "n_receipts", ascending=False).iloc[0]
     n["site_top"] = (top["display_name"], int(top["n_inv_ever"]), int(top["n_receipts"]))
+    n["cn_pairs"] = None
+    if (CURATED / "cn_filing_year.parquet").exists():
+        fy = pd.read_parquet(CURATED / "cn_filing_year.parquet")
+        lb = pd.read_parquet(CURATED / "cn_leaderboard.parquet")
+        si = pd.read_parquet(CURATED / "cn_site_index.parquet")
+        n["cn_pairs"] = int(fy["cum_pairs"].max())
+        n["cn_v20"] = int(fy[fy["year"] == 2020]["n_pairs"].sum())
+        n["cn_names"] = len(lb)
+        n["cn_insts"] = len(si)
+        py = pd.read_parquet(CURATED / "cn_province_year.parquet")
+        tp = py.groupby("province_en")["n_pairs"].sum().sort_values(ascending=False)
+        n["cn_top_prov"] = (tp.index[0], int(tp.iloc[0]))
+        sy = pd.read_parquet(CURATED / "cn_specialty_year.parquet")
+        ts = sy.groupby("group_en")["n_pairs"].sum().sort_values(ascending=False)
+        n["cn_top_spec"] = (ts.index[0], int(ts.iloc[0]))
     return n
 
 
 def build_slides(n: dict) -> list[dict]:
     f = lambda v: f"{int(v):,}"
     run = f(n["run25"]) if n["run25"] is not None else "n/a"
-    return [
+    has_cn = n["cn_pairs"] is not None
+    slides = [
         {"kind": "title", "title": "The U.S. Clinical-Trial Investigator Supply",
          "sub": ("A preliminary descriptive analysis of FDA BMIS Form 1572 filings, "
                  "benchmarked against industry trials"),
@@ -98,16 +121,20 @@ def build_slides(n: dict) -> list[dict]:
          ],
          "footnotes": ["BMIS covers CDER IND drugs/biologics only; FDA states it is not comprehensive.",
                        "2008 is file ramp-up, 2026 partial (thru Aug); both excluded from growth stats."]},
-        {"kind": "chart", "title": "Headline: global flat-to-down, U.S. up",
-         "images": ["investigators_geo_yoy.png"],
+        {"kind": "charts2", "title": "Headline: global flat-to-down, U.S. up",
+         "images": ["investigators_geo_yoy.png", "investigators_geo_share.png"],
          "bullets": [f"Global active CIs: {f(n['g09'])} \u2192 {f(n['g25'])} ({n['gg']:+.1f}%).",
                      f"U.S. active CIs: {f(n['u09'])} \u2192 {f(n['u25'])} ({n['ug']:+.1f}%).",
-                     "Ex-U.S. decline concentrates in 2020\u201321; no EU break at GDPR (May 2018)."],
-         "footnotes": ["Strict persons; receipt-year activity."]},
-        {"kind": "chart", "title": "Fewer newcomers; a stable returning core",
-         "images": ["new_returning.png"],
+                     "Ex-U.S. decline concentrates in 2020\u201321; no EU break at GDPR (May 2018).",
+                     "2021* follows the 2019 EU Form 1572 restriction (EORTC + NCI RCR "
+                     "replacements): the EU drop is administrative, not proven attrition."],
+         "footnotes": [f"Strict persons; receipt-year activity. Right = yearly share: EU "
+                       f"{n['eu19']:.1f}% (2019) \u2192 {n['eu21']:.1f}% (2021)."]},
+        {"kind": "charts2", "title": "Fewer newcomers; a stable returning core",
+         "images": ["new_returning.png", "new_returning_share.png"],
          "bullets": [f"{n['newshare']:.0f}% of 2025 actives are first-timers; the rest return.",
-                     "Entry is dominated by one-and-done dynamics (next)."],
+                     "Entry is dominated by one-and-done dynamics (next).",
+                     "Right panel: new-investigator share of each year."],
          "footnotes": ["New = first receipt ever in that year."]},
         {"kind": "chart", "title": "Half of investigators are one-and-done",
          "images": ["trials_per_person.png"],
@@ -165,6 +192,28 @@ def build_slides(n: dict) -> list[dict]:
          "links": [FDA_URL, CTGOV_URL, REPO_URL],
          "footnotes": []},
     ]
+    if has_cn:
+        slides[0]["sub"] += "; China CFDI registry supplement"
+        slides[-2:-2] = [
+            {"kind": "chart", "title": "China: registry stock by filing vintage",
+             "images": ["china_filing_yoy.png"],
+             "bullets": [f"{f(n['cn_pairs'])} investigator-institution pairs; "
+                         f"{f(n['cn_names'])} names; {f(n['cn_insts'])} institutions.",
+                         f"Bulk 2019\u201320 registration wave ({f(n['cn_v20'])} pairs in 2020); "
+                         "graphs read 2021+.",
+                         "Filing year is institution vintage, not investigator activity."],
+             "footnotes": ["Pairs count affiliations, not humans; common names collide. "
+                           "Partial extract, retrieved 2026-11-06."]},
+            {"kind": "charts2", "title": "China: provinces & specialties",
+             "images": ["china_province.png", "china_specialty.png"],
+             "bullets": [f"Top province: {n['cn_top_prov'][0]} ({f(n['cn_top_prov'][1])} pairs).",
+                         f"Top specialty group: {n['cn_top_spec'][0]} "
+                         f"({f(n['cn_top_spec'][1])} pairs)."],
+             "footnotes": ["ZH authoritative; EN labels curated or pattern-derived."]},
+        ]
+        slides[-1]["bullets"].insert(2, f"China: CFDI drug-institution filing extract \u2014 {CFDI_URL}")
+        slides[-1]["links"].insert(2, CFDI_URL)
+    return slides
 
 
 def render_pptx(slides: list[dict], path: Path) -> None:

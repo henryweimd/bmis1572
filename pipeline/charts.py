@@ -50,27 +50,73 @@ def _caption(fig, text: str) -> None:
              color="dimgray", style="italic")
 
 
-def chart_investigators_geo(iyg: pd.DataFrame, out: Path) -> None:
+def _year_ticks(ax, years) -> None:
+    ax.set_xticks([int(y) for y in years])
+    ax.set_xticklabels([str(int(y)) for y in years], fontsize=8)
+
+
+def _geo_pivot(iyg: pd.DataFrame) -> pd.DataFrame:
     d = iyg[(iyg["version"] == "strict") & (iyg["year"] >= 2008)].copy()
-    piv = d.pivot_table(index="year", columns="band", values="n_active",
-                        aggfunc="sum", observed=False).reindex(columns=BAND_ORDER)
-    fig, ax = plt.subplots(figsize=(10, 5.2))
+    return (d.pivot_table(index="year", columns="band", values="n_active",
+                          aggfunc="sum", observed=False)
+            .reindex(columns=BAND_ORDER).fillna(0))
+
+
+def _stacked_geo(ax, piv: pd.DataFrame) -> pd.Series:
+    acc = pd.Series(0.0, index=piv.index)
     for band in BAND_ORDER:
         if band in piv:
-            ax.plot(piv.index, piv[band], label=band,
-                    color=BAND_COLORS[band], lw=2 if band == "United States" else 1.4)
-    ax.axvline(2018, color="black", ls="--", lw=1, alpha=0.6)
-    ax.text(2018.1, ax.get_ylim()[1] * 0.92, "GDPR (May 2018)", fontsize=8)
+            ax.bar(piv.index, piv[band].to_numpy(), bottom=acc.to_numpy(),
+                   label=band, color=BAND_COLORS[band])
+            acc = acc + piv[band]
+    return acc
+
+
+def _geo_events(ax, acc: pd.Series) -> None:
+    ax.axvline(2017.5, color="black", ls="--", lw=1, alpha=0.6)
+    ax.text(2017.6, ax.get_ylim()[1] * 0.97, "GDPR (May 2018)", fontsize=8, va="top")
+    if 2021 in acc.index:
+        ax.text(2021, acc.loc[2021] * 1.015, "2021*", fontsize=10,
+                fontweight="bold", ha="center", va="bottom")
+
+
+def chart_investigators_geo(iyg: pd.DataFrame, out: Path) -> None:
+    piv = _geo_pivot(iyg)
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    acc = _stacked_geo(ax, piv)
+    _geo_events(ax, acc)
     _partial_shade(ax, piv.index)
     ax.set_title("Active clinical investigators per year by geography (Strict)")
     ax.set_xlabel("Receipt year")
     ax.set_ylabel("Unique active persons")
     ax.yaxis.set_major_formatter(_comma)
+    _year_ticks(ax, piv.index)
     ax.legend(fontsize=8, loc="upper left")
-    fig.tight_layout(rect=(0, 0.12, 1, 1))
+    fig.tight_layout(rect=(0, 0.20, 1, 1))
     _caption(fig, "DEFINITIONS: " + DEFINITIONS["person_strict"] + " " +
-             DEFINITIONS["active"] + " " + DEFINITIONS["bmis_scope"])
+             DEFINITIONS["active"] + " " + DEFINITIONS["bmis_scope"] + " " +
+             DEFINITIONS["eu_2021"])
     fig.savefig(out / "investigators_geo_yoy.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_investigators_geo_share(iyg: pd.DataFrame, out: Path) -> None:
+    piv = _geo_pivot(iyg)
+    shr = piv.div(piv.sum(axis=1), axis=0) * 100
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    _stacked_geo(ax, shr)
+    ax.set_ylim(0, 112)
+    _geo_events(ax, pd.Series(100.0, index=shr.index))
+    _partial_shade(ax, shr.index)
+    ax.set_title("Active investigators per year by geography: yearly share (Strict)")
+    ax.set_xlabel("Receipt year")
+    ax.set_ylabel("Share of active investigators (%)")
+    _year_ticks(ax, shr.index)
+    ax.legend(fontsize=8, loc="upper left")
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "100% view: segments sum to each year's active total. " +
+             DEFINITIONS["eu_2021"])
+    fig.savefig(out / "investigators_geo_share.png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -86,11 +132,33 @@ def chart_new_returning(iyg: pd.DataFrame, out: Path) -> None:
     ax.set_xlabel("Receipt year")
     ax.set_ylabel("Unique active persons")
     ax.yaxis.set_major_formatter(_comma)
+    _year_ticks(ax, d.index)
     ax.legend()
     fig.tight_layout(rect=(0, 0.14, 1, 1))
     _caption(fig, "DEFINITIONS: " + DEFINITIONS["person_strict"] + " " +
              DEFINITIONS["active"])
     fig.savefig(out / "new_returning.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_new_returning_share(iyg: pd.DataFrame, out: Path) -> None:
+    d = (iyg[(iyg["version"] == "strict") & (iyg["year"] >= 2008)]
+         .groupby("year")[["n_new", "n_returning"]].sum())
+    shr = d.div(d.sum(axis=1), axis=0) * 100
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(shr.index, shr["n_returning"], label="Returning", color="#1f77b4")
+    ax.bar(shr.index, shr["n_new"], bottom=shr["n_returning"], label="New",
+           color="#ff7f0e")
+    _partial_shade(ax, shr.index)
+    ax.set_title("New vs. returning investigators: yearly share (Strict, global)")
+    ax.set_xlabel("Receipt year")
+    ax.set_ylabel("Share of active investigators (%)")
+    _year_ticks(ax, shr.index)
+    ax.legend()
+    fig.tight_layout(rect=(0, 0.14, 1, 1))
+    _caption(fig, "100% view: new-investigator share of each year. DEFINITIONS: " +
+             DEFINITIONS["active"])
+    fig.savefig(out / "new_returning_share.png", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -369,7 +437,9 @@ def chart_china_province(py: pd.DataFrame, out: Path) -> None:
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
+    chart_investigators_geo_share(tables["investigators_year_geo"], out)
     chart_new_returning(tables["investigators_year_geo"], out)
+    chart_new_returning_share(tables["investigators_year_geo"], out)
     chart_distribution(tables["active_bins"], out)
     chart_retention(tables["retention"], out)
     chart_concentration(tables["concentration"], out)
