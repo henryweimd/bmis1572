@@ -58,6 +58,11 @@ def load_numbers(stats: dict) -> dict:
     ret = pd.read_parquet(CURATED / "retention.parquet")
     r09 = ret[(ret["version"] == "strict") & (ret["cohort"] == 2009)].set_index("k")["retention"]
     n["r1"], n["r10"] = r09.loc[1] * 100, r09.loc[10] * 100
+    n["sr1"] = n["sr10"] = None
+    if (CURATED / "site_retention.parquet").exists():
+        srt = pd.read_parquet(CURATED / "site_retention.parquet")
+        s09 = srt[(srt["version"] == "strict") & (srt["cohort"] == 2009)].set_index("k")["retention"]
+        n["sr1"], n["sr10"] = s09.loc[1] * 100, s09.loc[10] * 100
     cc = pd.read_parquet(CURATED / "concentration.parquet")
     c09 = cc[(cc["version"] == "strict") & (cc["year"] == 2009)].iloc[0]
     c25 = cc[(cc["version"] == "strict") & (cc["year"] == 2025)].iloc[0]
@@ -127,6 +132,7 @@ def build_slides(n: dict) -> list[dict]:
     run = f(n["run25"]) if n["run25"] is not None else "n/a"
     has_cn = n["cn_pairs"] is not None
     has_ct = n["ct_trials"] is not None
+    has_sr = n["sr1"] is not None
     slides = [
         {"kind": "title", "title": "The U.S. Clinical-Trial Investigator Supply",
          "sub": ("A preliminary descriptive analysis of FDA BMIS Form 1572 filings, "
@@ -163,12 +169,14 @@ def build_slides(n: dict) -> list[dict]:
                      f"Median {n['med']:.0f}, mean {n['mean']:.2f} trials per investigator.",
                      "A thin right tail of hyper-active CIs carries the top bins."],
          "footnotes": ["One row = one IND reference: a proxy, not confirmed distinct trials."]},
-        {"kind": "chart", "title": "Vintage attrition: steep, then flat",
-         "images": ["retention.png"],
-         "bullets": [f"\u2248{n['r1']:.0f}% of the 2009 vintage is active a year later; "
+        {"kind": "charts2" if has_sr else "chart", "title": "Vintage attrition: steep, then flat",
+         "images": ["retention.png"] + (["sites_retention.png"] if has_sr else []),
+         "bullets": [f"\u2248{n['r1']:.0f}% of the 2009 CI vintage is active a year later; "
                      f"\u2248{n['r10']:.0f}% a decade later.",
-                     "Curves look alike across vintages: most attrition is immediate."],
-         "footnotes": ["Vintage = CIs first seen in that year. Right-censored; 2008 excluded."]},
+                     "Curves look alike across vintages: most attrition is immediate."] +
+                    ([f"Sites persist longer: \u2248{n['sr1']:.0f}% / \u2248{n['sr10']:.0f}% "
+                      "for the 2009 site vintage."] if has_sr else []),
+         "footnotes": ["Vintage = first seen in that year. Right-censored; 2008 excluded."]},
         {"kind": "chart", "title": "Work is concentrating",
          "images": ["concentration.png"],
          "bullets": [f"Top-10% receipt share: {n['t09']:.0f}% \u2192 {n['t25']:.0f}%.",

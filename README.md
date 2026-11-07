@@ -96,7 +96,8 @@ Without step 1, the explorer falls back to a committed demo CSV
 - **Site identity.** A site is a street address: Strict matches normalized
   street+city+state+country (suite markers dropped, ZIP excluded); Merged unions
   same-house-number addresses at street-token Jaccard ≥ 0.6 within a city.
-  Rollups use strict persons; churn = first/last receipt year per roster link.
+  Rollups use strict persons; churn = first/last receipt year per roster link;
+  site vintage attrition mirrors person retention at address level.
 - **CT.gov cross-check (experimental).** US industry trials whose facility
   fuzzy-matches the institution name in the same city, year-gated; counts are
   institution×city, shared across addresses. See `docs/linkage.md`.
@@ -141,7 +142,12 @@ Without step 1, the explorer falls back to a committed demo CSV
 - TA mix of matched trials (experimental): oncology 32%, cardiology 9%,
   neurology 7%; Other 25% (healthy-volunteer, drug-class, unclassifiable).
 - Demand side: 53,543 US industry trials from 7,940 sponsors (Pfizer leads, 1,760);
-  phases P1 > P2 > P3. Top linked investigator: 43 trials, all strong-tier.
+  phases P1 > P2 > P3. 38,738 trials (72%) name ≥1 official.
+- Linkage: 12,808/288,855 strict persons (4.4%) match ≥1 official (11.0k strong /
+  11.6k weak links); top linked investigator: 43 trials, all strong-tier. US
+  coverage ≈7%, ex-US ≈1%.
+- Site vintage: the 2009 site cohort (10,842 addresses) is 25% active a year later,
+  ~16% a decade later — sites outlive investigators (19%/~9%).
 - China CFDI extract (partial): 42,117 investigator-institution pairs
   (34,077 names, 1,818 institutions); 79% of pairs sit at 2020-vintage
   filings (bulk registration). Internal Medicine leads specialties;

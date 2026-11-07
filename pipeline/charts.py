@@ -188,9 +188,8 @@ def chart_distribution(abins: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
-def chart_retention(ret: pd.DataFrame, out: Path) -> None:
-    d = ret[(ret["version"] == "strict") & (ret["cohort"] >= 2009)
-            & (ret["cohort"] <= 2025) & (ret["k"] <= 10)]
+def _vintage_heatmap(d: pd.DataFrame, title: str, ylabel: str,
+                     caption: str, path: Path) -> None:
     piv = (d.pivot_table(index="cohort", columns="k", values="retention",
                          aggfunc="first")
            .reindex(index=range(2009, 2026), columns=range(0, 11)))
@@ -211,14 +210,35 @@ def chart_retention(ret: pd.DataFrame, out: Path) -> None:
     ax.set_xticks(range(11), [f"+{k}y" for k in range(11)])
     ax.set_yticks(range(len(piv.index)),
                   [f"{c} (n={int(nmap.get(c, 0)):,})" for c in piv.index])
-    ax.set_title("Investigator vintage attrition: % of CIs first seen each year still active (Strict)")
-    ax.set_ylabel("CI vintage (first-seen year)")
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
     fig.colorbar(im, ax=ax, label="% active", shrink=0.85)
     fig.tight_layout(rect=(0, 0.13, 1, 1))
-    _caption(fig, "DEFINITIONS: " + DEFINITIONS["retention"] + " " +
-             DEFINITIONS["person_strict"])
-    fig.savefig(out / "retention.png", bbox_inches="tight")
+    _caption(fig, caption)
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
+
+
+def chart_retention(ret: pd.DataFrame, out: Path) -> None:
+    d = ret[(ret["version"] == "strict") & (ret["cohort"] >= 2009)
+            & (ret["cohort"] <= 2025) & (ret["k"] <= 10)]
+    _vintage_heatmap(
+        d,
+        "Investigator vintage attrition: % of CIs first seen each year still active (Strict)",
+        "CI vintage (first-seen year)",
+        "DEFINITIONS: " + DEFINITIONS["retention"] + " " + DEFINITIONS["person_strict"],
+        out / "retention.png")
+
+
+def chart_site_retention(sret: pd.DataFrame, out: Path) -> None:
+    d = sret[(sret["version"] == "strict") & (sret["cohort"] >= 2009)
+             & (sret["cohort"] <= 2025) & (sret["k"] <= 10)]
+    _vintage_heatmap(
+        d,
+        "Site vintage attrition: % of sites first seen each year still active (Strict)",
+        "Site vintage (first-seen year)",
+        "DEFINITIONS: " + DEFINITIONS["site_retention"],
+        out / "sites_retention.png")
 
 
 def chart_concentration(cc: pd.DataFrame, out: Path) -> None:
@@ -488,6 +508,8 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     if "person_ctgov_link" in tables and "person_index" in tables:
         chart_linkage_coverage(tables["person_ctgov_link"],
                                tables["person_index"], out)
+    if "site_retention" in tables:
+        chart_site_retention(tables["site_retention"], out)
     if "cn_filing_year" in tables:
         chart_china_filing(tables["cn_filing_year"], out)
         chart_china_specialty(tables["cn_specialty_year"], out)
