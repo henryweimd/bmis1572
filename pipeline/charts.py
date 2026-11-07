@@ -434,6 +434,38 @@ def chart_china_province(py: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_trial_sponsors(tr: pd.DataFrame, out: Path) -> None:
+    tot = tr.groupby("sponsor_disp").size().sort_values(ascending=False).head(15)
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(tot.index, tot.values, color="#1f77b4")
+    ax.set_title("Top lead sponsors by US industry trials")
+    ax.set_ylabel("Trials")
+    ax.yaxis.set_major_formatter(_comma)
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "Exact per-trial lead sponsor; variants merged by normalized key. "
+                  "US industry-led interventional trials, all years in file.")
+    fig.savefig(out / "trials_sponsors.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_linkage_coverage(lk: pd.DataFrame, pi: pd.DataFrame, out: Path) -> None:
+    linked = set(lk["person_id"].unique().tolist())
+    cov = (pi.assign(linked=pi["person_id"].isin(linked))
+           .groupby("band", observed=True)["linked"]
+           .agg(["mean", "size"]).reset_index()
+           .sort_values("size", ascending=False))
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    ax.bar(cov["band"], cov["mean"] * 100, color="#2ca02c")
+    ax.set_title("CT.gov linkage coverage by geography (share of strict persons)")
+    ax.set_ylabel("Linked (%)")
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
+    _caption(fig, "DEFINITIONS: " + DEFINITIONS["person_ctgov_link"])
+    fig.savefig(out / "linkage_coverage.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
     chart_investigators_geo(tables["investigators_year_geo"], out)
@@ -451,6 +483,11 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     chart_trials(tables["trials_year"], out)
     chart_tightness(tables["tightness"], out)
     chart_tightness_bands(tables["tightness_band"], out)
+    if "ctgov_trials" in tables:
+        chart_trial_sponsors(tables["ctgov_trials"], out)
+    if "person_ctgov_link" in tables and "person_index" in tables:
+        chart_linkage_coverage(tables["person_ctgov_link"],
+                               tables["person_index"], out)
     if "cn_filing_year" in tables:
         chart_china_filing(tables["cn_filing_year"], out)
         chart_china_specialty(tables["cn_specialty_year"], out)

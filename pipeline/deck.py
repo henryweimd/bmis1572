@@ -215,7 +215,8 @@ def build_slides(n: dict) -> list[dict]:
     ]
     if has_ct:
         slides[-2:-2] = [
-            {"kind": "bullets", "title": "Demand side: US industry trials",
+            {"kind": "chart", "title": "Demand side: US industry trials",
+             "images": ["trials_sponsors.png"],
              "bullets": [f"{f(n['ct_trials'])} US industry-led interventional trials "
                          f"from {f(n['ct_sponsors'])} sponsors.",
                          f"Top sponsor: {n['ct_top_sp'][0]} ({f(n['ct_top_sp'][1])} trials).",
@@ -223,7 +224,8 @@ def build_slides(n: dict) -> list[dict]:
                          f"{f(n['ct_with_off'])} trials ({n['ct_with_off'] / n['ct_trials'] * 100:.0f}%) "
                          "name ≥1 study official."],
              "footnotes": ["clinicaltrials.gov API v2, all years in file."]},
-            {"kind": "bullets", "title": "Person linkage: BMIS \u2194 CT.gov (experimental)",
+            {"kind": "chart", "title": "Person linkage: BMIS \u2194 CT.gov (experimental)",
+             "images": ["linkage_coverage.png"],
              "bullets": [f"{f(n['lk_persons'])} BMIS persons match ≥1 study official "
                          f"({f(n['lk_strong'])} strong / {f(n['lk_weak'])} weak links).",
                          f"Most-linked: {n['lk_top'][0].title()} ({n['lk_top'][1]} trials).",
