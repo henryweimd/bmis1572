@@ -237,6 +237,7 @@ export default function App() {
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
   const [linked, setLinked] = useState<LinkRow[]>([]);
+  const [colleagues, setColleagues] = useState<HitRow[]>([]);
   const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'trials' | 'china' | 'about'>(() =>
     pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'trials', 'china', 'about'] as const, 'inv'),
   );
@@ -486,6 +487,7 @@ export default function App() {
       setSel(null);
       setReceipts([]);
       setLinked([]);
+      setColleagues([]);
     } catch (e) {
       setNote(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -495,7 +497,7 @@ export default function App() {
     setSel({ id, name });
     try {
       const pid = escapeLiteral(id);
-      const [rows, cnt, lk] = await Promise.all([
+      const [rows, cnt, lk, cg] = await Promise.all([
         query<RcRow>(
           `SELECT CAST(rcvd AS VARCHAR) AS rcvd, CAST(site AS VARCHAR) AS site,` +
             ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
@@ -512,10 +514,21 @@ export default function App() {
             ` FROM person_ctgov_link l JOIN ctgov_officials o ON o.nct = l.nct AND o.name_raw = l.off_name` +
             ` WHERE l.person_id = '${pid}' ORDER BY o.start_y DESC NULLS LAST, l.nct`,
         ).catch(() => [] as LinkRow[]),
+        query<HitRow>(
+          `SELECT CAST(q.person_id AS VARCHAR) AS person_id,` +
+            ` CAST(q.display_name AS VARCHAR) AS display_name,` +
+            ` CAST(q.site AS VARCHAR) AS site, CAST(q.country AS VARCHAR) AS country,` +
+            ` CAST(q.n_trials AS INTEGER) AS n_trials, CAST(q.n_years AS INTEGER) AS n_years,` +
+            ` CAST(q.first_year AS INTEGER) AS first_year,` +
+            ` CAST(q.last_year AS INTEGER) AS last_year FROM person_index q` +
+            ` JOIN person_index me ON me.person_id = '${pid}' AND q.site = me.site` +
+            ` WHERE q.person_id != '${pid}' ORDER BY q.n_trials DESC LIMIT 10`,
+        ).catch(() => [] as HitRow[]),
       ]);
       setReceipts(rows);
       setRcTotal(num0(cnt[0]?.n));
       setLinked(lk);
+      setColleagues(cg);
     } catch (e) {
       setNote(`Receipts query failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -1066,6 +1079,44 @@ export default function App() {
                       Officials (usually study-level) matched by name + affiliation; most trials
                       name only directors/chairs. Strong = full-name + affiliation overlap; weak
                       links may be name collisions. See Definitions.
+                    </p>
+                  </>
+                )}
+                {!!colleagues.length && (
+                  <>
+                    <h3>
+                      Others at this site{' '}
+                      <span className="muted">· top {colleagues.length} by IND refs</span>
+                    </h3>
+                    <div className="table-scroll short">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Investigator</th>
+                            <th>IND refs</th>
+                            <th>Span</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {colleagues.map((r) => (
+                            <tr
+                              key={r.person_id}
+                              className="pickable"
+                              onClick={() => selectPerson(r.person_id, r.display_name)}
+                            >
+                              <td>{r.display_name}</td>
+                              <td>{fmtInt.format(r.n_trials)}</td>
+                              <td>
+                                {r.first_year}–{r.last_year}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="caption">
+                      Strict persons sharing the exact site string. Click a row to open that
+                      investigator.
                     </p>
                   </>
                 )}
