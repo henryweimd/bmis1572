@@ -66,6 +66,9 @@ STALE = [
     SNAPSHOT / "events_2026.parquet",
     SNAPSHOT / "demo-events.csv",
 ]
+# Curated-only tables: used by static charts/deck, never queried by the
+# explorer (dead views + bytes if snapshotted).
+SNAPSHOT_SKIP = {"trials_year", "trials_band", "tightness_band"}
 
 
 def log(msg: str) -> None:
@@ -286,7 +289,6 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         "site": ci["SITE"].to_numpy()[keep_rows],
         "city": ci["CITY"].to_numpy()[keep_rows],
         "state": ci["STATE"].astype(str).to_numpy()[keep_rows],
-        "zip": ci["ZIP"].astype(str).to_numpy()[keep_rows],
         "country": ci["COUNTRY"].astype(str).to_numpy()[keep_rows],
         "invn": ci["INVN"].to_numpy()[keep_rows],
         "site_strict": ci["site_strict"].to_numpy()[keep_rows],
@@ -575,8 +577,17 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
 def write_snapshot(tables, manifest) -> None:
     SNAPSHOT.mkdir(parents=True, exist_ok=True)
     for name in tables:
+        if name in SNAPSHOT_SKIP:
+            continue
         shutil.copy2(CURATED / f"{name}.parquet", SNAPSHOT / f"{name}.parquet")
-    (SNAPSHOT / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    for name in SNAPSHOT_SKIP:
+        stale = SNAPSHOT / f"{name}.parquet"
+        if stale.exists():
+            stale.unlink()
+            log(f"removed snapshot-only skip {stale.relative_to(ROOT)}")
+    snap = {**manifest, "datasets": [d for d in manifest["datasets"]
+                                    if d["id"] not in SNAPSHOT_SKIP]}
+    (SNAPSHOT / "manifest.json").write_text(json.dumps(snap, indent=2))
     exp_src = ROOT / "exports"
     if exp_src.exists():
         (SNAPSHOT / "exports").mkdir(exist_ok=True)
@@ -587,7 +598,8 @@ def write_snapshot(tables, manifest) -> None:
     demo_path = SNAPSHOT / "demo-investigators.csv"
     demo.to_csv(demo_path, index=False)
     manifest["demo"]["row_count"] = len(demo)
-    (SNAPSHOT / "manifest.json").write_text(json.dumps(manifest, indent=2))
+    snap["demo"]["row_count"] = len(demo)
+    (SNAPSHOT / "manifest.json").write_text(json.dumps(snap, indent=2))
     (LAKE / "manifest.json").write_text(json.dumps(manifest, indent=2))
     for stale in STALE:
         if stale.exists():
