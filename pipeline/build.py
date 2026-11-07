@@ -555,6 +555,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "site_ctgov_xcheck": "CT.gov institution cross-check per site (experimental)",
         "site_ta_mix": "Therapeutic-area mix of matched trials per site (experimental)",
         "ctgov_officials": "CT.gov study officials + sponsor/phase per trial (experimental)",
+        "ctgov_trials": "CT.gov US industry trials: sponsor/phase/start per NCT (experimental)",
         "person_ctgov_link": "BMIS person to CT.gov trial links, tiered (experimental)",
         "site_ctgov_phase_mix": "Phase mix of matched trials per site (experimental)",
     }
@@ -740,6 +741,11 @@ def verify_with_duckdb(tables) -> dict:
             "SELECT COUNT(*) FROM (SELECT DISTINCT nct FROM person_ctgov_link)"
             " WHERE nct NOT IN (SELECT DISTINCT nct FROM ctgov_officials)").fetchone()[0]
         assert lk_nct == 0, "person links reference unknown trials"
+    if "ctgov_trials" in tables:
+        tr_orph = con.execute(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT nct FROM ctgov_officials)"
+            " WHERE nct NOT IN (SELECT nct FROM ctgov_trials)").fetchone()[0]
+        assert tr_orph == 0, "officials reference unknown trials"
     for mt in ("site_ctgov_phase_mix",):
         if mt in tables:
             m_orph = con.execute(

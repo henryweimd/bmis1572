@@ -66,6 +66,10 @@ export default function About() {
           fuzzy-unioned) and tracks investigators per site plus roster churn over time.
         </li>
         <li>
+          <strong>Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases, the
+          most-linked investigators, and linkage coverage — all years, experimental.
+        </li>
+        <li>
           <strong>Stacked charts</strong> toggle between Absolute counts and 100% yearly share;
           hover any segment for counts and shares.
         </li>
