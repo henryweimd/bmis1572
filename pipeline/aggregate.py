@@ -48,12 +48,12 @@ DEFINITIONS = {
     "scope_unadjusted": (
         "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global "
         "industry-led interventional trial starts (clinicaltrials.gov). "
-        "Static charts only; the explorer shows adjusted scope."
+        "Static charts and the explorer Tightness scope toggle."
     ),
     "scope_adjusted": (
         "Adjusted benchmark: US-band BMIS persons vs. industry-led "
-        "interventional trials with >=1 US site. Shown in the explorer's "
-        "Tightness chart."
+        "interventional trials with >=1 US site. Default scope of the "
+        "explorer's Tightness chart."
     ),
     "eu_2021": (
         "2021*: first full year after 2019, when signing Form FDA 1572 was "
