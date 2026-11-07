@@ -229,6 +229,8 @@ export default function App() {
   const [cohorts, setCohorts] = useState<CohortRow[]>([]);
   const [ents, setEnts] = useState<LineSeries[]>([]);
   const [q, setQ] = useState('');
+  const [searchBand, setSearchBand] = useState('all');
+  const [minTrials, setMinTrials] = useState('');
   const [hits, setHits] = useState<HitRow[]>([]);
   const [searched, setSearched] = useState(false);
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
@@ -340,9 +342,10 @@ export default function App() {
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
               ` FROM active_bins WHERE version = '${v}' GROUP BY 1`,
           ),
-          query<{ cohort: number; k: number; v: number; n: number }>(
+          query<{ cohort: number; k: number; v: number; n: number; na: number }>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
-              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n FROM retention` +
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
+              ` CAST(n_active AS INTEGER) AS na FROM retention` +
               ` WHERE version = '${v}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX} ORDER BY 1, 2`,
           ),
           query<{ y: number; t1: number; t10: number; g: number }>(
@@ -404,14 +407,15 @@ export default function App() {
             .map((r) => ({ category: r.bin, v: num0(r.n) }))
             .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
         );
-        const byVintage = new Map<number, { n: number; m: Map<number, number> }>();
+        const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
         for (const r of rt) {
           let e = byVintage.get(r.cohort);
           if (!e) {
-            e = { n: num0(r.n), m: new Map() };
+            e = { n: num0(r.n), m: new Map(), c: new Map() };
             byVintage.set(r.cohort, e);
           }
           e.m.set(r.k, num0(r.v) * 100);
+          e.c.set(r.k, num0(r.na));
         }
         setRet(
           [...byVintage.entries()]
@@ -420,6 +424,7 @@ export default function App() {
               cohort: c,
               n: e.n,
               cells: Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
+              counts: Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
             })),
         );
         const concDefs: { label: string; color: string; key: 't1' | 't10' | 'g' }[] = [
@@ -466,12 +471,14 @@ export default function App() {
       return;
     }
     try {
+      const bc = searchBand === 'all' ? '' : ` AND band = '${escapeLiteral(searchBand)}'`;
+      const mt = /^\d+$/.test(minTrials.trim()) ? ` AND n_trials >= ${parseInt(minTrials.trim(), 10)}` : '';
       const r = await query<HitRow>(
         `SELECT CAST(person_id AS VARCHAR) AS person_id, CAST(display_name AS VARCHAR) AS display_name,` +
           ` CAST(site AS VARCHAR) AS site, CAST(country AS VARCHAR) AS country, CAST(n_trials AS INTEGER) AS n_trials,` +
           ` CAST(n_years AS INTEGER) AS n_years, CAST(first_year AS INTEGER) AS first_year,` +
           ` CAST(last_year AS INTEGER) AS last_year FROM person_index` +
-          ` WHERE name_key LIKE '%${needle}%' ORDER BY n_trials DESC LIMIT 50`,
+          ` WHERE name_key LIKE '%${needle}%'${bc}${mt} ORDER BY n_trials DESC LIMIT 50`,
       );
       setHits(r);
       setSearched(true);
@@ -825,6 +832,31 @@ export default function App() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') runSearch();
                   }}
+                />
+              </label>
+              <label>
+                Band
+                <select value={searchBand} onChange={(e) => setSearchBand(e.target.value)}>
+                  <option value="all">All bands</option>
+                  {BANDS.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Min refs
+                <input
+                  type="number"
+                  min={1}
+                  value={minTrials}
+                  placeholder="1"
+                  onChange={(e) => setMinTrials(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') runSearch();
+                  }}
+                  style={{ width: '5em' }}
                 />
               </label>
               <button className="btn" onClick={runSearch}>

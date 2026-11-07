@@ -150,9 +150,10 @@ export default function SiteTab({
               ` CAST(n_new AS DOUBLE) AS nj, CAST(n_ended AS DOUBLE) AS ne FROM site_churn` +
               ` WHERE version = '${ver}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
-          query<{ cohort: number; k: number; v: number; n: number }>(
+          query<{ cohort: number; k: number; v: number; n: number; na: number }>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
-              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n FROM site_retention` +
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
+              ` CAST(n_active AS INTEGER) AS na FROM site_retention` +
               ` WHERE version = '${ver}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${SITE_KMAX} ORDER BY 1, 2`,
           ).catch(() => []),
           query<SiteTopRow>(
@@ -191,11 +192,12 @@ export default function SiteTab({
           { label: 'Joined', color: '#2ca02c', points: ch.map((r) => ({ x: r.y, y: num0(r.nj) })) },
           { label: 'Last seen', color: '#d62728', points: ch.map((r) => ({ x: r.y, y: num0(r.ne) })) },
         ]);
-        const byVintage = new Map<number, { n: number; m: Map<number, number> }>();
+        const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
         for (const r of rt) {
-          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>() };
+          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>(), c: new Map<number, number>() };
           e.n = r.n;
           e.m.set(r.k, num0(r.v) * 100);
+          e.c.set(r.k, num0(r.na));
           byVintage.set(r.cohort, e);
         }
         setSret(
@@ -203,6 +205,7 @@ export default function SiteTab({
             cohort,
             n: e.n,
             cells: Array.from({ length: SITE_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
+            counts: Array.from({ length: SITE_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
           })),
         );
         setTop(t);
@@ -511,7 +514,7 @@ export default function SiteTab({
 
       <section className="panel">
         <h2>Site vintage attrition</h2>
-        <VintageHeatmap rows={sret} kMax={SITE_KMAX} />
+        <VintageHeatmap rows={sret} kMax={SITE_KMAX} unit="sites" />
         <p className="caption">
           Of the sites first seen in a given year (their vintage), the share active again k years
           later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;

@@ -411,7 +411,13 @@ export interface VintageRow {
   cohort: number;
   n: number;
   cells: (number | null)[];
+  counts?: (number | null)[];
 }
+
+const VINTAGE_UNIT: Record<string, { head: string; who: string }> = {
+  investigators: { head: 'CI vintage (year investigators first filed)', who: 'investigators' },
+  sites: { head: 'Site vintage (year sites first filed)', who: 'sites' },
+};
 
 function vintageColor(v: number): string {
   const t = Math.min(1, Math.max(0, v / 100));
@@ -421,16 +427,25 @@ function vintageColor(v: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-export function VintageHeatmap({ rows, kMax }: { rows: VintageRow[]; kMax: number }) {
+export function VintageHeatmap({
+  rows,
+  kMax,
+  unit = 'investigators',
+}: {
+  rows: VintageRow[];
+  kMax: number;
+  unit?: 'investigators' | 'sites';
+}) {
   if (!rows.length) return <p className="muted">No data.</p>;
   const ks: number[] = [];
   for (let k = 0; k <= kMax; k++) ks.push(k);
+  const u = VINTAGE_UNIT[unit];
   return (
     <div className="table-scroll">
       <table className="vintage">
         <thead>
           <tr>
-            <th>CI vintage (year investigators first filed)</th>
+            <th>{u.head}</th>
             {ks.map((k) => (
               <th key={k}>+{k}y</th>
             ))}
@@ -442,15 +457,23 @@ export function VintageHeatmap({ rows, kMax }: { rows: VintageRow[]; kMax: numbe
               <td>
                 {r.cohort} <span className="muted">n={r.n.toLocaleString('en-US')}</span>
               </td>
-              {r.cells.map((c, i) => (
-                <td
-                  key={i}
-                  style={c === null ? { background: '#f0f0f0', color: '#999' } : { background: vintageColor(c) }}
-                  title={c === null ? `${r.cohort} CI vintage: censored` : `${r.cohort} CI vintage, +${i}y: ${c.toFixed(1)}% of investigators active`}
-                >
-                  {c === null ? '·' : c.toFixed(1)}
-                </td>
-              ))}
+              {r.cells.map((c, i) => {
+                const na = r.counts?.[i] ?? null;
+                const tip =
+                  c === null
+                    ? `${r.cohort} vintage: censored`
+                    : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of ${u.who} active` +
+                      (na !== null ? ` (${na.toLocaleString('en-US')} of ${r.n.toLocaleString('en-US')})` : '');
+                return (
+                  <td
+                    key={i}
+                    style={c === null ? { background: '#f0f0f0', color: '#999' } : { background: vintageColor(c) }}
+                    title={tip}
+                  >
+                    {c === null ? '·' : c.toFixed(1)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
