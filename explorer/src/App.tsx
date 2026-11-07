@@ -172,6 +172,7 @@ interface LinkRow {
   tier: string;
   sponsor: string;
   phase: string;
+  ta: string;
   start_y: number | null;
 }
 interface RcRow {
@@ -496,7 +497,8 @@ export default function App() {
         query<LinkRow>(
           `SELECT CAST(l.nct AS VARCHAR) AS nct, CAST(l.role AS VARCHAR) AS role,` +
             ` CAST(l.tier AS VARCHAR) AS tier, CAST(o.sponsor_disp AS VARCHAR) AS sponsor,` +
-            ` CAST(o.phase AS VARCHAR) AS phase, CAST(o.start_y AS INTEGER) AS start_y` +
+            ` CAST(o.phase AS VARCHAR) AS phase, CAST(o.ta AS VARCHAR) AS ta,` +
+            ` CAST(o.start_y AS INTEGER) AS start_y` +
             ` FROM person_ctgov_link l JOIN ctgov_officials o ON o.nct = l.nct AND o.name_raw = l.off_name` +
             ` WHERE l.person_id = '${pid}' ORDER BY o.start_y DESC NULLS LAST, l.nct`,
         ).catch(() => [] as LinkRow[]),
@@ -952,6 +954,7 @@ export default function App() {
                             <th>Role</th>
                             <th>Sponsor</th>
                             <th>Phase</th>
+                            <th>TA</th>
                             <th>Start</th>
                             <th>Match</th>
                           </tr>
@@ -971,6 +974,7 @@ export default function App() {
                               <td>{r.role.replace(/_/g, ' ').toLowerCase()}</td>
                               <td>{r.sponsor}</td>
                               <td>{r.phase}</td>
+                              <td>{r.ta ? r.ta.replace(/;/g, ', ') : '—'}</td>
                               <td>{r.start_y ?? ''}</td>
                               <td>{r.tier}</td>
                             </tr>

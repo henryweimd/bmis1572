@@ -91,6 +91,10 @@ export default function About() {
           Residual name-variant splits remain on both sides; person/pair counts are documented
           bounds, not exact censuses of humans.
         </li>
+        <li>
+          CT.gov person linkage covers 12,808 of 288,855 strict persons (4.4%): only study-level
+          officials can match, so linked investigators skew toward chairs and KOLs.
+        </li>
       </ul>
 
       <h3>Limitations</h3>
