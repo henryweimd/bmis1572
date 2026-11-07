@@ -84,6 +84,26 @@ def load_numbers(stats: dict) -> dict:
     top = sx[sx["site_id"].str.startswith("strict:")].sort_values(
         "n_receipts", ascending=False).iloc[0]
     n["site_top"] = (top["display_name"], int(top["n_inv_ever"]), int(top["n_receipts"]))
+    n["ct_trials"] = None
+    if (CURATED / "ctgov_trials.parquet").exists():
+        tr2 = pd.read_parquet(CURATED / "ctgov_trials.parquet")
+        n["ct_trials"] = len(tr2)
+        n["ct_sponsors"] = int(tr2["sponsor"].nunique())
+        tsp = tr2.groupby("sponsor_disp").size().sort_values(ascending=False)
+        n["ct_top_sp"] = (tsp.index[0], int(tsp.iloc[0]))
+        tph = tr2.groupby("phase").size().sort_values(ascending=False)
+        n["ct_top_ph"] = (tph.index[0], int(tph.iloc[0]))
+        n["ct_with_off"] = int(pd.read_parquet(
+            CURATED / "ctgov_officials.parquet", columns=["nct"])["nct"].nunique())
+        lk = pd.read_parquet(CURATED / "person_ctgov_link.parquet")
+        n["lk_persons"] = int(lk["person_id"].nunique())
+        n["lk_strong"] = int((lk["tier"] == "strong").sum())
+        n["lk_weak"] = int((lk["tier"] == "weak").sum())
+        pi = pd.read_parquet(CURATED / "person_index.parquet",
+                             columns=["person_id", "display_name"])
+        tk = (lk.merge(pi, on="person_id").groupby("display_name")["nct"]
+              .nunique().sort_values(ascending=False))
+        n["lk_top"] = (tk.index[0], int(tk.iloc[0]))
     n["cn_pairs"] = None
     if (CURATED / "cn_filing_year.parquet").exists():
         fy = pd.read_parquet(CURATED / "cn_filing_year.parquet")
@@ -106,6 +126,7 @@ def build_slides(n: dict) -> list[dict]:
     f = lambda v: f"{int(v):,}"
     run = f(n["run25"]) if n["run25"] is not None else "n/a"
     has_cn = n["cn_pairs"] is not None
+    has_ct = n["ct_trials"] is not None
     slides = [
         {"kind": "title", "title": "The U.S. Clinical-Trial Investigator Supply",
          "sub": ("A preliminary descriptive analysis of FDA BMIS Form 1572 filings, "
@@ -192,6 +213,24 @@ def build_slides(n: dict) -> list[dict]:
          "links": [FDA_URL, CTGOV_URL, REPO_URL],
          "footnotes": []},
     ]
+    if has_ct:
+        slides[-2:-2] = [
+            {"kind": "bullets", "title": "Demand side: US industry trials",
+             "bullets": [f"{f(n['ct_trials'])} US industry-led interventional trials "
+                         f"from {f(n['ct_sponsors'])} sponsors.",
+                         f"Top sponsor: {n['ct_top_sp'][0]} ({f(n['ct_top_sp'][1])} trials).",
+                         f"Top phase: {n['ct_top_ph'][0]} ({f(n['ct_top_ph'][1])} trials).",
+                         f"{f(n['ct_with_off'])} trials ({n['ct_with_off'] / n['ct_trials'] * 100:.0f}%) "
+                         "name ≥1 study official."],
+             "footnotes": ["clinicaltrials.gov API v2, all years in file."]},
+            {"kind": "bullets", "title": "Person linkage: BMIS \u2194 CT.gov (experimental)",
+             "bullets": [f"{f(n['lk_persons'])} BMIS persons match ≥1 study official "
+                         f"({f(n['lk_strong'])} strong / {f(n['lk_weak'])} weak links).",
+                         f"Most-linked: {n['lk_top'][0].title()} ({n['lk_top'][1]} trials).",
+                         "Name + affiliation-overlap match; CT.gov names no site "
+                         "investigators, so coverage is thin and KOL-skewed."],
+             "footnotes": ["Weak links may be name collisions. See Definitions."]},
+        ]
     if has_cn:
         slides[0]["sub"] += "; China CFDI registry supplement"
         slides[-2:-2] = [
