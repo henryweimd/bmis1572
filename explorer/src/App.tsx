@@ -53,11 +53,6 @@ interface NewRetRow {
   n_new: number;
   n_ret: number;
 }
-interface TrialRow {
-  y: number;
-  s: number | null;
-  r: number | null;
-}
 interface TightRow {
   y: number;
   pr: number | null;
@@ -201,9 +196,7 @@ export default function App() {
       intIn(hashInit.y1, YEAR_MIN, YEAR_MAX, YEAR_MAX),
     ),
   );
-  const [scope, setScope] = useState<'adjusted' | 'unadjusted'>(() =>
-    pick(hashInit.s, ['adjusted', 'unadjusted'] as const, 'adjusted'),
-  );
+
   const [leaderGeo, setLeaderGeo] = useState(() => pick(hashInit.lg, ['ALL', ...BANDS], 'ALL'));
   const [leaderSort, setLeaderSort] = useState<'total' | 'rate'>(() =>
     pick(hashInit.ls, ['total', 'rate'] as const, 'total'),
@@ -212,7 +205,7 @@ export default function App() {
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [geo, setGeo] = useState<LineSeries[]>([]);
   const [newret, setNewret] = useState<{ x: number; bottom: number; top: number }[]>([]);
-  const [trials, setTrials] = useState<LineSeries[]>([]);
+
   const [tight, setTight] = useState<LineSeries[]>([]);
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
@@ -239,11 +232,10 @@ export default function App() {
       b: band,
       y0: String(y0),
       y1: String(y1),
-      s: scope,
       lg: leaderGeo,
       ls: leaderSort,
     });
-  }, [tab, version, band, y0, y1, scope, leaderGeo, leaderSort]);
+  }, [tab, version, band, y0, y1, leaderGeo, leaderSort]);
 
   useEffect(() => {
     document.title = `${
@@ -314,8 +306,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const s = escapeLiteral(scope);
-        const [ot, ti, tr, tser, bn, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -325,15 +316,11 @@ export default function App() {
             `SELECT CAST(per_running AS DOUBLE) AS v FROM tightness WHERE version = '${v}'` +
               ` AND scope = 'adjusted' AND year = ${LATEST_FULL}`,
           ),
-          query<TrialRow>(
-            `SELECT CAST(year AS INTEGER) AS y, CAST(n_starts AS DOUBLE) AS s,` +
-              ` CAST(n_running AS DOUBLE) AS r FROM trials_year WHERE scope = '${s}'` +
-              ` AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
-          ),
+
           query<TightRow>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(per_running AS DOUBLE) AS pr,` +
               ` CAST(per_start AS DOUBLE) AS ps FROM tightness WHERE version = '${v}'` +
-              ` AND scope = '${s}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
+              ` AND scope = 'adjusted' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
           query<BinRow>(
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
@@ -393,12 +380,6 @@ export default function App() {
           oneTrial: num(ot[0]?.v),
           tight: num(ti[0]?.v),
         });
-        setTrials([
-          { label: 'Starts', color: '#1f77b4', points: tr.map((r) => ({ x: r.y, y: num(r.s) })) },
-          ...(scope === 'adjusted'
-            ? [{ label: 'Running', color: '#ff7f0e', points: tr.map((r) => ({ x: r.y, y: num(r.r) })) }]
-            : []),
-        ]);
         setTight([
           { label: 'Active per running trial', color: '#d62728', points: tser.map((r) => ({ x: r.y, y: num(r.pr) })) },
           { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
@@ -459,7 +440,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [status, version, band, y0, y1, scope, leaderGeo, leaderSort, demo]);
+  }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo]);
 
 
   const runSearch = async () => {
@@ -693,13 +674,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="seg" role="group" aria-label="Trial scope">
-            {(['adjusted', 'unadjusted'] as const).map((s) => (
-              <button key={s} className={scope === s ? 'active' : ''} onClick={() => setScope(s)}>
-                {s === 'adjusted' ? 'US trials' : 'Global trials'}
-              </button>
-            ))}
-          </div>
+
         </div>
         <div className="filters future">
           <label title="BMIS carries no therapeutic-area field; needs a linked source (parked)">
@@ -767,28 +742,10 @@ export default function App() {
         </p>
       </section>
 
-      <section className="panels">
-        <div className="panel">
-          <h2>New vs. returning</h2>
-          <StackedBars data={newret} labels={['Returning', 'New']} />
-          <p className="caption">New = first receipt ever in that year (2008–09 inflated by file start).</p>
-        </div>
-        <div className="panel">
-          <h2>Industry trials per year ({scope})</h2>
-          {demo ? (
-            <p className="muted">Run the pipeline for trial data.</p>
-          ) : (
-            <>
-              <MultiLineChart series={trials} />
-              <p className="caption">
-                {scope === 'adjusted'
-                  ? 'US-site industry interventional trials.'
-                  : 'Global industry interventional trials.'}{' '}
-                Starts by Start Date; running = start ≤ year, completion ≥ year or still active.
-              </p>
-            </>
-          )}
-        </div>
+      <section className="panel">
+        <h2>New vs. returning</h2>
+        <StackedBars data={newret} labels={['Returning', 'New']} />
+        <p className="caption">New = first receipt ever in that year (2008–09 inflated by file start).</p>
       </section>
 
       <section className="panels">
@@ -800,7 +757,8 @@ export default function App() {
             <>
               <MultiLineChart series={tight} />
               <p className="caption">
-                Descriptive workload proxy only — supply and trial counts are not independent.
+                US-site industry trials (adjusted scope). Descriptive workload proxy only — supply and
+                trial counts are not independent.
               </p>
             </>
           )}
