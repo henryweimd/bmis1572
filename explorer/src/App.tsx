@@ -229,6 +229,7 @@ export default function App() {
 
   const [kpi, setKpi] = useState<Kpi | null>(null);
   const [geo, setGeo] = useState<LineSeries[]>([]);
+  const [geoNew, setGeoNew] = useState<LineSeries[]>([]);
   const [newret, setNewret] = useState<{ x: number; bottom: number; top: number }[]>([]);
 
   const [tight, setTight] = useState<LineSeries[]>([]);
@@ -328,6 +329,12 @@ export default function App() {
             ` WHERE version = '${v}' AND year BETWEEN ${y0} AND ${y1}${bandClause}` +
             ` GROUP BY 1 ORDER BY 1`,
         );
+        const gn = await query<GeoRow>(
+          `SELECT CAST(year AS INTEGER) AS y, CAST(band AS VARCHAR) AS band,` +
+            ` CAST(SUM(n_new) AS DOUBLE) AS n FROM investigators_year_geo` +
+            ` WHERE version = '${v}' AND year BETWEEN ${y0} AND ${y1}${bandClause}` +
+            ` GROUP BY 1, 2 ORDER BY 1, 2`,
+        );
         if (cancelled) return;
         const bands = band === 'all' ? BANDS : [band];
         setGeo(
@@ -338,6 +345,13 @@ export default function App() {
           })),
         );
         setNewret(nr.map((r) => ({ x: r.y, bottom: num0(r.n_ret), top: num0(r.n_new) })));
+        setGeoNew(
+          bands.map((b) => ({
+            label: b,
+            color: BAND_COLORS[b] ?? '#333',
+            points: gn.filter((r) => r.band === b).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
+        );
 
         if (demo) {
           setKpi({ active: num0(k[0]?.active), active09: num0(k[0]?.active09), nnew: num0(k[0]?.nnew), oneTrial: null, tight: null });
@@ -857,6 +871,16 @@ export default function App() {
             Repository (RCR)
           </a>{' '}
           for European countries.
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>New investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
+        <StackedMultiBars series={geoNew} marks={{ 2021: '*' }} />
+        <p className="caption">
+          First receipt ever in that year (2008–09 inflated by file start) ·{' '}
+          {VERSION_LABEL[version]} persons. Toggle 100% for yearly share — the newcomer
+          pipeline has grown steadily more American. Same 2021* EU note as above.
         </p>
       </section>
 
