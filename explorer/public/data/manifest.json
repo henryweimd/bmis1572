@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T18:38:18.287227+00:00",
+  "generated_at": "2026-11-07T19:44:35.585456+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -689,6 +689,11 @@
       "extract": "investigator_affiliations_2026-11-06_FINAL.csv",
       "retrieved": "2026-11-06",
       "coverage": "Partial, with defined scope"
+    },
+    "who": {
+      "portal": "https://trialsearch.who.int/AdvSearch.aspx",
+      "retrieved": "2026-11-07",
+      "coverage": "Aggregate counts only (records/trials found); ALL statuses; 199 countries + top-20 x years"
     }
   },
   "versions": {
@@ -726,6 +731,8 @@
     "site_ta": "Therapeutic-area mix (experimental, US only): the matched institution's CT.gov studies bucketed by conditions text into ~15 areas via keyword rules (first match wins). Counts inherit all cross-check caveats; multi-area studies count once per area; healthy-volunteer and unclassifiable conditions land in Other.",
     "china": "China CFDI registry extract (partial coverage, retrieved 2026-11-06): investigators affiliated with filed drug-trial institutions. Person = (name, institution) pair; rows exact-deduped at ingest (the extract repeats ~35% of rows). Pairs count affiliations, not humans: one person at two institutions = two pairs; same-named people at one institution = one pair; common names (e.g. \u5f20\u4f1f) collide across institutions and are not mobility.",
     "china_filing": "Filing year is the INSTITUTION's registration vintage, not investigator activity: most institutions filed in a 2019-2020 bulk wave. YoY reads as registry composition, never retention.",
+    "who": "WHO ICTRP (International Clinical Trials Registry Platform) aggregate counts from the public Search Portal Advanced Search (https://trialsearch.who.int/AdvSearch.aspx): 'N records for M trials found' per query. One country per search (or none = global), Recruitment Status = ALL, optional Date-of-registration year window. Multi-country trials count in every listed country; country sums therefore exceed the global total. See also: https://www.who.int/clinical-trials-registry-platform.",
+    "who_records": "ICTRP records vs trials: records are registry entries across the primary registries feeding ICTRP (including ClinicalTrials.gov); trials are deduplicated studies. Records >= trials; the gap reflects multi-registry registration.",
     "china_i18n": "ZH is authoritative. EN covers provinces, cities, roles, specialty groups, top-30 sites (curated) and pattern-derived site/specialty labels; investigator names stay in Chinese."
   },
   "stats": {
@@ -1426,6 +1433,64 @@
         "site_n",
         "phase",
         "n_trials"
+      ]
+    },
+    {
+      "id": "who_country",
+      "title": "WHO ICTRP trials/records by country (ALL statuses)",
+      "format": "parquet",
+      "files": [
+        "data/who_country.parquet"
+      ],
+      "row_count": 199,
+      "columns": [
+        "country",
+        "band",
+        "records",
+        "trials"
+      ]
+    },
+    {
+      "id": "who_year",
+      "title": "WHO ICTRP trials/records by registration year (global)",
+      "format": "parquet",
+      "files": [
+        "data/who_year.parquet"
+      ],
+      "row_count": 27,
+      "columns": [
+        "year",
+        "records",
+        "trials"
+      ]
+    },
+    {
+      "id": "who_country_year",
+      "title": "WHO ICTRP trials/records by top-20 country and year",
+      "format": "parquet",
+      "files": [
+        "data/who_country_year.parquet"
+      ],
+      "row_count": 540,
+      "columns": [
+        "country",
+        "band",
+        "year",
+        "records",
+        "trials"
+      ]
+    },
+    {
+      "id": "who_global",
+      "title": "WHO ICTRP global trial/record totals",
+      "format": "parquet",
+      "files": [
+        "data/who_global.parquet"
+      ],
+      "row_count": 1,
+      "columns": [
+        "records",
+        "trials"
       ]
     },
     {

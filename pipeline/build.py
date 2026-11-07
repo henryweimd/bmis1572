@@ -402,6 +402,14 @@ def stage_china() -> dict[str, pd.DataFrame]:
     return tables
 
 
+def stage_who() -> dict[str, pd.DataFrame]:
+    want = ["who_country", "who_year", "who_country_year", "who_global"]
+    if not all((CURATED / f"{n}.parquet").exists() for n in want):
+        log("who: curated tables absent (run pipeline/who.py --phase1/--phase2/--build); skipping")
+        return {}
+    return {n: pd.read_parquet(CURATED / f"{n}.parquet") for n in want}
+
+
 def stage_people() -> dict[str, pd.DataFrame]:
     try:
         tables = ctgov_people.run(audit_n=0)
@@ -595,6 +603,10 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "ctgov_trials": "CT.gov US industry trials: sponsor/phase/start per NCT (experimental)",
         "person_ctgov_link": "BMIS person to CT.gov trial links, tiered (experimental)",
         "site_ctgov_phase_mix": "Phase mix of matched trials per site (experimental)",
+        "who_country": "WHO ICTRP trials/records by country (ALL statuses)",
+        "who_year": "WHO ICTRP trials/records by registration year (global)",
+        "who_country_year": "WHO ICTRP trials/records by top-20 country and year",
+        "who_global": "WHO ICTRP global trial/record totals",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -608,6 +620,10 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
             "china": {"extract": "investigator_affiliations_2026-11-06_FINAL.csv",
                       "retrieved": "2026-11-06",
                       "coverage": "Partial, with defined scope"},
+            "who": {"portal": "https://trialsearch.who.int/AdvSearch.aspx",
+                    "retrieved": "2026-11-07",
+                    "coverage": "Aggregate counts only (records/trials found); "
+                               "ALL statuses; 199 countries + top-20 x years"},
         },
         "versions": {
             "strict": DEFINITIONS["person_strict"],
@@ -795,6 +811,19 @@ def verify_with_duckdb(tables) -> dict:
             "SELECT COUNT(*) FROM (SELECT DISTINCT nct FROM ctgov_officials)"
             " WHERE nct NOT IN (SELECT nct FROM ctgov_trials)").fetchone()[0]
         assert tr_orph == 0, "officials reference unknown trials"
+    if "who_country" in tables:
+        w = con.execute(
+            "SELECT (SELECT COUNT(*) FROM who_country),"
+            " (SELECT COUNT(*) FROM who_year),"
+            " (SELECT COUNT(*) FROM who_country_year),"
+            " (SELECT trials FROM who_global),"
+            " (SELECT COUNT(*) FROM who_country WHERE records < trials"
+            "  OR trials < 0)").fetchone()
+        assert w[0] == 199, f"who countries {w[0]} != 199"
+        assert w[1] == 27, f"who years {w[1]} != 27"
+        assert w[2] == 20 * 27, f"who country-years {w[2]} != 540"
+        assert 500_000 < w[3] < 3_000_000, f"who global {w[3]} out of range"
+        assert w[4] == 0, "who records<trials or negative"
     for mt in ("site_ctgov_phase_mix",):
         if mt in tables:
             m_orph = con.execute(
@@ -843,6 +872,7 @@ def main() -> None:
     tables["trials_band"] = band_tr
     tables.update(stage_china())
     tables.update(stage_people())
+    tables.update(stage_who())
     stage_tightness(tables)
 
     stats = headline_stats(persons, tables)

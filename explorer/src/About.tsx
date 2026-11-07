@@ -46,6 +46,14 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
           . Filing year is registration vintage, not activity; person = (name, institution)
           pair; Chinese is authoritative and EN labels are curated or pattern-derived.
         </li>
+        <li>
+          <strong>Global context:</strong> WHO ICTRP Search Portal aggregate counts
+          (&ldquo;N records for M trials found&rdquo; per country/year search, ALL statuses),
+          scraped 2026-11-07. No trial-level data.{' '}
+          <a href="https://trialsearch.who.int/AdvSearch.aspx" target="_blank" rel="noreferrer">
+            ICTRP Advanced Search
+          </a>
+        </li>
       </ul>
 
       <h3>How to read it</h3>
@@ -77,6 +85,11 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
           <strong>US Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases,
           therapeutic areas, the most-linked investigators, NCT lookup, and linkage coverage —
           with a year-range filter, experimental.
+        </li>
+        <li>
+          <strong>WHO ICTRP tab</strong> gives global context: WHO registry-platform trial counts
+          by country, region, and registration year. Multi-country trials repeat across countries,
+          so use the global total — never the country sum — as the denominator.
         </li>
         <li>
           <strong>Stacked charts</strong> toggle between Absolute counts and 100% yearly share;
