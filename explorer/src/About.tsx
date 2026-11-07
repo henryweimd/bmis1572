@@ -26,10 +26,18 @@ export default function About() {
           </a>
         </li>
         <li>
-          <strong>China:</strong> partial CFDI extract (药物临床试验机构备案管理信息系统) of
-          investigator affiliations at filed institutions, retrieved 2026-11-06. Filing year is
-          registration vintage, not activity; person = (name, institution) pair; Chinese is
-          authoritative and EN labels are curated or pattern-derived.
+          <strong>China:</strong> partial extract of the CFDI drug-trial institution filing
+          system (药物和医疗器械临床试验机构备案系统) — investigator affiliations at filed
+          institutions, retrieved 2026-11-06.{' '}
+          <a
+            href="https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
+            target="_blank"
+            rel="noreferrer"
+          >
+            CFDI public query portal
+          </a>
+          . Filing year is registration vintage, not activity; person = (name, institution)
+          pair; Chinese is authoritative and EN labels are curated or pattern-derived.
         </li>
       </ul>
 

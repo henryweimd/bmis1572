@@ -329,6 +329,27 @@ export default function ChinaTab({
         </div>
       </section>
 
+      <section className="panel">
+        <p>
+          <strong>About this data:</strong> China&apos;s National Medical Products Administration
+          (NMPA, 国家药品监督管理局) oversees drug trials through its Center for Food and Drug
+          Inspection (CFDI, 食品药品审核查验中心), which operates the public filing system for
+          clinical trial institutions (药物和医疗器械临床试验机构备案系统). Institutions file
+          (备案) their trial units — specialties, sites, and principal investigators — and anyone
+          can query the registry by institution, province, specialty, or investigator name.{' '}
+          <a
+            href="https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open the CFDI public query portal
+          </a>
+          . This tab analyzes a partial extract of the drug-institution filings (retrieved
+          2026-11-06), not the live system: coverage is incomplete, filing year marks
+          registration vintage (bulk 2019–2020 wave), and person = (name, institution) pair.
+        </p>
+      </section>
+
       <section className="kpis">
         <div className="kpi">
           <span className="kpi-label">Investigator-institution pairs</span>
