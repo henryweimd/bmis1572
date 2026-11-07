@@ -584,7 +584,23 @@ export default function ChinaTab({
       </section>
 
       <section className="panel">
-        <h2>Top investigators by affiliations</h2>
+        <h2>
+          Top investigators by affiliations{' '}
+          {!!leaders.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'china-top-investigators.csv',
+                  ['investigator', 'sites', 'affiliations', 'specialties', 'provinces', 'first_filed'],
+                  leaders.map((r) => [r.name, r.inst, r.rows, r.specs, r.provs, r.year]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </h2>
         <div className="table-scroll">
           <table>
             <thead>
@@ -628,6 +644,21 @@ export default function ChinaTab({
             Search
           </button>
           {searched && <span className="muted">{hits.length} matches (top 50 by affiliations)</span>}
+          {!!hits.length && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'china-search.csv',
+                  ['investigator', 'institution_zh', 'institution_en', 'province_zh', 'province_en', 'affiliations', 'filed'],
+                  hits.map((r) => [r.name, r.inst, r.inste, r.prov, r.prove, r.rows, r.year]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </form>
         {!!hits.length && (
           <div className="table-scroll short">
@@ -662,7 +693,22 @@ export default function ChinaTab({
         {sel && (
           <>
             <h3>
-              {sel.name} <span className="muted">· affiliation rows</span>
+              {sel.name} <span className="muted">· affiliation rows</span>{' '}
+              {!!affs.length && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    downloadCsv(
+                      'china-affiliations.csv',
+                      ['filed', 'institution_zh', 'institution_en', 'specialty_zh', 'specialty_en', 'group_zh', 'group_en', 'role_zh', 'role_en', 'province_zh', 'province_en'],
+                      affs.map((r) => [r.year, r.inst, r.inste, r.spec, r.spece, r.groupz, r.group, r.role, r.rolee, r.prov, r.prove]),
+                    )
+                  }
+                >
+                  CSV
+                </button>
+              )}
             </h3>
             {affs.length ? (
               <div className="table-scroll short">
