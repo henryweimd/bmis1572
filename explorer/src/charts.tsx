@@ -295,9 +295,11 @@ export function StackedBars({
 export function StackedMultiBars({
   series,
   marks,
+  allTicks,
 }: {
   series: LineSeries[];
   marks?: Record<number, string>;
+  allTicks?: boolean;
 }) {
   const W = 720;
   const H = 240;
@@ -316,7 +318,7 @@ export function StackedMultiBars({
   const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
   const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
   const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
-  const step = years.length > 10 ? 2 : 1;
+  const step = allTicks ? 1 : years.length > 10 ? 2 : 1;
   return (
     <div>
       {series.length > 1 && <ModeSeg mode={mode} setMode={setMode} />}
