@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T04:00:47.727754+00:00",
+  "generated_at": "2026-11-07T04:06:33.411949+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -821,7 +821,6 @@
         "site",
         "city",
         "state",
-        "zip",
         "country",
         "invn",
         "site_strict",
@@ -918,7 +917,6 @@
         "display_addr",
         "city",
         "state",
-        "zip",
         "country",
         "band",
         "n_inv_ever",
@@ -1177,37 +1175,6 @@
       ]
     },
     {
-      "id": "trials_year",
-      "title": "Industry trials by year (starts vs running)",
-      "format": "parquet",
-      "files": [
-        "data/trials_year.parquet"
-      ],
-      "row_count": 38,
-      "columns": [
-        "scope",
-        "year",
-        "n_starts",
-        "n_running",
-        "partial"
-      ]
-    },
-    {
-      "id": "trials_band",
-      "title": "Industry starts by year and band (multi-country overlap)",
-      "format": "parquet",
-      "files": [
-        "data/trials_band.parquet"
-      ],
-      "row_count": 133,
-      "columns": [
-        "band",
-        "year",
-        "n_starts",
-        "partial"
-      ]
-    },
-    {
       "id": "cn_filing_year",
       "title": "China registry by institution filing vintage",
       "format": "parquet",
@@ -1364,24 +1331,6 @@
         "trials_running",
         "per_start",
         "per_running",
-        "partial"
-      ]
-    },
-    {
-      "id": "tightness_band",
-      "title": "Investigators per start by year and band",
-      "format": "parquet",
-      "files": [
-        "data/tightness_band.parquet"
-      ],
-      "row_count": 915,
-      "columns": [
-        "version",
-        "band",
-        "year",
-        "investigators",
-        "trials_starts",
-        "per_start",
         "partial"
       ]
     }
