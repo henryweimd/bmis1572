@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T18:04:11.276037+00:00",
+  "generated_at": "2026-11-07T18:19:22.562665+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -703,8 +703,8 @@
     "trials_per_person": "Trials per person: collapsed BMIS rows per person-cluster. One row = one IND submission reference, a proxy for trials, not confirmed distinct trials.",
     "active": "Active in year: person has >=1 BMIS receipt in that calendar year. New: first receipt ever falls in that year (2008-09 inflated: file starts Oct 2008). Returning: active and first seen earlier.",
     "one_trial": "One-trial (one-and-done): person-cluster linked to exactly one IND reference across the full 1980-2026 file span.",
-    "scope_unadjusted": "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global industry-led interventional trial starts (clinicaltrials.gov). Static charts only; the explorer shows adjusted scope.",
-    "scope_adjusted": "Adjusted benchmark: US-band BMIS persons vs. industry-led interventional trials with >=1 US site. Shown in the explorer's Tightness chart.",
+    "scope_unadjusted": "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global industry-led interventional trial starts (clinicaltrials.gov). Static charts and the explorer Tightness scope toggle.",
+    "scope_adjusted": "Adjusted benchmark: US-band BMIS persons vs. industry-led interventional trials with >=1 US site. Default scope of the explorer's Tightness chart.",
     "eu_2021": "2021*: first full year after 2019, when signing Form FDA 1572 was deemed illegal for EU investigators and EU GCP inspectors prohibited its completion; replacements for US-led trials followed (EORTC statement for non-IND NCI trials; NCI RCR International Investigator Statement for European countries). EU BMIS presence falls sharply from 2021 for this administrative reason, not necessarily real attrition.",
     "starts_running": "Starts: trials by Study Start Date year. Running: start <= year-end AND (completion >= year-start OR still active with no completion date). CT.gov snapshot date recorded in manifest.",
     "tightness": "Tightness ratio: active investigators per running trial. Descriptive workload proxy only; supply and trial counts are not independent (a supply crunch can suppress starts), so this is not causal.",

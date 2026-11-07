@@ -220,6 +220,7 @@ export default function App() {
   const [newret, setNewret] = useState<{ x: number; bottom: number; top: number }[]>([]);
 
   const [tight, setTight] = useState<LineSeries[]>([]);
+  const [tightScope, setTightScope] = useState<'adjusted' | 'unadjusted'>('adjusted');
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
   const [pbins, setPbins] = useState<{ category: string; v: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
@@ -330,15 +331,16 @@ export default function App() {
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
               ` WHERE version = '${v}' AND year = ${LATEST_FULL}`,
           ),
-          query<{ v: number | null }>(
-            `SELECT CAST(per_running AS DOUBLE) AS v FROM tightness WHERE version = '${v}'` +
-              ` AND scope = 'adjusted' AND year = ${LATEST_FULL}`,
+          query<{ pr: number | null; ps: number | null }>(
+            `SELECT CAST(per_running AS DOUBLE) AS pr, CAST(per_start AS DOUBLE) AS ps` +
+              ` FROM tightness WHERE version = '${v}'` +
+              ` AND scope = '${tightScope}' AND year = ${LATEST_FULL}`,
           ),
 
           query<TightRow>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(per_running AS DOUBLE) AS pr,` +
               ` CAST(per_start AS DOUBLE) AS ps FROM tightness WHERE version = '${v}'` +
-              ` AND scope = 'adjusted' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
+              ` AND scope = '${tightScope}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
           query<BinRow>(
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
@@ -401,12 +403,18 @@ export default function App() {
           active09: num0(k[0]?.active09),
           nnew: num0(k[0]?.nnew),
           oneTrial: num(ot[0]?.v),
-          tight: num(ti[0]?.v),
+          tight: num(tightScope === 'adjusted' ? ti[0]?.pr : ti[0]?.ps),
         });
-        setTight([
-          { label: 'Active per running trial', color: '#d62728', points: tser.map((r) => ({ x: r.y, y: num(r.pr) })) },
-          { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
-        ]);
+        setTight(
+          tightScope === 'adjusted'
+            ? [
+                { label: 'Active per running trial', color: '#d62728', points: tser.map((r) => ({ x: r.y, y: num(r.pr) })) },
+                { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
+              ]
+            : [
+                { label: 'Active per started trial', color: '#1f77b4', points: tser.map((r) => ({ x: r.y, y: num(r.ps) })) },
+              ],
+        );
         const binOrder = [...Array.from({ length: 14 }, (_, i) => String(i + 1)), '15+'];
         setBins(
           bn
@@ -470,7 +478,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo]);
+  }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo, tightScope]);
 
 
   const runSearch = async (override?: string) => {
@@ -782,9 +790,11 @@ export default function App() {
           <span className="kpi-label">{VERSION_LABEL[version]} persons</span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">Active per running trial, US</span>
+          <span className="kpi-label">
+            {tightScope === 'adjusted' ? 'Active per running trial, US' : 'Active per started trial, global'}
+          </span>
           <span className="kpi-value">{kpi && kpi.tight !== null ? kpi.tight.toFixed(2) : '—'}</span>
-          <span className="kpi-label">adjusted scope</span>
+          <span className="kpi-label">{tightScope} scope</span>
         </div>
       </section>
 
@@ -824,10 +834,30 @@ export default function App() {
             <p className="muted">Run the pipeline for trial data.</p>
           ) : (
             <>
+              <div className="filters">
+                <div className="seg" role="group" aria-label="Tightness scope">
+                  <button
+                    className={tightScope === 'adjusted' ? 'active' : ''}
+                    onClick={() => setTightScope('adjusted')}
+                    title="US-band persons vs trials with a US site"
+                  >
+                    Adjusted
+                  </button>
+                  <button
+                    className={tightScope === 'unadjusted' ? 'active' : ''}
+                    onClick={() => setTightScope('unadjusted')}
+                    title="All BMIS persons vs all global industry trials"
+                  >
+                    Unadjusted
+                  </button>
+                </div>
+              </div>
               <MultiLineChart series={tight} />
               <p className="caption">
-                US-site industry trials (adjusted scope). Descriptive workload proxy only — supply and
-                trial counts are not independent.
+                Adjusted: US-band persons vs industry trials with ≥1 US site. Unadjusted: all
+                BMIS persons vs all global industry trials (starts only — the running-trial
+                denominator needs per-trial dates, computed for the US subset only). Descriptive
+                workload proxy only — supply and trial counts are not independent.
               </p>
             </>
           )}
