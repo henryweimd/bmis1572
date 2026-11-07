@@ -131,6 +131,12 @@ DEFINITIONS = {
         "receipt year at the site, ended = last receipt year. Right edge "
         "is censored (2026 links look ended); gaps read as continuous."
     ),
+    "site_retention": (
+        "Site vintage attrition: of the sites first seen in a given year (their "
+        "vintage), the share active again k years later. Right-censored; 2008 "
+        "excluded (file ramp-up). Follows the version selector (Strict/Merged "
+        "addresses)."
+    ),
     "person_ctgov_link": (
         "CT.gov person linkage (experimental): BMIS strict persons matched "
         "to study-level overall officials (chairs/directors/PIs) by "

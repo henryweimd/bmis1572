@@ -306,7 +306,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         nonci, entities, "IRB", normalize_irb_site, "irb")
 
     # Site rollups (strict persons; strict + merged site versions)
-    _si, _syg, _ssz, _sch = [], [], [], []
+    _si, _syg, _ssz, _sch, _srt = [], [], [], [], []
     _pid_s = ci["pid_strict"].to_numpy()
     _yr = ci["year"].to_numpy()
     _bd = ci["band"].to_numpy().astype(str)
@@ -317,10 +317,12 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         _syg.append(_a)
         _ssz.append(_b)
         _sch.append(_c)
+        _srt.append(sites.site_retention(_codes, _yr, _sv))
     tables["site_index"] = pd.concat(_si).reset_index(drop=True)
     tables["sites_year_geo"] = pd.concat(_syg).reset_index(drop=True)
     tables["site_size_year"] = pd.concat(_ssz).reset_index(drop=True)
     tables["site_churn"] = pd.concat(_sch).reset_index(drop=True)
+    tables["site_retention"] = pd.concat(_srt).reset_index(drop=True)
     if ctgov_link.LOC_CACHE.exists():
         xc = ctgov_link.run(audit_n=0, write_pairs=True)
         if xc is not None and len(xc):
@@ -563,6 +565,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "sites_year_geo": "Active sites by year, band, site version",
         "site_size_year": "Sites by investigator headcount bin and year",
         "site_churn": "Site roster churn: links, joins, ends by year",
+        "site_retention": "Site vintage attrition: active share k years after first seen",
         "site_ctgov_xcheck": "CT.gov institution cross-check per site (experimental)",
         "site_ta_mix": "Therapeutic-area mix of matched trials per site (experimental)",
         "ctgov_officials": "CT.gov study officials + sponsor/phase per trial (experimental)",
@@ -698,6 +701,12 @@ def verify_with_duckdb(tables) -> dict:
         " FROM retention WHERE k = 0").fetchone()
     assert r0lo == 1.0 and r0hi == 1.0 and rmax <= 1.0, \
         "retention out of bounds"
+    s0 = con.execute(
+        "SELECT MIN(retention), MAX(retention),"
+        " (SELECT MAX(retention) FROM site_retention)"
+        " FROM site_retention WHERE k = 0").fetchone()
+    assert s0[0] == 1.0 and s0[1] == 1.0 and s0[2] <= 1.0, \
+        "site retention out of bounds"
     bad_conc = con.execute(
         "SELECT COUNT(*) FROM concentration WHERE top1_share < 0"
         " OR top1_share > top10_share OR top10_share > 1"

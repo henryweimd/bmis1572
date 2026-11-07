@@ -210,6 +210,24 @@ def build_site_index(ci: pd.DataFrame, codes: np.ndarray, pid: np.ndarray,
     return idx
 
 
+def site_retention(codes: np.ndarray, yr: np.ndarray,
+                   version: str) -> pd.DataFrame:
+    """Cohort retention for sites: share of first-seen cohort active k years later."""
+    df = pd.DataFrame({"s": codes, "y": yr}).drop_duplicates()
+    first = df.groupby("s")["y"].min()
+    cohort = df["s"].map(first)
+    df = df[cohort.to_numpy() >= 2008]
+    cohort = df["s"].map(first)
+    n_cohort = first[first >= 2008].value_counts()
+    act = (pd.DataFrame({"cohort": cohort.to_numpy(),
+                         "k": df["y"].to_numpy() - cohort.to_numpy()})
+           .groupby(["cohort", "k"]).size().rename("n_active").reset_index())
+    act["n_cohort"] = act["cohort"].map(n_cohort)
+    act["retention"] = (act["n_active"] / act["n_cohort"]).round(4)
+    act["version"] = version
+    return act[["version", "cohort", "k", "n_cohort", "n_active", "retention"]]
+
+
 def site_year_stats(codes: np.ndarray, pid: np.ndarray, year: np.ndarray,
                     band: np.ndarray, version: str):
     """Aggregate site stats without persisting per-site rows.
