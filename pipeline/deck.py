@@ -35,6 +35,7 @@ FDA_URL = ("https://www.fda.gov/drugs/drug-approvals-and-databases/"
 CTGOV_URL = "https://clinicaltrials.gov/data-api/api"
 REPO_URL = "https://github.com/henryweimd/bmis1572"
 CFDI_URL = "https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
+WHO_URL = "https://trialsearch.who.int/AdvSearch.aspx"
 
 
 def load_numbers(stats: dict) -> dict:
@@ -131,6 +132,14 @@ def load_numbers(stats: dict) -> dict:
         sy = pd.read_parquet(CURATED / "cn_specialty_year.parquet")
         ts = sy.groupby("group_en")["n_pairs"].sum().sort_values(ascending=False)
         n["cn_top_spec"] = (ts.index[0], int(ts.iloc[0]))
+    n["who_trials"] = None
+    if (CURATED / "who_global.parquet").exists():
+        wg = pd.read_parquet(CURATED / "who_global.parquet")
+        n["who_trials"] = int(wg["trials"].iloc[0])
+        n["who_records"] = int(wg["records"].iloc[0])
+        wc = pd.read_parquet(CURATED / "who_country.parquet")
+        wc = wc.sort_values("trials", ascending=False).head(3)
+        n["who_top3"] = [(r["country"], int(r["trials"])) for _, r in wc.iterrows()]
     return n
 
 
@@ -140,6 +149,7 @@ def build_slides(n: dict) -> list[dict]:
     has_cn = n["cn_pairs"] is not None
     has_ct = n["ct_trials"] is not None
     has_sr = n["sr1"] is not None
+    has_who = n["who_trials"] is not None
     slides = [
         {"kind": "title", "title": "The U.S. Clinical-Trial Investigator Supply",
          "sub": ("A preliminary descriptive analysis of FDA BMIS Form 1572 filings, "
@@ -275,6 +285,18 @@ def build_slides(n: dict) -> list[dict]:
         ]
         slides[-1]["bullets"].insert(2, f"China: CFDI drug-institution filing extract \u2014 {CFDI_URL}")
         slides[-1]["links"].insert(2, CFDI_URL)
+    if has_who:
+        w0, w1, w2 = n["who_top3"]
+        slides[-2:-2] = [
+            {"kind": "charts2", "title": "Global context: WHO ICTRP",
+             "images": ["who_global_yoy.png", "who_top_countries.png"],
+             "bullets": [f"{f(n['who_trials'])} trials / {f(n['who_records'])} records worldwide.",
+                         f"Top: {w0[0]} ({f(w0[1])}), {w1[0]} ({f(w1[1])}), {w2[0]} ({f(w2[1])}).",
+                         "Multi-country trials repeat per country; registration year, ALL statuses."],
+             "footnotes": ["Aggregate portal counts retrieved 2026-11-07; no trial-level data."]},
+        ]
+        slides[-1]["bullets"].insert(2, f"Global context: WHO ICTRP Search Portal \u2014 {WHO_URL}")
+        slides[-1]["links"].insert(2, WHO_URL)
     return slides
 
 
