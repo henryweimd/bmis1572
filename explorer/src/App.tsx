@@ -128,6 +128,7 @@ const DEF_TITLES: [string, string][] = [
   ['cro', 'CRO company grouping'],
   ['irb', 'IRB board grouping'],
   ['site', 'Site definition'],
+  ['person_ctgov_link', 'CT.gov person linkage (experimental)'],
   ['site_churn', 'Site roster churn'],
   ['site_xcheck', 'CT.gov cross-check (experimental)'],
   ['site_ta', 'Therapeutic-area mix (experimental)'],
@@ -164,6 +165,14 @@ interface HitRow {
   n_years: number;
   first_year: number;
   last_year: number;
+}
+interface LinkRow {
+  nct: string;
+  role: string;
+  tier: string;
+  sponsor: string;
+  phase: string;
+  start_y: number | null;
 }
 interface RcRow {
   rcvd: string;
@@ -222,6 +231,7 @@ export default function App() {
   const [sel, setSel] = useState<{ id: string; name: string } | null>(null);
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
+  const [linked, setLinked] = useState<LinkRow[]>([]);
   const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'china' | 'about'>(() =>
     pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'china', 'about'] as const, 'inv'),
   );
@@ -464,6 +474,7 @@ export default function App() {
       setSearched(true);
       setSel(null);
       setReceipts([]);
+      setLinked([]);
     } catch (e) {
       setNote(`Search failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -473,7 +484,7 @@ export default function App() {
     setSel({ id, name });
     try {
       const pid = escapeLiteral(id);
-      const [rows, cnt] = await Promise.all([
+      const [rows, cnt, lk] = await Promise.all([
         query<RcRow>(
           `SELECT CAST(rcvd AS VARCHAR) AS rcvd, CAST(site AS VARCHAR) AS site,` +
             ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
@@ -482,9 +493,17 @@ export default function App() {
             ` FROM person_receipts WHERE person_id = '${pid}' ORDER BY rcvd DESC LIMIT 1000`,
         ),
         query<{ n: number }>(`SELECT COUNT(*) AS n FROM person_receipts WHERE person_id = '${pid}'`),
+        query<LinkRow>(
+          `SELECT CAST(l.nct AS VARCHAR) AS nct, CAST(l.role AS VARCHAR) AS role,` +
+            ` CAST(l.tier AS VARCHAR) AS tier, CAST(o.sponsor_disp AS VARCHAR) AS sponsor,` +
+            ` CAST(o.phase AS VARCHAR) AS phase, CAST(o.start_y AS INTEGER) AS start_y` +
+            ` FROM person_ctgov_link l JOIN ctgov_officials o ON o.nct = l.nct AND o.name_raw = l.off_name` +
+            ` WHERE l.person_id = '${pid}' ORDER BY o.start_y DESC NULLS LAST, l.nct`,
+        ).catch(() => [] as LinkRow[]),
       ]);
       setReceipts(rows);
       setRcTotal(num0(cnt[0]?.n));
+      setLinked(lk);
     } catch (e) {
       setNote(`Receipts query failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -919,6 +938,53 @@ export default function App() {
                   One row = one IND submission reference naming this investigator (date + site as filed).
                   BMIS carries no trial identifiers, so rows cannot be mapped to specific trials.
                 </p>
+                {!!linked.length && (
+                  <>
+                    <h3>
+                      CT.gov-linked trials{' '}
+                      <span className="muted">· {linked.length} via name match (experimental)</span>
+                    </h3>
+                    <div className="table-scroll short">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Trial</th>
+                            <th>Role</th>
+                            <th>Sponsor</th>
+                            <th>Phase</th>
+                            <th>Start</th>
+                            <th>Match</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {linked.map((r) => (
+                            <tr key={`${r.nct}-${r.role}`}>
+                              <td>
+                                <a
+                                  href={`https://clinicaltrials.gov/study/${r.nct}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {r.nct}
+                                </a>
+                              </td>
+                              <td>{r.role.replace(/_/g, ' ').toLowerCase()}</td>
+                              <td>{r.sponsor}</td>
+                              <td>{r.phase}</td>
+                              <td>{r.start_y ?? ''}</td>
+                              <td>{r.tier}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="caption">
+                      Study-level officials (chairs/directors) matched by name + affiliation;
+                      CT.gov names no site investigators. Strong = full-name + affiliation overlap;
+                      weak links may be name collisions. See Definitions.
+                    </p>
+                  </>
+                )}
               </>
             )}
           </>

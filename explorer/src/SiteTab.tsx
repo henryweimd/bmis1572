@@ -106,6 +106,7 @@ export default function SiteTab({
   const [roster, setRoster] = useState<{ name: string; country: string; n: number }[]>([]);
   const [xc, setXc] = useState<{ n: number; ns: number; j: number; samp: string; fac: string; sib: number } | null>(null);
   const [tamix, setTamix] = useState<{ category: string; v: number }[]>([]);
+  const [phasemix, setPhasemix] = useState<{ category: string; v: number }[]>([]);
   const [note, setNote] = useState('');
 
   const yearOpts: number[] = [];
@@ -198,6 +199,7 @@ export default function SiteTab({
       setDetail([]);
       setXc(null);
       setTamix([]);
+      setPhasemix([]);
       return;
     }
     let cancelled = false;
@@ -205,7 +207,7 @@ export default function SiteTab({
       try {
         const col = ver === 'strict' ? 'site_strict' : 'site_merged';
         const yr = 'EXTRACT(YEAR FROM CAST(rcvd AS DATE))';
-        const [inf, yy, pr, xq, tq] = await Promise.all([
+        const [inf, yy, pr, xq, tq, pq] = await Promise.all([
           query<SiteInfo>(
             `SELECT CAST(display_name AS VARCHAR) AS name, CAST(display_addr AS VARCHAR) AS addr,` +
               ` CAST(city AS VARCHAR) AS city, CAST(state AS VARCHAR) AS state,` +
@@ -234,6 +236,11 @@ export default function SiteTab({
               ` FROM site_ta_mix WHERE version = '${ver}' AND site_n = ${sel.n}` +
               ` GROUP BY 1 ORDER BY 2 DESC`,
           ).catch(() => []),
+          query<{ category: string; v: number }>(
+            `SELECT CAST(phase AS VARCHAR) AS category, CAST(SUM(n_trials) AS DOUBLE) AS v` +
+              ` FROM site_ctgov_phase_mix WHERE version = '${ver}' AND site_n = ${sel.n}` +
+              ` GROUP BY 1 ORDER BY 2 DESC`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setInfo(inf[0] ?? null);
@@ -246,6 +253,7 @@ export default function SiteTab({
         setDetail(yy.map((r) => ({ y: r.y, invs: num0(r.invs), joins: joins.get(r.y) ?? 0, ends: ends.get(r.y) ?? 0 })));
         setXc(xq[0] ? { n: num0(xq[0].n), ns: num0(xq[0].ns), j: num0(xq[0].j), samp: xq[0].samp, fac: xq[0].fac, sib: num0(xq[0].sib) } : null);
         setTamix(tq.map((r) => ({ category: r.category, v: num0(r.v) })));
+        setPhasemix(pq.map((r) => ({ category: r.category, v: num0(r.v) })));
       } catch (e) {
         if (cancelled) return;
         setNote(`Site detail failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -661,6 +669,18 @@ export default function SiteTab({
             </>
           ) : (
             <p className="muted">No therapeutic-area data (no CT.gov match for this site).</p>
+          )}
+          <h3>Phase mix (experimental)</h3>
+          {phasemix.length ? (
+            <>
+              <CategoryBars data={phasemix} />
+              <p className="caption">
+                Matched trials by CT.gov phase (exact per-trial field). Inherits all cross-check
+                caveats; see Definitions: site_xcheck.
+              </p>
+            </>
+          ) : (
+            <p className="muted">No phase data (no CT.gov match for this site).</p>
           )}
           <h3>
             Roster,{' '}
