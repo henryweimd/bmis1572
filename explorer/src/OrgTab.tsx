@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { MultiLineChart } from './charts';
+import { StackedMultiBars } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -172,13 +172,27 @@ export default function OrgTab({
                   ` GROUP BY 1, 2 ORDER BY 1, 2`,
               );
         if (cancelled) return;
-        setSeries(
-          names.map((n, i) => ({
-            label: n,
-            color: SERIES_COLORS[i % SERIES_COLORS.length],
-            points: sr.filter((r) => r.org === n).map((r) => ({ x: r.y, y: num0(r.n) })),
-          })),
-        );
+        const top8 = names.map((n, i) => ({
+          label: n,
+          color: SERIES_COLORS[i % SERIES_COLORS.length],
+          points: sr.filter((r) => r.org === n).map((r) => ({ x: r.y, y: num0(r.n) })),
+        }));
+        if (sel === 'all') {
+          // Complete the stack so absolute and 100% views cover all receipts.
+          const tot = await query<{ y: number; n: number }>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_receipts) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
+              ` WHERE year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 1`,
+          );
+          if (cancelled) return;
+          const part = new Map<number, number>();
+          for (const r of sr) part.set(r.y, (part.get(r.y) ?? 0) + num0(r.n));
+          top8.push({
+            label: 'All other',
+            color: '#bdbdbd',
+            points: tot.map((r) => ({ x: r.y, y: Math.max(0, num0(r.n) - (part.get(r.y) ?? 0)) })),
+          });
+        }
+        setSeries(top8);
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -259,7 +273,7 @@ export default function OrgTab({
           <label>
             {cfg.selector}
             <select value={sel} onChange={(e) => setSel(e.target.value)}>
-              <option value="all">All (top 8 in chart)</option>
+              <option value="all">All (top 8 + other in chart)</option>
               {opts.map((o) => (
                 <option key={o.org} value={o.org}>
                   {o.org} ({fmtInt.format(o.n)})
@@ -295,12 +309,12 @@ export default function OrgTab({
 
       <section className="panel">
         <h2>
-          {cfg.singular} receipts per year{sel === 'all' ? ' (top 8)' : `: ${sel}`}
+          {cfg.singular} receipts per year{sel === 'all' ? ' (top 8 + all other)' : `: ${sel}`}
         </h2>
-        <MultiLineChart series={series} />
+        <StackedMultiBars series={series} allTicks />
         <p className="caption">
-          Receipts naming the {cfg.selector.toLowerCase()} (normalized site strings) · 2008 (ramp-up) and
-          2026 (thru Aug) are partial.
+          Top 8 {cfg.table} by receipts in the selected range, plus all others (normalized site
+          strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.
         </p>
       </section>
 
@@ -308,7 +322,7 @@ export default function OrgTab({
         <h2>
           Active {cfg.singular} entities per year{sel === 'all' ? '' : `: ${sel}`}
         </h2>
-        <MultiLineChart series={ent} />
+        <StackedMultiBars series={ent} allTicks />
         <p className="caption">Distinct {cfg.singular} site entities with ≥1 receipt that year.</p>
       </section>
 
