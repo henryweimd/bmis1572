@@ -111,7 +111,9 @@ def match_one(key: str, city: str, first_y: int, last_y: int,
             continue
         nct = locs["nct"][i]
         prev = best.get(nct)
-        if prev is None or j > prev[0]:
+        # Deterministic tie-break: counts iteration order varies with hash
+        # seed, so equal-jaccard facilities must resolve identically.
+        if prev is None or j > prev[0] or (j == prev[0] and locs["fac_raw"][i] < prev[1]):
             best[nct] = (j, locs["fac_raw"][i])
     return best
 

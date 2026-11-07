@@ -122,6 +122,7 @@ const DEF_TITLES: [string, string][] = [
   ['scope_adjusted', 'Adjusted benchmark'],
   ['starts_running', 'Starts vs. running'],
   ['tightness', 'Tightness ratio'],
+  ['eu_2021', '2021* EU 1572 note'],
   ['partial', 'Partial years'],
   ['bmis_scope', 'BMIS scope'],
   ['cro', 'CRO company grouping'],

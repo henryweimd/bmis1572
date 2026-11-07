@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T02:36:17.308993+00:00",
+  "generated_at": "2026-11-07T03:56:31.269105+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -703,8 +703,9 @@
     "trials_per_person": "Trials per person: collapsed BMIS rows per person-cluster. One row = one IND submission reference, a proxy for trials, not confirmed distinct trials.",
     "active": "Active in year: person has >=1 BMIS receipt in that calendar year. New: first receipt ever falls in that year (2008-09 inflated: file starts Oct 2008). Returning: active and first seen earlier.",
     "one_trial": "One-trial (one-and-done): person-cluster linked to exactly one IND reference across the full 1980-2026 file span.",
-    "scope_unadjusted": "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global industry-led interventional trial starts (clinicaltrials.gov).",
-    "scope_adjusted": "Adjusted benchmark: US-band BMIS persons vs. industry-led interventional trials with >=1 US site.",
+    "scope_unadjusted": "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global industry-led interventional trial starts (clinicaltrials.gov). Static charts only; the explorer shows adjusted scope.",
+    "scope_adjusted": "Adjusted benchmark: US-band BMIS persons vs. industry-led interventional trials with >=1 US site. Shown in the explorer's Tightness chart.",
+    "eu_2021": "2021*: first full year after 2019, when signing Form FDA 1572 was deemed illegal for EU investigators and EU GCP inspectors prohibited its completion; replacements for US-led trials followed (EORTC statement for non-IND NCI trials; NCI RCR International Investigator Statement for European countries). EU BMIS presence falls sharply from 2021 for this administrative reason, not necessarily real attrition.",
     "starts_running": "Starts: trials by Study Start Date year. Running: start <= year-end AND (completion >= year-start OR still active with no completion date). CT.gov snapshot date recorded in manifest.",
     "tightness": "Tightness ratio: active investigators per running trial. Descriptive workload proxy only; supply and trial counts are not independent (a supply crunch can suppress starts), so this is not causal.",
     "partial": "2008 (file ramp-up from Oct 1) and 2026 (file through Aug 31) are partial: shown faded, excluded from growth statistics.",
@@ -720,7 +721,7 @@
     "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them.",
     "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio.",
     "site_ta": "Therapeutic-area mix (experimental, US only): the matched institution's CT.gov studies bucketed by conditions text into ~15 areas via keyword rules (first match wins). Counts inherit all cross-check caveats; multi-area studies count once per area; healthy-volunteer and unclassifiable conditions land in Other.",
-    "china": "China CFDI registry extract (partial coverage, retrieved 2026-11-06): investigators affiliated with filed drug-trial institutions. Person = (name, institution) pair; bare names collide across institutions.",
+    "china": "China CFDI registry extract (partial coverage, retrieved 2026-11-06): investigators affiliated with filed drug-trial institutions. Person = (name, institution) pair; rows exact-deduped at ingest (the extract repeats ~35% of rows). Pairs count affiliations, not humans: one person at two institutions = two pairs; same-named people at one institution = one pair; common names (e.g. \u5f20\u4f1f) collide across institutions and are not mobility.",
     "china_filing": "Filing year is the INSTITUTION's registration vintage, not investigator activity: most institutions filed in a 2019-2020 bulk wave. YoY reads as registry composition, never retention.",
     "china_i18n": "ZH is authoritative. EN covers provinces, cities, roles, specialty groups, top-30 sites (curated) and pattern-derived site/specialty labels; investigator names stay in Chinese."
   },

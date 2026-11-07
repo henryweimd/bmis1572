@@ -47,11 +47,22 @@ DEFINITIONS = {
     ),
     "scope_unadjusted": (
         "Unadjusted benchmark: all TYPE=CI BMIS persons vs. all global "
-        "industry-led interventional trial starts (clinicaltrials.gov)."
+        "industry-led interventional trial starts (clinicaltrials.gov). "
+        "Static charts only; the explorer shows adjusted scope."
     ),
     "scope_adjusted": (
         "Adjusted benchmark: US-band BMIS persons vs. industry-led "
-        "interventional trials with >=1 US site."
+        "interventional trials with >=1 US site. Shown in the explorer's "
+        "Tightness chart."
+    ),
+    "eu_2021": (
+        "2021*: first full year after 2019, when signing Form FDA 1572 was "
+        "deemed illegal for EU investigators and EU GCP inspectors "
+        "prohibited its completion; replacements for US-led trials "
+        "followed (EORTC statement for non-IND NCI trials; NCI RCR "
+        "International Investigator Statement for European countries). "
+        "EU BMIS presence falls sharply from 2021 for this administrative "
+        "reason, not necessarily real attrition."
     ),
     "starts_running": (
         "Starts: trials by Study Start Date year. Running: start <= year-end "
@@ -151,7 +162,11 @@ DEFINITIONS = {
     "china": (
         "China CFDI registry extract (partial coverage, retrieved 2026-11-06): "
         "investigators affiliated with filed drug-trial institutions. Person = "
-        "(name, institution) pair; bare names collide across institutions."
+        "(name, institution) pair; rows exact-deduped at ingest (the extract "
+        "repeats ~35% of rows). Pairs count affiliations, not humans: one "
+        "person at two institutions = two pairs; same-named people at one "
+        "institution = one pair; common names (e.g. \u5f20\u4f1f) collide "
+        "across institutions and are not mobility."
     ),
     "china_filing": (
         "Filing year is the INSTITUTION's registration vintage, not "
