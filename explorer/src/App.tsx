@@ -108,6 +108,18 @@ const num = (v: unknown): number | null =>
 const num0 = (v: unknown): number => num(v) ?? 0;
 const pct = (v: number | null, d = 1): string =>
   v === null ? '—' : `${(v * 100).toFixed(d)}%`;
+function seriesCsv(name: string, series: LineSeries[]): void {
+  if (!series.length || !series[0].points.length) return;
+  const n = series[0].points.length;
+  downloadCsv(
+    name,
+    ['year', ...series.map((s) => s.label)],
+    Array.from({ length: n }, (_, i) => [
+      series[0].points[i].x,
+      ...series.map((s) => s.points[i]?.y ?? ''),
+    ]),
+  );
+}
 
 const DEF_TITLES: [string, string][] = [
   ['person_strict', 'Strict person'],
@@ -884,7 +896,15 @@ export default function App() {
                 Adjusted: US-band persons vs industry trials with ≥1 US site. Unadjusted: all
                 BMIS persons vs all global industry trials (starts only — the running-trial
                 denominator needs per-trial dates, computed for the US subset only). Descriptive
-                workload proxy only — supply and trial counts are not independent.
+                workload proxy only — supply and trial counts are not independent.{' '}
+                {!!tight.length && (
+                  <button
+                    className="btn"
+                    onClick={() => seriesCsv(`tightness-${version}-${tightScope}.csv`, tight)}
+                  >
+                    CSV
+                  </button>
+                )}
               </p>
             </>
           )}
@@ -1246,7 +1266,27 @@ export default function App() {
                   <>
                     <h3>
                       Others at this site{' '}
-                      <span className="muted">· top {colleagues.length} by IND refs</span>
+                      <span className="muted">· top {colleagues.length} by IND refs</span>{' '}
+                      <button
+                        className="btn"
+                        onClick={() =>
+                          downloadCsv(
+                            'site-colleagues.csv',
+                            ['investigator', 'site', 'country', 'ind_refs', 'years_active', 'first_year', 'last_year'],
+                            colleagues.map((r) => [
+                              r.display_name,
+                              r.site ?? '',
+                              r.country,
+                              r.n_trials,
+                              r.n_years,
+                              r.first_year,
+                              r.last_year,
+                            ]),
+                          )
+                        }
+                      >
+                        CSV
+                      </button>
                     </h3>
                     <div className="table-scroll short">
                       <table>
@@ -1493,7 +1533,15 @@ export default function App() {
                 <MultiLineChart series={conc} />
                 <p className="caption">
                   Yearly share of receipts going to the top 1%/10% investigators, plus Gini ×100
-                  (percent scale). Rising lines mean work concentrating in fewer hands.
+                  (percent scale). Rising lines mean work concentrating in fewer hands.{' '}
+                  {!!conc.length && (
+                    <button
+                      className="btn"
+                      onClick={() => seriesCsv(`concentration-${version}.csv`, conc)}
+                    >
+                      CSV
+                    </button>
+                  )}
                 </p>
               </>
             )}
