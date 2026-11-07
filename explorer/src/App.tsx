@@ -1041,6 +1041,26 @@ export default function App() {
                         </tbody>
                       </table>
                     </div>
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        downloadCsv(
+                          'linked_trials.csv',
+                          ['nct', 'role', 'sponsor', 'phase', 'ta', 'start_y', 'tier'],
+                          linked.map((r) => [
+                            r.nct,
+                            r.role,
+                            r.sponsor,
+                            r.phase,
+                            r.ta,
+                            r.start_y ?? '',
+                            r.tier,
+                          ]),
+                        )
+                      }
+                    >
+                      CSV
+                    </button>
                     <p className="caption">
                       Officials (usually study-level) matched by name + affiliation; most trials
                       name only directors/chairs. Strong = full-name + affiliation overlap; weak
