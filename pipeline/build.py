@@ -200,6 +200,23 @@ def org_tables(nonci, entities, org_type, normalize_fn, key):
     return year.reset_index(drop=True), index.reset_index(drop=True)
 
 
+def org_retention(oy: pd.DataFrame, key: str, otype: str) -> pd.DataFrame:
+    """Cohort retention for orgs: share of first-seen cohort active k years later."""
+    df = oy[[key, "year"]].drop_duplicates()
+    first = df.groupby(key)["year"].min()
+    cohort = df[key].map(first)
+    df = df[cohort.to_numpy() >= 2008]
+    cohort = df[key].map(first)
+    n_cohort = first[first >= 2008].value_counts()
+    act = (pd.DataFrame({"cohort": cohort.to_numpy(),
+                         "k": df["year"].to_numpy() - cohort.to_numpy()})
+           .groupby(["cohort", "k"]).size().rename("n_active").reset_index())
+    act["n_cohort"] = act["cohort"].map(n_cohort)
+    act["retention"] = (act["n_active"] / act["n_cohort"]).round(4)
+    act["org_type"] = otype
+    return act[["org_type", "cohort", "k", "n_cohort", "n_active", "retention"]]
+
+
 def downcast(t: pd.DataFrame) -> pd.DataFrame:
     """Slim int64 columns to int32 where values fit (snapshot diet)."""
     for c in t.columns:
@@ -304,6 +321,11 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         nonci, entities, "CRO", normalize_cro_site, "cro")
     tables["irb_year"], tables["irb_index"] = org_tables(
         nonci, entities, "IRB", normalize_irb_site, "irb")
+    _ort = pd.concat([org_retention(tables["cro_year"], "cro", "cro"),
+                      org_retention(tables["irb_year"], "irb", "irb")])
+    _ort = downcast(_ort.reset_index(drop=True))
+    _ort.to_parquet(CURATED / "org_retention.parquet", index=False)
+    tables["org_retention"] = _ort
 
     # Site rollups (strict persons; strict + merged site versions)
     _si, _syg, _ssz, _sch, _srt = [], [], [], [], []
@@ -561,6 +583,7 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "cro_index": "CRO company summary with site-variant audit",
         "irb_year": "IRB receipts/entities by year, band, board",
         "irb_index": "IRB board summary with site-variant audit",
+        "org_retention": "CRO/IRB vintage attrition: active share k years after first seen",
         "site_index": "Site summary: display, geo, investigators, span",
         "sites_year_geo": "Active sites by year, band, site version",
         "site_size_year": "Sites by investigator headcount bin and year",
@@ -707,6 +730,12 @@ def verify_with_duckdb(tables) -> dict:
         " FROM site_retention WHERE k = 0").fetchone()
     assert s0[0] == 1.0 and s0[1] == 1.0 and s0[2] <= 1.0, \
         "site retention out of bounds"
+    o0 = con.execute(
+        "SELECT MIN(retention), MAX(retention),"
+        " (SELECT MAX(retention) FROM org_retention)"
+        " FROM org_retention WHERE k = 0").fetchone()
+    assert o0[0] == 1.0 and o0[1] == 1.0 and o0[2] <= 1.0, \
+        "org retention out of bounds"
     bad_conc = con.execute(
         "SELECT COUNT(*) FROM concentration WHERE top1_share < 0"
         " OR top1_share > top10_share OR top10_share > 1"

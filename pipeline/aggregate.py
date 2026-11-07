@@ -112,6 +112,12 @@ DEFINITIONS = {
         "active again k years later. Right-censored (recent vintages show "
         "fewer years); 2008 excluded (file ramp-up distorts the base)."
     ),
+    "org_retention": (
+        "CRO/IRB vintage attrition: of the normalized companies/boards "
+        "first seen in a given year (their vintage), the share active "
+        "again k years later. Right-censored; 2008 excluded (file "
+        "ramp-up). Company/board keys carry residual spelling splits."
+    ),
     "concentration": (
         "Annual concentration: share of each year's receipts going to the "
         "year's top 1%/10% investigators by receipts, plus the Gini of "
