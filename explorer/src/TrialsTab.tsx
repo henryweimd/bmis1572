@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, TrendChart } from './charts';
-import { downloadCsv, trendCsv } from './csv';
+import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
+import type { LineSeries } from './charts';
+import { downloadCsv, stackedCsv, trendCsv } from './csv';
 
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num0 = (v: unknown): number =>
@@ -39,6 +40,7 @@ export default function TrialsTab({
   const [kols, setKols] = useState<KolRow[]>([]);
   const [cover, setCover] = useState<CoverRow[]>([]);
   const [triYoy, setTriYoy] = useState<{ d: string; v: number }[]>([]);
+  const [phaseTrend, setPhaseTrend] = useState<LineSeries[]>([]);
   const [note, setNote] = useState('');
   const [nctIn, setNctIn] = useState('');
   const [trial, setTrial] = useState<{
@@ -101,7 +103,7 @@ export default function TrialsTab({
           return;
         }
         const yr = `start_y BETWEEN ${y0} AND ${y1}`;
-        const [k, sp, ph, ta, ko, cv, yy] = await Promise.all([
+        const [k, sp, ph, ta, ko, cv, yy, pt] = await Promise.all([
           query<{ trials: number; withOff: number; sponsors: number; linked: number; conc: number }>(
             `SELECT (SELECT COUNT(*) FROM ctgov_trials WHERE ${yr}) AS trials,` +
               ` (SELECT COUNT(DISTINCT o.nct) FROM ctgov_officials o` +
@@ -145,6 +147,11 @@ export default function TrialsTab({
             `SELECT CAST(start_y AS INTEGER) AS y, CAST(COUNT(*) AS DOUBLE) AS n` +
               ` FROM ctgov_trials WHERE ${yr} GROUP BY 1 ORDER BY 1`,
           ),
+          query<{ y: number; p: string; n: number }>(
+            `SELECT CAST(start_y AS INTEGER) AS y, CAST(phase AS VARCHAR) AS p,` +
+              ` CAST(COUNT(*) AS DOUBLE) AS n FROM ctgov_trials WHERE ${yr}` +
+              ` GROUP BY 1, 2 ORDER BY 1, 2`,
+          ),
         ]);
         if (cancelled) return;
         setKpi({
@@ -160,6 +167,17 @@ export default function TrialsTab({
         setKols(ko);
         setCover(cv);
         setTriYoy(yy.map((r) => ({ d: String(r.y), v: num0(r.n) })));
+        const phaseOrder = ['EARLY_P1', 'P1', 'P1+P2', 'P2', 'P2+P3', 'P3', 'P4', 'NA'];
+        const phaseColors = ['#9467bd', '#1f77b4', '#17becf', '#2ca02c', '#bcbd22', '#ff7f0e', '#d62728', '#7f7f7f'];
+        setPhaseTrend(
+          phaseOrder
+            .filter((p) => pt.some((r) => r.p === p))
+            .map((p, i) => ({
+              label: p,
+              color: phaseColors[i % phaseColors.length],
+              points: pt.filter((r) => r.p === p).map((r) => ({ x: r.y, y: num0(r.n) })),
+            })),
+        );
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -263,6 +281,23 @@ export default function TrialsTab({
           <CategoryBars data={phases} />
           <p className="caption">NA = no phase listed; combos (e.g. P2+P3) kept whole.</p>
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Phase mix over time</h2>
+        <StackedMultiBars series={phaseTrend} allTicks />
+        <p className="caption">
+          Trial starts per year by phase in range. Toggle 100% for yearly share. NA growth
+          reflects missing phase data, not a real mix shift.{' '}
+          {!!phaseTrend.length && (
+            <button
+              className="btn"
+              onClick={() => stackedCsv(`phase-mix-${y0}-${y1}.csv`, phaseTrend)}
+            >
+              CSV
+            </button>
+          )}
+        </p>
       </section>
 
       <section className="panel">
