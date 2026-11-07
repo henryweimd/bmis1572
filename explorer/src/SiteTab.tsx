@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, StackedMultiBars, VintageHeatmap } from './charts';
+import { CategoryBars, StackedMultiBars, TrendChart, VintageHeatmap } from './charts';
 import type { VintageRow } from './charts';
 
 const SITE_KMAX = 10;
@@ -102,6 +102,7 @@ export default function SiteTab({
 
   const [kpi, setKpi] = useState<{ active: number; receipts: number; receipts09: number; ever: number } | null>(null);
   const [byBand, setByBand] = useState<LineSeries[]>([]);
+  const [meanInv, setMeanInv] = useState<{ d: string; v: number }[]>([]);
   const [sizeTrend, setSizeTrend] = useState<LineSeries[]>([]);
   const [sizeSnap, setSizeSnap] = useState<{ category: string; v: number }[]>([]);
   const [churn, setChurn] = useState<LineSeries[]>([]);
@@ -125,7 +126,11 @@ export default function SiteTab({
     (async () => {
       try {
         const bc = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
-        const [k, bb, st, ss, ch, rt, t] = await Promise.all([
+        const bcJ =
+          band === 'all'
+            ? ''
+            : ` AND s.band = '${escapeLiteral(band)}' AND i.band = '${escapeLiteral(band)}'`;
+        const [k, bb, st, ss, ch, rt, t, mi] = await Promise.all([
           query<{ active: number; r25: number; r09: number; ever: number }>(
             `SELECT CAST(SUM(CASE WHEN year = ${latestFull} THEN n_sites ELSE 0 END) AS DOUBLE) AS active,` +
               ` CAST(SUM(CASE WHEN year = ${latestFull} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
@@ -167,6 +172,14 @@ export default function SiteTab({
               ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM site_index` +
               ` WHERE version = '${ver}'${bc}` +
               ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : sort === 'invs' ? 'n_inv_ever DESC' : 'n_receipts DESC'} LIMIT 25`,
+          ),
+          query<{ y: number; m: number }>(
+            `SELECT CAST(s.year AS INTEGER) AS y,` +
+              ` CAST(SUM(i.n_active) AS DOUBLE) / NULLIF(SUM(s.n_sites), 0) AS m` +
+              ` FROM sites_year_geo s JOIN investigators_year_geo i` +
+              ` ON i.version = s.version AND i.year = s.year AND i.band = s.band` +
+              ` WHERE s.version = '${ver}' AND s.year BETWEEN ${y0} AND ${y1}${bcJ}` +
+              ` GROUP BY 1 ORDER BY 1`,
           ),
         ]);
         if (cancelled) return;
@@ -211,6 +224,7 @@ export default function SiteTab({
           })),
         );
         setTop(t);
+        setMeanInv(mi.map((r) => ({ d: String(r.y), v: num0(r.m) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -501,6 +515,15 @@ export default function SiteTab({
         <p className="caption">
           Global (all bands): sites grouped by distinct investigators active that year. Solo sites dominate;
           21+ sites are mega-centers. Toggle 100% for yearly share.
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>Mean investigators per active site</h2>
+        <TrendChart data={meanInv} />
+        <p className="caption">
+          Active investigators ÷ active sites per year (follows version and band filters). Teams
+          per site have nearly doubled since the 1980s.
         </p>
       </section>
 
