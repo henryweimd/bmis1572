@@ -201,17 +201,19 @@ def run(refresh: bool = False, audit_n: int = 10) -> dict[str, pd.DataFrame]:
     print(f"people: {len(recs):,} studies -> {len(trials):,} trials, "
           f"{len(offs):,} officials ({time.time()-t0:.0f}s)")
     tables: dict[str, pd.DataFrame] = {}
+    ta_map = ctgov_ta.load_cond_tas() if ctgov_ta.COND_CACHE.exists() else {}
     if len(trials):
         sdisp = (trials.groupby("sponsor")["sponsor_raw"]
                  .agg(lambda s: s.value_counts().index[0]))
         trials["sponsor_disp"] = trials["sponsor"].map(sdisp)
+        trials["ta"] = trials["nct"].map(lambda n: ";".join(ta_map.get(n, [])))
         tables["ctgov_trials"] = trials[["nct", "sponsor", "sponsor_disp",
-                                        "phase", "start_y"]].reset_index(drop=True)
+                                        "phase", "ta",
+                                        "start_y"]].reset_index(drop=True)
     if len(offs):
         off = offs.merge(trials[["nct", "sponsor_raw", "sponsor", "phase", "start_y"]],
                          on="nct", how="left")
         off["sponsor_disp"] = off["sponsor_raw"]
-        ta_map = ctgov_ta.load_cond_tas() if ctgov_ta.COND_CACHE.exists() else {}
         off["ta"] = off["nct"].map(lambda n: ";".join(ta_map.get(n, [])))
         print(f"people: TA attached to {(off['ta'] != '').mean():.1%} of officials")
         tables["ctgov_officials"] = off[["nct", "name_raw", "role", "affiliation",

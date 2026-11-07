@@ -1214,7 +1214,7 @@ export default function App() {
 
       {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}
 
-      {tab === 'about' && <About />}
+      {tab === 'about' && <About stats={manifest?.stats} />}
 
       <section className="panel">
         <h2>Definitions</h2>
