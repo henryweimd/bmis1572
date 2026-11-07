@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T17:51:10.260824+00:00",
+  "generated_at": "2026-11-07T17:57:10.532128+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -718,7 +718,7 @@
     "site": "A site is a PLACE (street address): Strict matches normalized street+city+state+country exactly (suite/floor markers dropped, ZIP excluded); Merged additionally unions same-house-number addresses with street-token Jaccard >= 0.6 within a city. Branches of one org at different addresses stay split. Site rollups use strict persons.",
     "site_churn": "Site roster churn: per investigator-site link, joined = first receipt year at the site, ended = last receipt year. Right edge is censored (2026 links look ended); gaps read as continuous.",
     "site_retention": "Site vintage attrition: of the sites first seen in a given year (their vintage), the share active again k years later. Right-censored; 2008 excluded (file ramp-up). Follows the version selector (Strict/Merged addresses).",
-    "person_ctgov_link": "CT.gov person linkage (experimental): BMIS strict persons matched to study-level overall officials (chairs/directors/PIs) by normalized name, gated on affiliation-to-site token overlap. Strong = full-name match + >=2 overlap tokens; weak = full-name + 1 token (or no affiliation) or initial + >=2 tokens. Covers ~4% of persons (CT.gov names no site investigators); weak links may be collisions.",
+    "person_ctgov_link": "CT.gov person linkage (experimental): BMIS strict persons matched to overall officials (usually study-level directors/chairs; median 1 per trial, though some trials list site PIs) by normalized name, gated on affiliation-to-site token overlap. Strong = full-name match + >=2 overlap tokens; weak = full-name + 1 token (or no affiliation) or initial + >=2 tokens. Covers ~4% of persons; weak links may be collisions.",
     "site_xcheck": "CT.gov cross-check (experimental, US only): industry-interventional studies whose facility fuzzy-matches the site's institution name in the same city, with start year overlapping the site's BMIS span. CT.gov facilities carry no street address, so counts are institution x city and shared across that institution's addresses; name variants split counts. Strong = token Jaccard >= 0.6.",
     "data_quality": "Junk names: ~7,300 CI rows (0.7%) lack a usable surname or given name (blank/NG/?), concentrated in 1980s-90s filings; 298 strict persons (0.1%) are excluded from the search index for the same reason. Headline counts include junk-name rows; the search index, leaderboard, rosters, and site-detail series exclude them.",
     "tightness_band": "Investigators per industry start by band (starts-only; running stays US-only). Multi-country trials count in every band they touch, so bands do not sum to global. Unknown band has no trial geography and no ratio.",

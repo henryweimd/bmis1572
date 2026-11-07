@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { query } from './duckdb';
+import { escapeLiteral, query } from './duckdb';
 import { CategoryBars } from './charts';
+import { downloadCsv } from './csv';
 
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num0 = (v: unknown): number =>
@@ -30,6 +31,50 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
   const [kols, setKols] = useState<KolRow[]>([]);
   const [cover, setCover] = useState<CoverRow[]>([]);
   const [note, setNote] = useState('');
+  const [nctIn, setNctIn] = useState('');
+  const [trial, setTrial] = useState<{
+    nct: string;
+    sponsor: string;
+    phase: string;
+    ta: string;
+    start_y: number | null;
+  } | null>(null);
+  const [trialOffs, setTrialOffs] = useState<{ name: string; role: string; aff: string }[]>([]);
+  const [trialLinked, setTrialLinked] = useState<
+    { name: string; site: string; country: string; tier: string }[]
+  >([]);
+  const [searched, setSearched] = useState(false);
+
+  const lookupTrial = async () => {
+    const nct = nctIn.trim().toUpperCase();
+    if (!nct) return;
+    const id = escapeLiteral(nct);
+    try {
+      const [tr, of, lk] = await Promise.all([
+        query<{ nct: string; sponsor: string; phase: string; ta: string; start_y: number | null }>(
+          `SELECT CAST(nct AS VARCHAR) AS nct, CAST(sponsor_disp AS VARCHAR) AS sponsor,` +
+            ` CAST(phase AS VARCHAR) AS phase, CAST(ta AS VARCHAR) AS ta,` +
+            ` CAST(start_y AS INTEGER) AS start_y FROM ctgov_trials WHERE nct = '${id}'`,
+        ),
+        query<{ name: string; role: string; aff: string }>(
+          `SELECT CAST(name_raw AS VARCHAR) AS name, CAST(role AS VARCHAR) AS role,` +
+            ` CAST(affiliation AS VARCHAR) AS aff FROM ctgov_officials WHERE nct = '${id}'`,
+        ),
+        query<{ name: string; site: string; country: string; tier: string }>(
+          `SELECT CAST(p.display_name AS VARCHAR) AS name, CAST(p.site AS VARCHAR) AS site,` +
+            ` CAST(p.country AS VARCHAR) AS country, CAST(l.tier AS VARCHAR) AS tier` +
+            ` FROM person_ctgov_link l JOIN person_index p ON p.person_id = l.person_id` +
+            ` WHERE l.nct = '${id}' ORDER BY 1`,
+        ).catch(() => []),
+      ]);
+      setTrial(tr[0] ?? null);
+      setTrialOffs(of);
+      setTrialLinked(lk);
+      setSearched(true);
+    } catch (e) {
+      setNote(`Trial lookup failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   useEffect(() => {
     if (!ready || demo) return;
@@ -119,8 +164,9 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
       <section className="panel">
         <p>
           <strong>About this data:</strong> US industry-led interventional trials from the
-          clinicaltrials.gov API, with study-level officials (chairs, directors, PIs —{' '}
-          <em>not</em> site investigators), lead sponsors, phases, and keyword therapeutic areas.
+          clinicaltrials.gov API, with overall officials (usually study-level directors/chairs —
+          median 1 per trial, though some trials list site PIs), lead sponsors, phases, and
+          keyword therapeutic areas.
           Person links match officials to BMIS investigators by name + affiliation; see
           Definitions. Trials with unknown start year are excluded when filtering.
         </p>
@@ -190,7 +236,121 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
       </section>
 
       <section className="panel">
-        <h2>Most-linked investigators (study officials)</h2>
+        <h2>Trial lookup by NCT number</h2>
+        <div className="filters">
+          <label>
+            NCT
+            <input
+              value={nctIn}
+              onChange={(e) => setNctIn(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') lookupTrial();
+              }}
+              placeholder="e.g. NCT01188928"
+              style={{ width: '12em' }}
+            />
+          </label>
+          <button className="btn" onClick={lookupTrial}>
+            Look up
+          </button>
+        </div>
+        {searched &&
+          (trial ? (
+            <>
+              <p>
+                <strong>{trial.nct}</strong> · {trial.sponsor} · {trial.phase}
+                {trial.ta ? ` · ${trial.ta.replace(/;/g, ', ')}` : ''} · started{' '}
+                {trial.start_y ?? 'unknown'} ·{' '}
+                <a
+                  href={`https://clinicaltrials.gov/study/${trial.nct}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  CT.gov record
+                </a>
+              </p>
+              {!!trialOffs.length && (
+                <>
+                  <h3>Study officials</h3>
+                  <div className="table-scroll short">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Role</th>
+                          <th>Affiliation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {trialOffs.map((r, i) => (
+                          <tr key={`${r.name}-${i}`}>
+                            <td>{r.name}</td>
+                            <td>{r.role.replace(/_/g, ' ').toLowerCase()}</td>
+                            <td>{r.aff}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              <h3>Linked BMIS investigators</h3>
+              {trialLinked.length ? (
+                <div className="table-scroll short">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Investigator</th>
+                        <th>Site</th>
+                        <th>Country</th>
+                        <th>Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trialLinked.map((r, i) => (
+                        <tr key={`${r.name}-${i}`}>
+                          <td>{r.name}</td>
+                          <td>{r.site}</td>
+                          <td>{r.country}</td>
+                          <td>{r.tier}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted">No BMIS investigators linked to this trial.</p>
+              )}
+            </>
+          ) : (
+            <p className="muted">
+              {nctIn.trim().toUpperCase()} is not a US industry trial in this file.
+            </p>
+          ))}
+        <p className="caption">
+          Exact NCT match against the 53,543-trial subset. Officials are study-level;
+          investigator links carry the usual tier caveats.
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>
+          Most-linked investigators (study officials){' '}
+          {!!kols.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `kol-board-${y0}-${y1}.csv`,
+                  ['investigator', 'country', 'ctgov_trials', 'sponsors'],
+                  kols.map((r) => [r.name, r.country, r.n, r.sponsors]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </h2>
         <div className="table-scroll">
           <table>
             <thead>
@@ -215,13 +375,29 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
         </div>
         <p className="caption">
           BMIS persons by linked CT.gov trials in range (strong + weak tiers). Skews toward study
-          chairs and KOLs — CT.gov names no site investigators, so most investigators cannot
-          appear here.
+          chairs and KOLs — most trials name only study-level officials, so most investigators
+          cannot appear here.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Linkage coverage by geography</h2>
+        <h2>
+          Linkage coverage by geography{' '}
+          {!!cover.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `linkage-coverage-${y0}-${y1}.csv`,
+                  ['band', 'persons', 'linked'],
+                  cover.map((r) => [r.band, r.n, r.lk]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </h2>
         <div className="table-scroll">
           <table>
             <thead>

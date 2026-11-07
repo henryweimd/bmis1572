@@ -106,13 +106,13 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
           {linked !== null && ever ? (
             <>
               CT.gov person linkage covers {fmtInt.format(linked)} of {fmtInt.format(ever)} strict
-              persons ({((linked / ever) * 100).toFixed(1)}%): only study-level officials can match,
-              so linked investigators skew toward chairs and KOLs.
+              persons ({((linked / ever) * 100).toFixed(1)}%): most trials name only study-level
+              officials, so linked investigators skew toward chairs and KOLs.
             </>
           ) : (
             <>
-              CT.gov person linkage covers ~4% of strict persons: only study-level officials can
-              match, so linked investigators skew toward chairs and KOLs.
+              CT.gov person linkage covers ~4% of strict persons: most trials name only
+              study-level officials, so linked investigators skew toward chairs and KOLs.
             </>
           )}
         </li>

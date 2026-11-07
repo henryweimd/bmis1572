@@ -229,8 +229,8 @@ def build_slides(n: dict) -> list[dict]:
              "bullets": [f"{f(n['lk_persons'])} BMIS persons match ≥1 study official "
                          f"({f(n['lk_strong'])} strong / {f(n['lk_weak'])} weak links).",
                          f"Most-linked: {n['lk_top'][0].title()} ({n['lk_top'][1]} trials).",
-                         "Name + affiliation-overlap match; CT.gov names no site "
-                         "investigators, so coverage is thin and KOL-skewed."],
+                         "Name + affiliation-overlap match; most trials name only "
+                         "study-level officials, so coverage is thin and KOL-skewed."],
              "footnotes": ["Weak links may be name collisions. See Definitions."]},
         ]
     if has_cn:

@@ -100,10 +100,11 @@ Without step 1, the explorer falls back to a committed demo CSV
 - **CT.gov cross-check (experimental).** US industry trials whose facility
   fuzzy-matches the institution name in the same city, year-gated; counts are
   institution×city, shared across addresses. See `docs/linkage.md`.
-- **CT.gov person linkage (experimental).** Study-level officials (chairs/directors,
-  not site PIs) matched to strict persons by normalized name + affiliation↔site
-  token overlap. Strong = full name + ≥2 tokens; weak = full name + 1 token (or no
-  affiliation) or initial + ≥2 tokens. Covers 12,808/288,855 persons (4.4%), KOL-skewed.
+- **CT.gov person linkage (experimental).** Overall officials (usually study-level
+  directors/chairs — median 1 per trial, though some trials list site PIs) matched
+  to strict persons by normalized name + affiliation↔site token overlap. Strong =
+  full name + ≥2 tokens; weak = full name + 1 token (or no affiliation) or initial
+  + ≥2 tokens. Covers 12,808/288,855 persons (4.4%), KOL-skewed.
 - **Benchmark.** Unadjusted: all CI persons vs. global industry starts. Adjusted:
   US persons vs. US-site trials, counted as starts/year and running-in-year
   (start ≤ year, completion ≥ year or still active). Tightness = active per running
@@ -150,8 +151,9 @@ Without step 1, the explorer falls back to a committed demo CSV
 
 - BMIS is CDER IND drugs/biologics only, and FDA states it is **not comprehensive**
   (1572 goes to the sponsor; forwarding to FDA is voluntary-ish). No devices, CBER, non-IND.
-- Person↔trial linkage is experimental and thin (4.4% persons, study officials only);
-  benchmarking is otherwise ecological (year-level ratios). Receipt rows carry date + site only.
+- Person↔trial linkage is experimental and thin (4.4% persons; most trials name only
+  study-level officials); benchmarking is otherwise ecological (year-level ratios).
+  Receipt rows carry date + site only.
 - BMIS has no therapeutic-area/phase fields; TA splits come from matched CT.gov trials
   (site mixes, linked-trial TAs) and inherit all linkage caveats.
 - Person counts are ranges across Strict/Merged/Raw, not exact headcounts. Org groupings

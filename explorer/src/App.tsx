@@ -993,9 +993,9 @@ export default function App() {
                       </table>
                     </div>
                     <p className="caption">
-                      Study-level officials (chairs/directors) matched by name + affiliation;
-                      CT.gov names no site investigators. Strong = full-name + affiliation overlap;
-                      weak links may be name collisions. See Definitions.
+                      Officials (usually study-level) matched by name + affiliation; most trials
+                      name only directors/chairs. Strong = full-name + affiliation overlap; weak
+                      links may be name collisions. See Definitions.
                     </p>
                   </>
                 )}
