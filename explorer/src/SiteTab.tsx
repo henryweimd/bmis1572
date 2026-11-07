@@ -6,7 +6,7 @@ import type { VintageRow } from './charts';
 const SITE_KMAX = 10;
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
-import { downloadCsv } from './csv';
+import { downloadCsv, trendCsv } from './csv';
 
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -529,7 +529,15 @@ export default function SiteTab({
         <TrendChart data={meanInv} />
         <p className="caption">
           Active investigators ÷ active sites per year (follows version and band filters). Teams
-          per site have nearly doubled since the 1980s.
+          per site have nearly doubled since the 1980s.{' '}
+          {!!meanInv.length && (
+            <button
+              className="btn"
+              onClick={() => trendCsv(`mean-investigators-per-site-${ver}.csv`, meanInv)}
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
 
@@ -550,7 +558,15 @@ export default function SiteTab({
         <TrendChart data={sret5} />
         <p className="caption">
           Share of each site vintage still active 5 years later (percent). Cohorts 2009–2020
-          only. Site retention has roughly halved since 2009.
+          only. Site retention has roughly halved since 2009.{' '}
+          {!!sret5.length && (
+            <button
+              className="btn"
+              onClick={() => trendCsv(`site-five-year-retention-${ver}.csv`, sret5)}
+            >
+              CSV
+            </button>
+          )}
         </p>
         <p className="caption">
           Of the sites first seen in a given year (their vintage), the share active again k years

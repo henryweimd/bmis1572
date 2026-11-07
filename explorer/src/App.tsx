@@ -9,7 +9,7 @@ import TrialsTab from './TrialsTab';
 import ChinaTab from './ChinaTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
-import { downloadCsv } from './csv';
+import { downloadCsv, stackedCsv, trendCsv } from './csv';
 import './App.css';
 
 const BANDS = [
@@ -108,18 +108,6 @@ const num = (v: unknown): number | null =>
 const num0 = (v: unknown): number => num(v) ?? 0;
 const pct = (v: number | null, d = 1): string =>
   v === null ? '—' : `${(v * 100).toFixed(d)}%`;
-function seriesCsv(name: string, series: LineSeries[]): void {
-  if (!series.length || !series[0].points.length) return;
-  const n = series[0].points.length;
-  downloadCsv(
-    name,
-    ['year', ...series.map((s) => s.label)],
-    Array.from({ length: n }, (_, i) => [
-      series[0].points[i].x,
-      ...series.map((s) => s.points[i]?.y ?? ''),
-    ]),
-  );
-}
 
 const DEF_TITLES: [string, string][] = [
   ['person_strict', 'Strict person'],
@@ -924,7 +912,7 @@ export default function App() {
                 {!!tight.length && (
                   <button
                     className="btn"
-                    onClick={() => seriesCsv(`tightness-${version}-${tightScope}.csv`, tight)}
+                    onClick={() => stackedCsv(`tightness-${version}-${tightScope}.csv`, tight)}
                   >
                     CSV
                   </button>
@@ -1027,7 +1015,12 @@ export default function App() {
             <p className="caption">
               IND references ÷ active investigators per year (follows band filter; raw
               version falls back to strict — site roll-ups exist for strict/merged only).
-              Workload per head has risen since the mid-2010s.
+              Workload per head has risen since the mid-2010s.{' '}
+              {!!workload.length && (
+                <button className="btn" onClick={() => trendCsv('workload.csv', workload)}>
+                  CSV
+                </button>
+              )}
             </p>
           </>
         )}
@@ -1523,7 +1516,15 @@ export default function App() {
                 <p className="caption">
                   Share of each vintage still active 5 years later (percent). Cohorts 2009–2020
                   only — later vintages cannot be fully observed yet. Newer vintages retain
-                  worse at five years.
+                  worse at five years.{' '}
+                  {!!ret5.length && (
+                    <button
+                      className="btn"
+                      onClick={() => trendCsv(`five-year-retention-${version}.csv`, ret5)}
+                    >
+                      CSV
+                    </button>
+                  )}
                 </p>
                 <p className="caption">
                   Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in
@@ -1561,7 +1562,7 @@ export default function App() {
                   {!!conc.length && (
                     <button
                       className="btn"
-                      onClick={() => seriesCsv(`concentration-${version}.csv`, conc)}
+                      onClick={() => stackedCsv(`concentration-${version}.csv`, conc)}
                     >
                       CSV
                     </button>

@@ -11,3 +11,34 @@ export function downloadCsv(filename: string, cols: string[], rows: (string | nu
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+
+export interface TrendPoint {
+  d: string;
+  v: number;
+}
+
+export function trendCsv(filename: string, data: TrendPoint[]): void {
+  downloadCsv(
+    filename,
+    ['year', 'value'],
+    data.map((r) => [r.d, r.v]),
+  );
+}
+
+export interface StackSeries {
+  label: string;
+  points: { x: number; y: number | null }[];
+}
+
+export function stackedCsv(filename: string, series: StackSeries[]): void {
+  if (!series.length || !series[0].points.length) return;
+  const n = series[0].points.length;
+  downloadCsv(
+    filename,
+    ['year', ...series.map((s) => s.label)],
+    Array.from({ length: n }, (_, i) => [
+      series[0].points[i].x,
+      ...series.map((s) => s.points[i]?.y ?? ''),
+    ]),
+  );
+}

@@ -3,7 +3,7 @@ import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, StackedMultiBars } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
-import { downloadCsv } from './csv';
+import { downloadCsv, stackedCsv } from './csv';
 
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -327,7 +327,15 @@ export default function OrgTab({
         <StackedMultiBars series={series} allTicks />
         <p className="caption">
           Top 8 {cfg.table} by receipts in the selected range, plus all others (normalized site
-          strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.
+          strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.{' '}
+          {!!series.length && (
+            <button
+              className="btn"
+              onClick={() => stackedCsv(`${kind}-receipts-by-year.csv`, series)}
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
 
@@ -361,7 +369,17 @@ export default function OrgTab({
           Active {cfg.singular} entities per year{sel === 'all' ? '' : `: ${sel}`}
         </h2>
         <StackedMultiBars series={ent} allTicks />
-        <p className="caption">Distinct {cfg.singular} site entities with ≥1 receipt that year.</p>
+        <p className="caption">
+          Distinct {cfg.singular} site entities with ≥1 receipt that year.{' '}
+          {!!ent.length && (
+            <button
+              className="btn"
+              onClick={() => stackedCsv(`${kind}-entities-by-year.csv`, ent)}
+            >
+              CSV
+            </button>
+          )}
+        </p>
       </section>
 
       <section className="panel">
