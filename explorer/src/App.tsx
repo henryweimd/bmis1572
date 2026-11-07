@@ -223,6 +223,7 @@ export default function App() {
   const [tightScope, setTightScope] = useState<'adjusted' | 'unadjusted'>('adjusted');
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
   const [pbins, setPbins] = useState<{ category: string; v: number }[]>([]);
+  const [oadBand, setOadBand] = useState<{ b: string; n: number; s: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
@@ -325,7 +326,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const [ot, ti, tser, bn, pb, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, pb, ob, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -349,6 +350,11 @@ export default function App() {
           query<BinRow>(
             `SELECT CASE WHEN n_trials >= 15 THEN '15+' ELSE CAST(n_trials AS VARCHAR) END AS bin,` +
               ` CAST(COUNT(*) AS DOUBLE) AS n FROM person_index GROUP BY 1`,
+          ),
+          query<{ b: string; n: number; s: number }>(
+            `SELECT CAST(band AS VARCHAR) AS b, CAST(COUNT(*) AS DOUBLE) AS n,` +
+              ` CAST(SUM(CASE WHEN n_trials = 1 THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) AS s` +
+              ` FROM person_index GROUP BY 1 ORDER BY 3 DESC`,
           ),
           query<{ cohort: number; k: number; v: number; n: number; na: number }>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
@@ -426,6 +432,7 @@ export default function App() {
             .map((r) => ({ category: r.bin, v: num0(r.n) }))
             .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
         );
+        setOadBand(ob.map((r) => ({ b: r.b, n: num0(r.n), s: num0(r.s) })));
         const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
         for (const r of rt) {
           let e = byVintage.get(r.cohort);
@@ -894,6 +901,56 @@ export default function App() {
             </>
           )}
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>
+          One-and-done share by geography{' '}
+          {!!oadBand.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'one-and-done-by-band.csv',
+                  ['band', 'persons', 'one_and_done_share'],
+                  oadBand.map((r) => [r.b, r.n, r.s.toFixed(4)]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </h2>
+        {demo ? (
+          <p className="muted">Run the pipeline for distribution data.</p>
+        ) : (
+          <>
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Geography</th>
+                    <th>Persons</th>
+                    <th>One-and-done</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oadBand.map((r) => (
+                    <tr key={r.b}>
+                      <td>{r.b}</td>
+                      <td>{fmtInt.format(r.n)}</td>
+                      <td>{(100 * r.s).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="caption">
+              Strict persons, all years. Repeat-investigator supply concentrates in the US
+              (43% one-and-done) vs 57–67% across non-US bands — thinner benches abroad.
+            </p>
+          </>
+        )}
       </section>
 
       <section className="panel" id="inv-search">
