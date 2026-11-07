@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createViews, escapeLiteral, loadManifest, query } from './duckdb';
 import type { Manifest } from './duckdb';
-import { CategoryBars, MultiLineChart, StackedBars, VintageHeatmap } from './charts';
+import { CategoryBars, MultiLineChart, StackedBars, StackedMultiBars, VintageHeatmap } from './charts';
 import type { LineSeries, VintageRow } from './charts';
 import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
@@ -746,10 +746,24 @@ export default function App() {
 
       <section className="panel">
         <h2>Active investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
-        <MultiLineChart series={geo} />
+        <StackedMultiBars series={geo} marks={{ 2021: '*' }} />
         <p className="caption">
           Active = ≥1 BMIS receipt in year · {VERSION_LABEL[version]} persons · 2008 (ramp-up) and 2026
-          (thru Aug) are partial.
+          (thru Aug) are partial. Toggle 100% for yearly share.
+        </p>
+        <p className="caption">
+          <strong>*</strong> 2021* marked the first full year after 2019, when signing Form FDA 1572 was
+          deemed illegal for EU investigators and EU GCP inspectors prohibited its completion;
+          replacements for participation in US-led trials followed, including the{' '}
+          <a href="https://www.eortc.org/blog/2021/02/23/new-statement-to-replace-the-form-fda-1572-form-for-non-ind-trials-supported-by-nci/">
+            EORTC statement replacing Form FDA 1572 for non-IND trials supported by NCI
+          </a>{' '}
+          and the new{' '}
+          <a href="https://dctd.cancer.gov/research/ctep-trials/for-sites/registration">
+            International Investigator Statement created by NCI in the Registration and Credential
+            Repository (RCR)
+          </a>{' '}
+          for European countries.
         </p>
       </section>
 

@@ -368,6 +368,11 @@ footer {
   font-weight: 600;
 }
 
+.chart-mode {
+  width: fit-content;
+  margin: 0 0 8px;
+}
+
 .filters.future {
   border-top: 1px dashed var(--line);
   padding-top: 10px;

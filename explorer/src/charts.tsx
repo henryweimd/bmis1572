@@ -3,6 +3,30 @@ import { useState } from 'react';
 const fmtCompact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const fmtVal = (v: number): string => (Number.isInteger(v) ? fmtInt.format(v) : v.toFixed(2));
+const fmtPct1 = (v: number): string => `${v.toFixed(1)}%`;
+
+type BarMode = 'abs' | 'pct';
+
+function ModeSeg({ mode, setMode }: { mode: BarMode; setMode: (m: BarMode) => void }) {
+  return (
+    <div className="seg chart-mode" role="group" aria-label="Bar scale">
+      <button
+        className={mode === 'abs' ? 'active' : ''}
+        onClick={() => setMode('abs')}
+        title="Bar height shows absolute counts"
+      >
+        Absolute
+      </button>
+      <button
+        className={mode === 'pct' ? 'active' : ''}
+        onClick={() => setMode('pct')}
+        title="Each bar scaled to 100%; segments show share of the year"
+      >
+        100%
+      </button>
+    </div>
+  );
+}
 
 export function TrendChart({ data }: { data: { d: string; v: number }[] }) {
   const W = 720;
@@ -201,37 +225,49 @@ export function StackedBars({
   const W = 720;
   const H = 240;
   const P = { l: 52, r: 12, t: 12, b: 30 };
+  const [mode, setMode] = useState<BarMode>('abs');
   if (!data.length) return <p className="muted">No data.</p>;
   const [cBottom, cTop] = colors ?? ['#1f77b4', '#ff7f0e'];
-  const max = Math.max(...data.map((d) => d.bottom + d.top)) || 1;
+  const totals = data.map((d) => d.bottom + d.top);
+  const max = mode === 'abs' ? Math.max(...totals) || 1 : 100;
+  const scale = (v: number, t: number) => (mode === 'abs' ? v : t > 0 ? (v / t) * 100 : 0);
+  const share = (v: number, t: number) => (t > 0 ? fmtPct1((v / t) * 100) : '—');
   const bw = (W - P.l - P.r) / data.length;
   const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
-  const ticks = [0, 1, 2, 3].map((i) => (max * i) / 3);
+  const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
+  const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
   const step = data.length > 10 ? 2 : 1;
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Stacked bars, ${data.length} years`}>
+      <ModeSeg mode={mode} setMode={setMode} />
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={`Stacked bars, ${data.length} years, ${mode === 'pct' ? 'percent' : 'absolute'}`}
+      >
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
             <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-              {fmtCompact.format(t)}
+              {tickFmt(t)}
             </text>
           </g>
         ))}
         {data.map((d, i) => {
+          const t = totals[i];
           const bx = P.l + i * bw + bw * 0.15;
           const w = bw * 0.7;
-          const yTop = y(d.bottom + d.top);
-          const yMid = y(d.bottom);
+          const yTop = y(scale(d.bottom, t) + scale(d.top, t));
+          const yMid = y(scale(d.bottom, t));
           const yBase = y(0);
+          const tip = `${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)} (${share(d.bottom, t)}), ${labels[1]} ${fmtInt.format(d.top)} (${share(d.top, t)})`;
           return (
             <g key={d.x}>
               <rect x={bx} y={yMid} width={w} height={Math.max(0, yBase - yMid)} fill={cBottom}>
-                <title>{`${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)}, ${labels[1]} ${fmtInt.format(d.top)}`}</title>
+                <title>{tip}</title>
               </rect>
               <rect x={bx} y={yTop} width={w} height={Math.max(0, yMid - yTop)} fill={cTop}>
-                <title>{`${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)}, ${labels[1]} ${fmtInt.format(d.top)}`}</title>
+                <title>{tip}</title>
               </rect>
               {i % step === 0 && (
                 <text x={bx + w / 2} y={H - 8} textAnchor="middle" className="tick tick-x">
@@ -251,6 +287,101 @@ export function StackedBars({
           <span className="swatch" style={{ background: cTop }} />
           {labels[1]}
         </span>
+      </div>
+    </div>
+  );
+}
+
+export function StackedMultiBars({
+  series,
+  marks,
+}: {
+  series: LineSeries[];
+  marks?: Record<number, string>;
+}) {
+  const W = 720;
+  const H = 240;
+  const P = { l: 52, r: 12, t: 12, b: 30 };
+  const [mode, setMode] = useState<BarMode>('abs');
+  const years = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
+  if (!series.length || !years.length) return <p className="muted">No data.</p>;
+  const lookup = new Map<string, number>();
+  for (const s of series) for (const p of s.points) lookup.set(`${s.label}|${p.x}`, p.y ?? 0);
+  const totals = years.map((yr) =>
+    series.reduce((a, s) => a + (lookup.get(`${s.label}|${yr}`) ?? 0), 0),
+  );
+  const max = mode === 'abs' ? Math.max(...totals) || 1 : 100;
+  const scale = (v: number, t: number) => (mode === 'abs' ? v : t > 0 ? (v / t) * 100 : 0);
+  const bw = (W - P.l - P.r) / years.length;
+  const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
+  const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
+  const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
+  const step = years.length > 10 ? 2 : 1;
+  return (
+    <div>
+      {series.length > 1 && <ModeSeg mode={mode} setMode={setMode} />}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={`Stacked bars, ${years.length} years, ${series.length} segments, ${mode === 'pct' ? 'percent' : 'absolute'}`}
+      >
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
+            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
+              {tickFmt(t)}
+            </text>
+          </g>
+        ))}
+        {years.map((yr, i) => {
+          const t = totals[i];
+          const bx = P.l + i * bw + bw * 0.15;
+          const w = bw * 0.7;
+          let acc = 0;
+          return (
+            <g key={yr}>
+              {series.map((s) => {
+                const v = lookup.get(`${s.label}|${yr}`) ?? 0;
+                const yBase = y(acc);
+                acc += scale(v, t);
+                const yTop = y(acc);
+                const share = t > 0 ? fmtPct1((v / t) * 100) : '—';
+                return (
+                  <rect
+                    key={s.label}
+                    x={bx}
+                    y={yTop}
+                    width={w}
+                    height={Math.max(0, yBase - yTop)}
+                    fill={s.color}
+                  >
+                    <title>{`${yr}: ${s.label} ${fmtInt.format(v)} (${share})`}</title>
+                  </rect>
+                );
+              })}
+              {(i % step === 0 || marks?.[yr]) && (
+                <text
+                  x={bx + w / 2}
+                  y={H - 8}
+                  textAnchor="middle"
+                  className="tick tick-x"
+                  fontWeight={marks?.[yr] ? 'bold' : undefined}
+                >
+                  {yr}
+                  {marks?.[yr] ?? ''}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="legend">
+        {series.map((s) => (
+          <span key={s.label} className="legend-item">
+            <span className="swatch" style={{ background: s.color }} />
+            {s.label}
+          </span>
+        ))}
       </div>
     </div>
   );
