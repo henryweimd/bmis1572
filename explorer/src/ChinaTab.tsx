@@ -82,6 +82,7 @@ export default function ChinaTab({
     pick(hashInit['cn.o'], ['pairs', 'rows'] as const, 'pairs'),
   );
   const [leaders, setLeaders] = useState<CnLeaderRow[]>([]);
+  const [affil, setAffil] = useState<{ category: string; v: number }[]>([]);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<CnHit[]>([]);
   const [searched, setSearched] = useState(false);
@@ -104,7 +105,7 @@ export default function ChinaTab({
     (async () => {
       try {
         const pc = prov === 'all' ? '' : ` AND province_zh = '${escapeLiteral(prov)}'`;
-        const [pl, k, vy, sb, pb, st, ld] = await Promise.all([
+        const [pl, k, vy, sb, pb, st, ld, ad] = await Promise.all([
           query<{ zh: string; en: string }>(
             `SELECT CAST(province_zh AS VARCHAR) AS zh, CAST(province_en AS VARCHAR) AS en` +
               ` FROM cn_province_year GROUP BY 1, 2 ORDER BY 1`,
@@ -149,6 +150,12 @@ export default function ChinaTab({
               ` CAST(province_zh AS VARCHAR) AS prov FROM cn_leaderboard WHERE 1 = 1${pc}` +
               ` AND first_year BETWEEN ${y0} AND ${y1} ORDER BY n_rows DESC, n_inst DESC LIMIT 25`,
           ),
+          query<{ category: string; v: number }>(
+            `SELECT CASE WHEN n_inst >= 6 THEN '6+' ELSE CAST(n_inst AS VARCHAR) END AS category,` +
+              ` CAST(COUNT(*) AS DOUBLE) AS v, MIN(n_inst) AS o FROM cn_leaderboard` +
+              ` WHERE 1 = 1${pc} AND first_year BETWEEN ${y0} AND ${y1}` +
+              ` GROUP BY 1 ORDER BY 3`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setProvs(pl);
@@ -166,6 +173,7 @@ export default function ChinaTab({
         setProvBars(pb.map((r) => ({ category: zh ? r.p : r.pe, v: num0(r.n) })));
         setSites(st);
         setLeaders(ld);
+        setAffil(ad.map((r) => ({ category: `${r.category} institution${r.category === '1' ? '' : 's'}`, v: num0(r.v) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -533,6 +541,16 @@ export default function ChinaTab({
           )}
         </section>
       )}
+
+      <section className="panel">
+        <h2>Names by institution count</h2>
+        <CategoryBars data={affil} />
+        <p className="caption">
+          How many institutions each distinct name spans (same filters as the leaderboard). The
+          long tail is dominated by common-name collision, not mobility — e.g. the top name spans
+          27 institutions. Pairs, not names, are the person unit.
+        </p>
+      </section>
 
       <section className="panel">
         <h2>Top investigators by affiliations</h2>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { StackedMultiBars } from './charts';
+import { CategoryBars, StackedMultiBars } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -99,6 +99,8 @@ export default function OrgTab({
   const [opts, setOpts] = useState<{ org: string; n: number }[]>([]);
   const [kpi, setKpi] = useState<{ active: number; receipts: number; receipts09: number; orgs: number } | null>(null);
   const [series, setSeries] = useState<LineSeries[]>([]);
+  const [footprint, setFootprint] = useState<{ category: string; v: number }[]>([]);
+  const orgCol = cfg.table === 'CROs' ? 'cro' : 'irb';
   const [ent, setEnt] = useState<LineSeries[]>([]);
   const [top, setTop] = useState<OrgTopRow[]>([]);
   const [note, setNote] = useState('');
@@ -193,6 +195,17 @@ export default function OrgTab({
           });
         }
         setSeries(top8);
+        if (sel === 'all') {
+          setFootprint([]);
+        } else {
+          const fp = await query<{ category: string; v: number }>(
+            `SELECT CAST(band AS VARCHAR) AS category, CAST(SUM(n_receipts) AS DOUBLE) AS v` +
+              ` FROM ${cfg.yearTable} WHERE ${orgCol} = '${escapeLiteral(sel)}'` +
+              ` AND year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 2 DESC`,
+          ).catch(() => []);
+          if (cancelled) return;
+          setFootprint(fp.map((r) => ({ category: r.category, v: num0(r.v) })));
+        }
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -317,6 +330,19 @@ export default function OrgTab({
           strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.
         </p>
       </section>
+
+      {sel !== 'all' && !!footprint.length && (
+        <section className="panel">
+          <h2>
+            {sel}: receipts by geography, {y0}–{y1}
+          </h2>
+          <CategoryBars data={footprint} />
+          <p className="caption">
+            Where this {cfg.singular.toLowerCase()}&apos;s receipts were filed (investigator
+            geography bands, selected range).
+          </p>
+        </section>
+      )}
 
       <section className="panel">
         <h2>
