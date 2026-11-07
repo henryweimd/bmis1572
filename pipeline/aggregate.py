@@ -131,6 +131,15 @@ DEFINITIONS = {
         "receipt year at the site, ended = last receipt year. Right edge "
         "is censored (2026 links look ended); gaps read as continuous."
     ),
+    "person_ctgov_link": (
+        "CT.gov person linkage (experimental): BMIS strict persons matched "
+        "to study-level overall officials (chairs/directors/PIs) by "
+        "normalized name, gated on affiliation-to-site token overlap. "
+        "Strong = full-name match + >=2 overlap tokens; weak = full-name + "
+        "1 token (or no affiliation) or initial + >=2 tokens. Covers ~4% "
+        "of persons (CT.gov names no site investigators); weak links may "
+        "be collisions."
+    ),
     "site_xcheck": (
         "CT.gov cross-check (experimental, US only): industry-interventional "
         "studies whose facility fuzzy-matches the site's institution name in "
