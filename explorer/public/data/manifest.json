@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T22:59:20.043873+00:00",
+  "generated_at": "2026-11-07T01:25:21.914275+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -1220,7 +1220,9 @@
         "n_pairs",
         "n_institutions",
         "cum_pairs",
-        "cum_institutions"
+        "cum_institutions",
+        "n_new_pairs",
+        "n_new_inst"
       ]
     },
     {

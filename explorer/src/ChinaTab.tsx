@@ -71,8 +71,10 @@ export default function ChinaTab({
   const [y0, setY0] = useState(() => intIn(hashInit['cn.y0'], 2019, 2025, 2019));
   const [y1, setY1] = useState(() => intIn(hashInit['cn.y1'], 2019, 2025, 2025));
   const [provs, setProvs] = useState<{ zh: string; en: string }[]>([]);
-  const [kpi, setKpi] = useState<{ pairs: number; names: number; insts: number; specs: number } | null>(null);
-  const [vintage, setVintage] = useState<LineSeries[]>([]);
+  const [kpi, setKpi] = useState<{ pairs: number; names: number; insts: number; specs: number; v20: number } | null>(null);
+  const [vintage, setVintage] = useState<{ category: string; v: number }[]>([]);
+  const [cumline, setCumline] = useState<LineSeries[]>([]);
+  const [newpairs, setNewpairs] = useState<{ category: string; v: number }[]>([]);
   const [specBars, setSpecBars] = useState<{ category: string; v: number }[]>([]);
   const [provBars, setProvBars] = useState<{ category: string; v: number }[]>([]);
   const [sites, setSites] = useState<CnSiteRow[]>([]);
@@ -107,16 +109,18 @@ export default function ChinaTab({
             `SELECT CAST(province_zh AS VARCHAR) AS zh, CAST(province_en AS VARCHAR) AS en` +
               ` FROM cn_province_year GROUP BY 1, 2 ORDER BY 1`,
           ),
-          query<{ pairs: number; names: number; insts: number; specs: number }>(
+          query<{ pairs: number; names: number; insts: number; specs: number; v20: number }>(
             `SELECT (SELECT COUNT(*) FROM cn_person_index) AS pairs,` +
               ` (SELECT COUNT(*) FROM cn_leaderboard) AS names,` +
               ` (SELECT COUNT(*) FROM cn_site_index) AS insts,` +
-              ` (SELECT COUNT(DISTINCT group_en) FROM cn_specialty_year) AS specs`,
+              ` (SELECT COUNT(DISTINCT group_en) FROM cn_specialty_year) AS specs,` +
+              ` (SELECT SUM(n_pairs) FROM cn_filing_year WHERE year = 2020) AS v20`,
           ),
-          query<{ y: number; n: number; c: number }>(
+          query<{ y: number; n: number; nn: number; c: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_pairs) AS DOUBLE) AS n,` +
-              ` CAST(MAX(cum_pairs) AS DOUBLE) AS c FROM cn_filing_year` +
-              ` WHERE year BETWEEN ${y0} AND ${y1} GROUP BY 1 ORDER BY 1`,
+              ` CAST(SUM(n_new_pairs) AS DOUBLE) AS nn, CAST(MAX(cum_pairs) AS DOUBLE) AS c` +
+              ` FROM cn_filing_year WHERE year BETWEEN ${y0} AND ${y1} AND year >= 2021` +
+              ` GROUP BY 1 ORDER BY 1`,
           ),
           query<{ g: string; gz: string; n: number }>(
             `SELECT CAST(group_en AS VARCHAR) AS g, CAST(group_zh AS VARCHAR) AS gz,` +
@@ -148,10 +152,15 @@ export default function ChinaTab({
         ]);
         if (cancelled) return;
         setProvs(pl);
-        setKpi({ pairs: num0(k[0]?.pairs), names: num0(k[0]?.names), insts: num0(k[0]?.insts), specs: num0(k[0]?.specs) });
-        setVintage([
-          { label: 'Pairs (filing vintage)', color: '#1f77b4', points: vy.map((r) => ({ x: r.y, y: num0(r.n) })) },
-          { label: 'Cumulative pairs', color: '#d62728', points: vy.map((r) => ({ x: r.y, y: num0(r.c) })) },
+        setKpi({ pairs: num0(k[0]?.pairs), names: num0(k[0]?.names), insts: num0(k[0]?.insts), specs: num0(k[0]?.specs), v20: num0(k[0]?.v20) });
+        setVintage(vy.map((r) => ({ category: String(r.y), v: num0(r.n) })));
+        setNewpairs(vy.map((r) => ({ category: String(r.y), v: num0(r.nn) })));
+        setCumline([
+          {
+            label: 'Cumulative unique pairs',
+            color: '#d62728',
+            points: vy.map((r) => ({ x: r.y, y: num0(r.c) })),
+          },
         ]);
         setSpecBars(sb.map((r) => ({ category: zh ? `${r.gz} ${r.g}` : r.g, v: num0(r.n) })));
         setProvBars(pb.map((r) => ({ category: zh ? r.p : r.pe, v: num0(r.n) })));
@@ -369,18 +378,40 @@ export default function ChinaTab({
 
       <section className="panel">
         <h2>Registry by filing vintage</h2>
-        <MultiLineChart series={vintage} />
+        <CategoryBars data={vintage} />
         <p className="caption">
-          Pairs at institutions filed each year + cumulative registry. The 2020 spike is bulk
-          registration, not a surge of investigators.
+          Investigator-institution pairs at institutions filed each year (2021+). The 2020
+          bulk-registration spike ({kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the
+          graph; cumulative registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.
         </p>
+      </section>
+
+      <section className="panels">
+        <div className="panel">
+          <h2>Cumulative unique pairs</h2>
+          <MultiLineChart series={cumline} />
+          <p className="caption">
+            Each investigator-institution pair counted once, at its first vintage. Nearly flat
+            after 2020: the registry was loaded in the bulk wave.
+          </p>
+        </div>
+        <div className="panel">
+          <h2>New unique pairs by vintage</h2>
+          <CategoryBars data={newpairs} />
+          <p className="caption">
+            First-seen pairs per vintage — true registry growth, no cross-year repeats.
+          </p>
+        </div>
       </section>
 
       <section className="panels">
         <div className="panel">
           <h2>Top specialty groups</h2>
           <CategoryBars data={specBars} />
-          <p className="caption">1,937 raw specialty strings grouped (3.9% Other).</p>
+          <p className="caption">
+            Investigator-institution pairs by specialty group. 1,937 raw specialty strings grouped
+            (3.9% Other).
+          </p>
         </div>
         <div className="panel">
           <h2>Top provinces</h2>
@@ -407,7 +438,9 @@ export default function ChinaTab({
               Rows
             </button>
           </div>
-          <span className="muted">Click a row for institution detail. * = curated EN; else pattern translation.</span>
+          <span className="muted">
+            Pairs = investigator-institution pairs. Click a row for detail. * = curated EN; else pattern translation.
+          </span>
           {!!sites.length && (
             <button
               className="btn"
@@ -465,7 +498,7 @@ export default function ChinaTab({
       {siteSel && (
         <section className="panel">
           <h2>{siteSel.name}</h2>
-          <h3>Specialty mix (pairs)</h3>
+          <h3>Specialty mix (investigator-institution pairs)</h3>
           <CategoryBars data={siteMix} />
           <h3>
             Investigators <span className="muted">· top 100 by affiliations</span>
