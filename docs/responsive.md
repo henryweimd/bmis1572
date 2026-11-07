@@ -28,6 +28,8 @@ Goal: every tab reads and operates cleanly at **390px** (phone) and **1280px**
 - **Charts**: SVG with `viewBox`, sized by `.panel svg { width: 100%; height: auto }`.
   Ticks already thin (`step 2` past 10 points); keep `allTicks` opt-in per chart.
   Tooltips flip near the right edge and cap at `min(260px, 70vw)`.
+- **Filters**: labels and selects carry `min-width: 0; max-width: 100%` so a
+  long dropdown option (e.g. CRO names) never stretches the page on phones.
 - **Header**: wraps; `h1` drops to 20px under 900px.
 - **Widths**: no fixed-pixel layout widths (icons ≤16px exempt; `min/max-width`
   allowed). Layout is grid/flex + `max-width: 1060px` on `.wrap`.

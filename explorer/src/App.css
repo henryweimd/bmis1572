@@ -195,6 +195,13 @@ h2 {
   gap: 4px;
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filters select {
+  min-width: 0;
+  max-width: 100%;
 }
 
 select {
@@ -266,6 +273,7 @@ footer a {
 
 .table-scroll {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 table {
