@@ -520,7 +520,21 @@ export default function SiteTab({
         <p className="caption">
           Of the sites first seen in a given year (their vintage), the share active again k years
           later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;
-          see Definitions: site_retention.
+          see Definitions: site_retention.{' '}
+          {!!sret.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `site-vintage-attrition-${ver}.csv`,
+                  ['vintage', 'n', ...sret[0].cells.map((_, k) => `k${k}_pct`)],
+                  sret.map((r) => [r.cohort, r.n, ...r.cells.map((c) => c ?? '')]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
         </p>
       </section>
 

@@ -339,7 +339,19 @@ export default function OrgTab({
           <CategoryBars data={footprint} />
           <p className="caption">
             Where this {cfg.singular.toLowerCase()}&apos;s receipts were filed (investigator
-            geography bands, selected range).
+            geography bands, selected range).{' '}
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `${kind}-footprint-${y0}-${y1}.csv`,
+                  ['band', 'receipts'],
+                  footprint.map((r) => [r.category, r.v]),
+                )
+              }
+            >
+              CSV
+            </button>
           </p>
         </section>
       )}
