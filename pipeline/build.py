@@ -43,6 +43,7 @@ import cluster
 import ctgov
 import ctgov_geo
 import ctgov_link
+import ctgov_people
 import ctgov_ta
 import deck
 import sites
@@ -321,7 +322,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["site_size_year"] = pd.concat(_ssz).reset_index(drop=True)
     tables["site_churn"] = pd.concat(_sch).reset_index(drop=True)
     if ctgov_link.LOC_CACHE.exists():
-        xc = ctgov_link.run(audit_n=0)
+        xc = ctgov_link.run(audit_n=0, write_pairs=True)
         if xc is not None and len(xc):
             tables["site_ctgov_xcheck"] = xc.reset_index(drop=True)
     if ctgov_ta.COND_CACHE.exists() and ctgov_link.LOC_CACHE.exists():
@@ -368,6 +369,21 @@ def stage_china() -> dict[str, pd.DataFrame]:
         return {}
     df = china.load_china()
     tables = china.build_china_tables(df)
+    for name, t in tables.items():
+        t = downcast(t)
+        tables[name] = t
+        t.to_parquet(CURATED / f"{name}.parquet", index=False,
+                     compression="zstd", compression_level=9)
+        log(f"curated/{name}.parquet: {len(t):,} rows")
+    return tables
+
+
+def stage_people() -> dict[str, pd.DataFrame]:
+    try:
+        tables = ctgov_people.run(audit_n=0)
+    except Exception as e:
+        log(f"people: skipped ({e})")
+        return {}
     for name, t in tables.items():
         t = downcast(t)
         tables[name] = t
@@ -538,6 +554,9 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "site_churn": "Site roster churn: links, joins, ends by year",
         "site_ctgov_xcheck": "CT.gov institution cross-check per site (experimental)",
         "site_ta_mix": "Therapeutic-area mix of matched trials per site (experimental)",
+        "ctgov_officials": "CT.gov study officials + sponsor/phase per trial (experimental)",
+        "person_ctgov_link": "BMIS person to CT.gov trial links, tiered (experimental)",
+        "site_ctgov_phase_mix": "Phase mix of matched trials per site (experimental)",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -711,6 +730,23 @@ def verify_with_duckdb(tables) -> dict:
         " WHERE scope = 'adjusted' AND year = 2025)").fetchone()
     assert bu > 0 and abs(bu - au) / au < 0.02, \
         f"band US cross-foot failed ({bu} vs {au})"
+    if "person_ctgov_link" in tables:
+        lk_orph = con.execute(
+            "SELECT COUNT(*) FROM person_ctgov_link l"
+            " LEFT JOIN person_index p ON l.person_id = p.person_id"
+            " WHERE p.person_id IS NULL").fetchone()[0]
+        assert lk_orph == 0, "person links missing from person_index"
+        lk_nct = con.execute(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT nct FROM person_ctgov_link)"
+            " WHERE nct NOT IN (SELECT DISTINCT nct FROM ctgov_officials)").fetchone()[0]
+        assert lk_nct == 0, "person links reference unknown trials"
+    for mt in ("site_ctgov_phase_mix",):
+        if mt in tables:
+            m_orph = con.execute(
+                f"SELECT COUNT(*) FROM {mt} m"
+                " LEFT JOIN site_index s ON m.version = s.version"
+                " AND m.site_n = s.site_n WHERE s.site_n IS NULL").fetchone()[0]
+            assert m_orph == 0, f"{mt} sites missing from site_index"
     if "cn_person_rows" in tables:
         cn = con.execute(
             "SELECT (SELECT COUNT(*) FROM cn_person_rows),"
@@ -751,6 +787,7 @@ def main() -> None:
     tables["trials_year"] = trials
     tables["trials_band"] = band_tr
     tables.update(stage_china())
+    tables.update(stage_people())
     stage_tightness(tables)
 
     stats = headline_stats(persons, tables)

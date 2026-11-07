@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T04:06:33.411949+00:00",
+  "generated_at": "2026-11-07T17:19:24.656542+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -1312,6 +1312,58 @@
         "province_zh",
         "province_en",
         "inst_en"
+      ]
+    },
+    {
+      "id": "ctgov_officials",
+      "title": "CT.gov study officials + sponsor/phase per trial (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/ctgov_officials.parquet"
+      ],
+      "row_count": 46645,
+      "columns": [
+        "nct",
+        "name_raw",
+        "role",
+        "affiliation",
+        "sponsor",
+        "sponsor_disp",
+        "phase",
+        "start_y"
+      ]
+    },
+    {
+      "id": "person_ctgov_link",
+      "title": "BMIS person to CT.gov trial links, tiered (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/person_ctgov_link.parquet"
+      ],
+      "row_count": 22568,
+      "columns": [
+        "person_id",
+        "nct",
+        "off_name",
+        "role",
+        "tier",
+        "affil_overlap",
+        "n_cands"
+      ]
+    },
+    {
+      "id": "site_ctgov_phase_mix",
+      "title": "Phase mix of matched trials per site (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/site_ctgov_phase_mix.parquet"
+      ],
+      "row_count": 269812,
+      "columns": [
+        "version",
+        "site_n",
+        "phase",
+        "n_trials"
       ]
     },
     {

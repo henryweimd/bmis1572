@@ -118,12 +118,17 @@ def match_one(key: str, city: str, first_y: int, last_y: int,
     return best
 
 
-def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame) -> list[dict]:
+def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame,
+                      pairs_out: list | None = None) -> list[dict]:
     locs, ftok, post, big = _build_loc_index(locs)
     out = []
     for _, s in insts.iterrows():
         best = match_one(s["key"], s["city"], s["first_y"], s["last_y"],
                          locs, ftok, post, big)
+        if pairs_out is not None:
+            for nct, (j, _) in best.items():
+                pairs_out.append({"key": s["key"], "city": s["city"],
+                                  "nct": nct, "j": round(float(j), 3)})
         if best:
             strong = sorted([n for n, (j, _) in best.items() if j >= 0.6])
             weak = sorted([n for n, (j, _) in best.items() if j < 0.6])
@@ -136,7 +141,8 @@ def join_institutions(insts: pd.DataFrame, locs: pd.DataFrame) -> list[dict]:
     return out
 
 
-def run(refresh: bool = False, audit_n: int = 30) -> pd.DataFrame | None:
+def run(refresh: bool = False, audit_n: int = 30,
+        write_pairs: bool = False) -> pd.DataFrame | None:
     t0 = time.time()
     s = ctgov.session()
     recs = ctgov.fetch_subset(s, LOC_FILTER, LOC_FIELDS, LOC_CACHE, refresh)
@@ -144,6 +150,7 @@ def run(refresh: bool = False, audit_n: int = 30) -> pd.DataFrame | None:
     print(f"link: {len(recs):,} studies -> {len(locs):,} US location rows "
           f"({locs['city'].nunique():,} cities, {time.time()-t0:.0f}s)")
     frames = []
+    all_pairs: list[dict] = []
     for ver in ["strict", "merged"]:
         si = pd.read_parquet(CURATED / "site_index.parquet",
                              columns=["site_n", "site_id", "display_name",
@@ -160,13 +167,22 @@ def run(refresh: bool = False, audit_n: int = 30) -> pd.DataFrame | None:
                  .reset_index().rename(columns={"ncity": "city"}))
         insts.insert(0, "inst", range(len(insts)))
         t1 = time.time()
-        matches = join_institutions(insts, locs)
+        pairs_out: list[dict] = [] if write_pairs else None  # type: ignore[assignment]
+        matches = join_institutions(insts, locs, pairs_out)
         m = pd.DataFrame(matches)
         print(f"link: {ver}: {len(m):,}/{len(insts):,} US institutions matched "
               f"({time.time()-t1:.0f}s)")
         if len(m):
             m["version"] = ver
             m = m.merge(insts[["inst", "key", "city", "n_sites"]], on="inst")
+            if write_pairs and pairs_out:
+                pm = (pd.DataFrame(pairs_out)
+                      .merge(si[["key", "ncity", "site_n"]],
+                             left_on=["key", "city"], right_on=["key", "ncity"],
+                             how="inner")
+                      [["site_n", "nct", "j"]])
+                pm["version"] = ver
+                all_pairs.append(pm)
             members = si.merge(
                 m[["key", "city", "n_plausible", "n_strong", "best_j",
                    "sample", "sample_fac", "n_sites"]],
@@ -179,6 +195,10 @@ def run(refresh: bool = False, audit_n: int = 30) -> pd.DataFrame | None:
             frames.append(members[["version", "site_n", "site_id", "display_name",
                                     "n_plausible", "n_strong", "best_j", "sample",
                                     "sample_fac", "n_sibling_sites"]])
+    if all_pairs:
+        pr = pd.concat(all_pairs, ignore_index=True)
+        pr.to_parquet(CURATED / "site_ctgov_pairs.parquet", index=False)
+        print(f"link: wrote site_ctgov_pairs.parquet ({len(pr):,} rows)")
     if frames:
         xc = pd.concat(frames, ignore_index=True)
         xc.to_parquet(CURATED / "site_ctgov_xcheck.parquet", index=False)
