@@ -982,6 +982,23 @@ export default function App() {
                   One row = one IND submission reference naming this investigator (date + site as filed).
                   BMIS carries no trial identifiers, so rows cannot be mapped to specific trials.
                 </p>
+                <h3>Receipts by year</h3>
+                <CategoryBars
+                  data={(() => {
+                    const m = new Map<string, number>();
+                    for (const r of receipts) {
+                      const y = (r.rcvd ?? '').slice(0, 4);
+                      if (/^\d{4}$/.test(y)) m.set(y, (m.get(y) ?? 0) + 1);
+                    }
+                    return [...m.entries()]
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([category, v]) => ({ category, v }));
+                  })()}
+                />
+                <p className="caption">
+                  This investigator&apos;s BMIS receipts by year (IND references, not distinct
+                  trials).
+                </p>
                 {!!linked.length && (
                   <>
                     <h3>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, MultiLineChart } from './charts';
+import { CategoryBars, MultiLineChart, StackedMultiBars } from './charts';
+
+const CN_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#7f7f7f'];
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -72,7 +74,7 @@ export default function ChinaTab({
   const [y1, setY1] = useState(() => intIn(hashInit['cn.y1'], 2019, 2025, 2025));
   const [provs, setProvs] = useState<{ zh: string; en: string }[]>([]);
   const [kpi, setKpi] = useState<{ pairs: number; names: number; insts: number; specs: number; v20: number } | null>(null);
-  const [vintage, setVintage] = useState<{ category: string; v: number }[]>([]);
+  const [vintStack, setVintStack] = useState<LineSeries[]>([]);
   const [cumline, setCumline] = useState<LineSeries[]>([]);
   const [newpairs, setNewpairs] = useState<{ category: string; v: number }[]>([]);
   const [specBars, setSpecBars] = useState<{ category: string; v: number }[]>([]);
@@ -105,7 +107,7 @@ export default function ChinaTab({
     (async () => {
       try {
         const pc = prov === 'all' ? '' : ` AND province_zh = '${escapeLiteral(prov)}'`;
-        const [pl, k, vy, sb, pb, st, ld, ad] = await Promise.all([
+        const [pl, k, vy, sb, pb, st, ld, ad, pv] = await Promise.all([
           query<{ zh: string; en: string }>(
             `SELECT CAST(province_zh AS VARCHAR) AS zh, CAST(province_en AS VARCHAR) AS en` +
               ` FROM cn_province_year GROUP BY 1, 2 ORDER BY 1`,
@@ -156,11 +158,39 @@ export default function ChinaTab({
               ` WHERE 1 = 1${pc} AND first_year BETWEEN ${y0} AND ${y1}` +
               ` GROUP BY 1 ORDER BY 3`,
           ).catch(() => []),
+          query<{ y: number; p: string; n: number }>(
+            `SELECT CAST(year AS INTEGER) AS y,` +
+              ` CAST(${zh ? 'province_zh' : 'province_en'} AS VARCHAR) AS p,` +
+              ` CAST(SUM(n_pairs) AS DOUBLE) AS n FROM cn_province_year` +
+              ` WHERE year BETWEEN ${y0} AND ${y1} AND year >= 2021${pc}` +
+              ` GROUP BY 1, 2 ORDER BY 1, 3 DESC`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setProvs(pl);
         setKpi({ pairs: num0(k[0]?.pairs), names: num0(k[0]?.names), insts: num0(k[0]?.insts), specs: num0(k[0]?.specs), v20: num0(k[0]?.v20) });
-        setVintage(vy.map((r) => ({ category: String(r.y), v: num0(r.n) })));
+        const provTotals = new Map<string, number>();
+        for (const r of pv) provTotals.set(r.p, (provTotals.get(r.p) ?? 0) + num0(r.n));
+        const topProv = [...provTotals.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([p]) => p);
+        const vyears = [...new Set(pv.map((r) => r.y))].sort((a, b) => a - b);
+        const at = (y: number, pred: (p: string) => boolean): number =>
+          pv.filter((r) => r.y === y && pred(r.p)).reduce((a, r) => a + num0(r.n), 0);
+        const stack: LineSeries[] = topProv.map((p, i) => ({
+          label: p,
+          color: CN_COLORS[i % CN_COLORS.length],
+          points: vyears.map((y) => ({ x: y, y: at(y, (q) => q === p) })),
+        }));
+        if (topProv.length < provTotals.size) {
+          stack.push({
+            label: zh ? '其他' : 'Other',
+            color: '#7f7f7f',
+            points: vyears.map((y) => ({ x: y, y: at(y, (q) => !topProv.includes(q)) })),
+          });
+        }
+        setVintStack(stack);
         setNewpairs(vy.map((r) => ({ category: String(r.y), v: num0(r.nn) })));
         setCumline([
           {
@@ -392,11 +422,12 @@ export default function ChinaTab({
 
       <section className="panel">
         <h2>Registry by filing vintage</h2>
-        <CategoryBars data={vintage} />
+        <StackedMultiBars series={vintStack} allTicks />
         <p className="caption">
-          Investigator-institution pairs at institutions filed each year (2021+). The 2020
-          bulk-registration spike ({kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the
-          graph; cumulative registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.
+          Investigator-institution pairs at institutions filed each year (2021+), top 6 provinces
+          plus others. Toggle 100% for yearly share. The 2020 bulk-registration spike (
+          {kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the graph; cumulative
+          registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.
         </p>
       </section>
 
