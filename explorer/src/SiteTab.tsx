@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, StackedMultiBars } from './charts';
+import { CategoryBars, StackedMultiBars, VintageHeatmap } from './charts';
+import type { VintageRow } from './charts';
+
+const SITE_KMAX = 10;
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -101,6 +104,7 @@ export default function SiteTab({
   const [sizeSnap, setSizeSnap] = useState<{ category: string; v: number }[]>([]);
   const [churn, setChurn] = useState<LineSeries[]>([]);
   const [top, setTop] = useState<SiteTopRow[]>([]);
+  const [sret, setSret] = useState<VintageRow[]>([]);
   const [info, setInfo] = useState<SiteInfo | null>(null);
   const [detail, setDetail] = useState<{ y: number; invs: number; joins: number; ends: number }[]>([]);
   const [roster, setRoster] = useState<{ name: string; country: string; n: number }[]>([]);
@@ -119,7 +123,7 @@ export default function SiteTab({
     (async () => {
       try {
         const bc = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
-        const [k, bb, st, ss, ch, t] = await Promise.all([
+        const [k, bb, st, ss, ch, rt, t] = await Promise.all([
           query<{ active: number; r25: number; r09: number; ever: number }>(
             `SELECT CAST(SUM(CASE WHEN year = ${latestFull} THEN n_sites ELSE 0 END) AS DOUBLE) AS active,` +
               ` CAST(SUM(CASE WHEN year = ${latestFull} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
@@ -146,6 +150,11 @@ export default function SiteTab({
               ` CAST(n_new AS DOUBLE) AS nj, CAST(n_ended AS DOUBLE) AS ne FROM site_churn` +
               ` WHERE version = '${ver}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
+          query<{ cohort: number; k: number; v: number; n: number }>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n FROM site_retention` +
+              ` WHERE version = '${ver}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${SITE_KMAX} ORDER BY 1, 2`,
+          ).catch(() => []),
           query<SiteTopRow>(
             `SELECT CAST(site_id AS VARCHAR) AS site_id, CAST(site_n AS INTEGER) AS site_n,` +
               ` CAST(display_name AS VARCHAR) AS name, CAST(city AS VARCHAR) AS city,` +
@@ -182,6 +191,20 @@ export default function SiteTab({
           { label: 'Joined', color: '#2ca02c', points: ch.map((r) => ({ x: r.y, y: num0(r.nj) })) },
           { label: 'Last seen', color: '#d62728', points: ch.map((r) => ({ x: r.y, y: num0(r.ne) })) },
         ]);
+        const byVintage = new Map<number, { n: number; m: Map<number, number> }>();
+        for (const r of rt) {
+          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>() };
+          e.n = r.n;
+          e.m.set(r.k, num0(r.v) * 100);
+          byVintage.set(r.cohort, e);
+        }
+        setSret(
+          [...byVintage.entries()].map(([cohort, e]) => ({
+            cohort,
+            n: e.n,
+            cells: Array.from({ length: SITE_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
+          })),
+        );
         setTop(t);
         setNote('');
       } catch (e) {
@@ -483,6 +506,16 @@ export default function SiteTab({
           Global (all bands): per investigator-site link, joined = first receipt year at the site, last seen =
           last receipt year. Right edge is censored (2026 links look ended); gap years read as continuous.
           Toggle 100% for the join/end split.
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>Site vintage attrition</h2>
+        <VintageHeatmap rows={sret} kMax={SITE_KMAX} />
+        <p className="caption">
+          Of the sites first seen in a given year (their vintage), the share active again k years
+          later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;
+          see Definitions: site_retention.
         </p>
       </section>
 

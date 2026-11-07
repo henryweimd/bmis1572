@@ -131,6 +131,7 @@ const DEF_TITLES: [string, string][] = [
   ['site', 'Site definition'],
   ['person_ctgov_link', 'CT.gov person linkage (experimental)'],
   ['site_churn', 'Site roster churn'],
+  ['site_retention', 'Site vintage attrition'],
   ['site_xcheck', 'CT.gov cross-check (experimental)'],
   ['site_ta', 'Therapeutic-area mix (experimental)'],
   ['data_quality', 'Junk names & coverage'],
