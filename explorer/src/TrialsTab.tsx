@@ -32,7 +32,7 @@ export default function TrialsTab({
   const [bounds, setBounds] = useState<{ lo: number; hi: number } | null>(null);
   const [y0, setY0] = useState<number | null>(null);
   const [y1, setY1] = useState<number | null>(null);
-  const [kpi, setKpi] = useState<{ trials: number; withOff: number; sponsors: number; linked: number } | null>(null);
+  const [kpi, setKpi] = useState<{ trials: number; withOff: number; sponsors: number; linked: number; conc: number } | null>(null);
   const [sponsors, setSponsors] = useState<{ category: string; v: number }[]>([]);
   const [phases, setPhases] = useState<{ category: string; v: number }[]>([]);
   const [tas, setTas] = useState<{ category: string; v: number }[]>([]);
@@ -102,13 +102,16 @@ export default function TrialsTab({
         }
         const yr = `start_y BETWEEN ${y0} AND ${y1}`;
         const [k, sp, ph, ta, ko, cv, yy] = await Promise.all([
-          query<{ trials: number; withOff: number; sponsors: number; linked: number }>(
+          query<{ trials: number; withOff: number; sponsors: number; linked: number; conc: number }>(
             `SELECT (SELECT COUNT(*) FROM ctgov_trials WHERE ${yr}) AS trials,` +
               ` (SELECT COUNT(DISTINCT o.nct) FROM ctgov_officials o` +
               ` JOIN ctgov_trials t ON t.nct = o.nct WHERE t.${yr}) AS withOff,` +
               ` (SELECT COUNT(DISTINCT sponsor) FROM ctgov_trials WHERE ${yr}) AS sponsors,` +
               ` (SELECT COUNT(DISTINCT l.person_id) FROM person_ctgov_link l` +
-              ` JOIN ctgov_trials t ON t.nct = l.nct WHERE t.${yr}) AS linked`,
+              ` JOIN ctgov_trials t ON t.nct = l.nct WHERE t.${yr}) AS linked,` +
+              ` (SELECT CAST(SUM(CASE WHEN rn <= 10 THEN n ELSE 0 END) AS DOUBLE) / NULLIF(SUM(n), 0)` +
+              ` FROM (SELECT COUNT(*) AS n, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) AS rn` +
+              ` FROM ctgov_trials WHERE ${yr} GROUP BY sponsor, sponsor_disp)) AS conc`,
           ),
           query<{ category: string; v: number }>(
             `SELECT CAST(sponsor_disp AS VARCHAR) AS category, CAST(COUNT(*) AS DOUBLE) AS v` +
@@ -149,6 +152,7 @@ export default function TrialsTab({
           withOff: num0(k[0]?.withOff),
           sponsors: num0(k[0]?.sponsors),
           linked: num0(k[0]?.linked),
+          conc: num0(k[0]?.conc),
         });
         setSponsors(sp.map((r) => ({ category: r.category, v: num0(r.v) })));
         setPhases(ph.map((r) => ({ category: r.category, v: num0(r.v) })));
@@ -208,10 +212,14 @@ export default function TrialsTab({
         </div>
       </section>
 
-      <section className="kpis four">
+      <section className="kpis five">
         <div className="kpi">
           <span className="kpi-label">US industry trials</span>
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.trials) : '—'}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Top-10 sponsor share</span>
+          <span className="kpi-value">{kpi ? `${(100 * kpi.conc).toFixed(1)}%` : '—'}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Trials naming officials</span>
