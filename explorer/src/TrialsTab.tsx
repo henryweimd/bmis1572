@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars } from './charts';
+import { CategoryBars, TrendChart } from './charts';
 import { downloadCsv } from './csv';
 
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -30,6 +30,7 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
   const [tas, setTas] = useState<{ category: string; v: number }[]>([]);
   const [kols, setKols] = useState<KolRow[]>([]);
   const [cover, setCover] = useState<CoverRow[]>([]);
+  const [triYoy, setTriYoy] = useState<{ d: string; v: number }[]>([]);
   const [note, setNote] = useState('');
   const [nctIn, setNctIn] = useState('');
   const [trial, setTrial] = useState<{
@@ -92,7 +93,7 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
           return;
         }
         const yr = `start_y BETWEEN ${y0} AND ${y1}`;
-        const [k, sp, ph, ta, ko, cv] = await Promise.all([
+        const [k, sp, ph, ta, ko, cv, yy] = await Promise.all([
           query<{ trials: number; withOff: number; sponsors: number; linked: number }>(
             `SELECT (SELECT COUNT(*) FROM ctgov_trials WHERE ${yr}) AS trials,` +
               ` (SELECT COUNT(DISTINCT o.nct) FROM ctgov_officials o` +
@@ -129,6 +130,10 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
               ` JOIN ctgov_trials t ON t.nct = l2.nct WHERE t.${yr}) l` +
               ` ON l.person_id = p.person_id GROUP BY 1 ORDER BY 2 DESC`,
           ),
+          query<{ y: number; n: number }>(
+            `SELECT CAST(start_y AS INTEGER) AS y, CAST(COUNT(*) AS DOUBLE) AS n` +
+              ` FROM ctgov_trials WHERE ${yr} GROUP BY 1 ORDER BY 1`,
+          ),
         ]);
         if (cancelled) return;
         setKpi({
@@ -142,6 +147,7 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
         setTas(ta.map((r) => ({ category: r.category, v: num0(r.v) })));
         setKols(ko);
         setCover(cv);
+        setTriYoy(yy.map((r) => ({ d: String(r.y), v: num0(r.n) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -211,6 +217,15 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
           <span className="kpi-label">BMIS persons linked</span>
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.linked) : '—'}</span>
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Trials by start year</h2>
+        <TrendChart data={triYoy} />
+        <p className="caption">
+          Industry trial starts per year in range (CT.gov Start Date; unknown-start trials
+          excluded).
+        </p>
       </section>
 
       <section className="panels">
