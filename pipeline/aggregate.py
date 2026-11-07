@@ -139,12 +139,12 @@ DEFINITIONS = {
     ),
     "person_ctgov_link": (
         "CT.gov person linkage (experimental): BMIS strict persons matched "
-        "to study-level overall officials (chairs/directors/PIs) by "
-        "normalized name, gated on affiliation-to-site token overlap. "
-        "Strong = full-name match + >=2 overlap tokens; weak = full-name + "
-        "1 token (or no affiliation) or initial + >=2 tokens. Covers ~4% "
-        "of persons (CT.gov names no site investigators); weak links may "
-        "be collisions."
+        "to overall officials (usually study-level directors/chairs; median "
+        "1 per trial, though some trials list site PIs) by normalized "
+        "name, gated on affiliation-to-site token overlap. Strong = "
+        "full-name match + >=2 overlap tokens; weak = full-name + 1 token "
+        "(or no affiliation) or initial + >=2 tokens. Covers ~4% of "
+        "persons; weak links may be collisions."
     ),
     "site_xcheck": (
         "CT.gov cross-check (experimental, US only): industry-interventional "
