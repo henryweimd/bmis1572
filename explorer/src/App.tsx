@@ -534,6 +534,12 @@ export default function App() {
     }
   };
 
+  const jumpInvestigator = (name: string) => {
+    setTab('inv');
+    runSearch(name);
+    setTimeout(() => document.getElementById('inv-search')?.scrollIntoView(), 60);
+  };
+
   const jumpToSite = (n: number) => {
     writeHash({ t: 'site', 'site.v': 'strict', 'site.s': `strict:${n}` });
     setTab('site');
@@ -1329,22 +1335,11 @@ export default function App() {
       )}
 
       {tab === 'site' && (
-        <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
+        <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} onJump={jumpInvestigator} />
       )}
 
       {tab === 'trials' && (
-        <TrialsTab
-          demo={demo}
-          ready={status === 'ready'}
-          onJump={(name) => {
-            setTab('inv');
-            runSearch(name);
-            setTimeout(
-              () => document.getElementById('inv-search')?.scrollIntoView(),
-              60,
-            );
-          }}
-        />
+        <TrialsTab demo={demo} ready={status === 'ready'} onJump={jumpInvestigator} />
       )}
 
       {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}

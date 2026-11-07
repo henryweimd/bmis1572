@@ -60,6 +60,7 @@ export default function SiteTab({
   latestFull,
   demo,
   ready,
+  onJump,
 }: {
   bands: string[];
   yearMin: number;
@@ -67,6 +68,7 @@ export default function SiteTab({
   latestFull: number;
   demo: boolean;
   ready: boolean;
+  onJump: (name: string) => void;
 }) {
   const [hashInit] = useState(readHash);
   const [band, setBand] = useState(() => pick(hashInit['site.b'], ['all', ...bands], 'all'));
@@ -791,7 +793,12 @@ export default function SiteTab({
                 </thead>
                 <tbody>
                   {roster.map((r, i) => (
-                    <tr key={`${r.name}-${i}`}>
+                    <tr
+                      key={`${r.name}-${i}`}
+                      className="pickable"
+                      title="Search in US Investigators"
+                      onClick={() => onJump(r.name)}
+                    >
                       <td>{r.name}</td>
                       <td>{r.country}</td>
                       <td>{r.n}</td>
@@ -805,7 +812,7 @@ export default function SiteTab({
           )}
           <p className="caption">
             No trial IDs in BMIS: roster shows who filed from this address, not which trials. Last-seen years
-            include right-censored recent links.
+            include right-censored recent links. Click a row to search that name in US Investigators.
           </p>
         </section>
       )}

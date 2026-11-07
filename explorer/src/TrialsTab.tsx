@@ -331,7 +331,12 @@ export default function TrialsTab({
                     </thead>
                     <tbody>
                       {trialLinked.map((r, i) => (
-                        <tr key={`${r.name}-${i}`}>
+                        <tr
+                          key={`${r.name}-${i}`}
+                          className="pickable"
+                          title="Search in US Investigators"
+                          onClick={() => onJump(r.name)}
+                        >
                           <td>{r.name}</td>
                           <td>{r.site}</td>
                           <td>{r.country}</td>
