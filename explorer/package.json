@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview --port 4173"
+    "preview": "vite preview --port 4173",
+    "check:responsive": "python3 ../scripts/check_responsive.py"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.32.0",
