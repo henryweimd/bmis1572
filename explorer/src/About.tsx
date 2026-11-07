@@ -65,16 +65,18 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
           distinct trials. <strong>Trials/year</strong> divides that by the inclusive first–last span.
         </li>
         <li>
-          <strong>CRO/IRB tabs</strong> group organization rows by normalized company/board name
-          (giant aliases, stopword rules, state disambiguation; residual variants audited per row).
+          <strong>US CROs / US IRBs tabs</strong> group organization rows by normalized
+          company/board name (giant aliases, stopword rules, state disambiguation; residual
+          variants audited per row).
         </li>
         <li>
-          <strong>Sites tab</strong> rolls rows up to street addresses (Strict exact, Merged
+          <strong>US Sites tab</strong> rolls rows up to street addresses (Strict exact, Merged
           fuzzy-unioned) and tracks investigators per site plus roster churn over time.
         </li>
         <li>
-          <strong>Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases, the
-          most-linked investigators, and linkage coverage — all years, experimental.
+          <strong>US Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases,
+          therapeutic areas, the most-linked investigators, NCT lookup, and linkage coverage —
+          with a year-range filter, experimental.
         </li>
         <li>
           <strong>Stacked charts</strong> toggle between Absolute counts and 100% yearly share;
@@ -121,7 +123,7 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
       <h3>Limitations</h3>
       <ul className="about-list">
         <li>BMIS is CDER IND drugs/biologics only, and the FDA states it is not comprehensive.</li>
-        <li>No record-level investigator↔trial linkage exists; benchmarking is year-level ratios.</li>
+        <li>Record-level investigator↔trial linkage is experimental and thin (name-based, KOL-skewed); most benchmarking is year-level ratios.</li>
         <li>BMIS has no therapeutic-area or phase fields; rows carry date + site only.</li>
         <li>
           China coverage is partial (1,818 institutions) and a single 2026-11-06 snapshot; filing
