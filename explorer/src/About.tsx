@@ -61,6 +61,36 @@ export default function About() {
           <strong>CRO/IRB tabs</strong> group organization rows by normalized company/board name
           (giant aliases, stopword rules, state disambiguation; residual variants audited per row).
         </li>
+        <li>
+          <strong>Sites tab</strong> rolls rows up to street addresses (Strict exact, Merged
+          fuzzy-unioned) and tracks investigators per site plus roster churn over time.
+        </li>
+        <li>
+          <strong>Stacked charts</strong> toggle between Absolute counts and 100% yearly share;
+          hover any segment for counts and shares.
+        </li>
+        <li>
+          <strong>2021*</strong> on the geography chart marks the first full year after the 2019 EU
+          Form 1572 restriction — see the footnote links (EORTC, NCI RCR) and the Definitions entry.
+        </li>
+      </ul>
+
+      <h3>Data quality &amp; dedupe</h3>
+      <ul className="about-list">
+        <li>
+          BMIS rows are exact-deduped before person clustering. ~7,300 CI rows (0.7%) lack usable
+          names: kept in headline counts, excluded from search, leaderboards, rosters, and
+          site-detail series.
+        </li>
+        <li>
+          The China extract repeats ~35% of its rows; ingest drops exact duplicates (76,764 → 50,038
+          rows) without changing pair counts. Pairs count affiliations, not humans — see the China
+          tab caption.
+        </li>
+        <li>
+          Residual name-variant splits remain on both sides; person/pair counts are documented
+          bounds, not exact censuses of humans.
+        </li>
       </ul>
 
       <h3>Limitations</h3>
@@ -68,6 +98,10 @@ export default function About() {
         <li>BMIS is CDER IND drugs/biologics only, and the FDA states it is not comprehensive.</li>
         <li>No record-level investigator↔trial linkage exists; benchmarking is year-level ratios.</li>
         <li>BMIS has no therapeutic-area or phase fields; rows carry date + site only.</li>
+        <li>
+          China coverage is partial (1,818 institutions) and a single 2026-11-06 snapshot; filing
+          year is vintage, not activity.
+        </li>
       </ul>
 
       <h3>Slide deck export</h3>
