@@ -80,6 +80,7 @@ export default function ChinaTab({
   const [specBars, setSpecBars] = useState<{ category: string; v: number }[]>([]);
   const [provBars, setProvBars] = useState<{ category: string; v: number }[]>([]);
   const [sites, setSites] = useState<CnSiteRow[]>([]);
+  const [sizeBins, setSizeBins] = useState<{ category: string; v: number }[]>([]);
   const [siteSort, setSiteSort] = useState<'pairs' | 'rows'>(() =>
     pick(hashInit['cn.o'], ['pairs', 'rows'] as const, 'pairs'),
   );
@@ -107,7 +108,7 @@ export default function ChinaTab({
     (async () => {
       try {
         const pc = prov === 'all' ? '' : ` AND province_zh = '${escapeLiteral(prov)}'`;
-        const [pl, k, vy, sb, pb, st, ld, ad, pv] = await Promise.all([
+        const [pl, k, vy, sb, pb, st, ld, ad, pv, sz] = await Promise.all([
           query<{ zh: string; en: string }>(
             `SELECT CAST(province_zh AS VARCHAR) AS zh, CAST(province_en AS VARCHAR) AS en` +
               ` FROM cn_province_year GROUP BY 1, 2 ORDER BY 1`,
@@ -165,6 +166,13 @@ export default function ChinaTab({
               ` WHERE year BETWEEN ${y0} AND ${y1} AND year >= 2021${pc}` +
               ` GROUP BY 1, 2 ORDER BY 1, 3 DESC`,
           ).catch(() => []),
+          query<{ category: string; v: number }>(
+            `SELECT CASE WHEN n_pairs < 5 THEN '1-4' WHEN n_pairs < 15 THEN '5-14'` +
+              ` WHEN n_pairs < 40 THEN '15-39' WHEN n_pairs < 100 THEN '40-99'` +
+              ` ELSE '100+' END AS category, CAST(COUNT(*) AS DOUBLE) AS v,` +
+              ` MIN(n_pairs) AS o FROM cn_site_index WHERE 1 = 1${pc}` +
+              ` AND filing_year BETWEEN ${y0} AND ${y1} GROUP BY 1 ORDER BY 3`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setProvs(pl);
@@ -202,6 +210,7 @@ export default function ChinaTab({
         setSpecBars(sb.map((r) => ({ category: zh ? `${r.gz} ${r.g}` : r.g, v: num0(r.n) })));
         setProvBars(pb.map((r) => ({ category: zh ? r.p : r.pe, v: num0(r.n) })));
         setSites(st);
+        setSizeBins(sz.map((r) => ({ category: r.category, v: num0(r.v) })));
         setLeaders(ld);
         setAffil(ad.map((r) => ({ category: `${r.category} institution${r.category === '1' ? '' : 's'}`, v: num0(r.v) })));
         setNote('');
@@ -580,6 +589,16 @@ export default function ChinaTab({
           )}
         </section>
       )}
+
+      <section className="panel">
+        <h2>Institutions by pair count</h2>
+        <CategoryBars data={sizeBins} />
+        <p className="caption">
+          Institutions grouped by investigator-institution pairs (same province and filing-vintage
+          filters as the leaderboard). A long tail of small filers sits beside a few
+          mega-sites with 100+ pairs.
+        </p>
+      </section>
 
       <section className="panel">
         <h2>Names by institution count</h2>
