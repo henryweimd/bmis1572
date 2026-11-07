@@ -462,9 +462,10 @@ export default function App() {
   }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo]);
 
 
-  const runSearch = async () => {
+  const runSearch = async (override?: string) => {
     if (demo) return;
-    const needle = normName(q);
+    if (override !== undefined) setQ(override);
+    const needle = normName(override ?? q);
     if (!needle) {
       setHits([]);
       setSearched(false);
@@ -815,7 +816,7 @@ export default function App() {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="inv-search">
         <h2>Search investigators</h2>
         {demo ? (
           <p className="muted">Run the pipeline for investigator search.</p>
@@ -859,7 +860,7 @@ export default function App() {
                   style={{ width: '5em' }}
                 />
               </label>
-              <button className="btn" onClick={runSearch}>
+              <button className="btn" onClick={() => runSearch()}>
                 Search
               </button>
               <span className="muted">Strict persons · top 50 by IND references · names as published</span>
@@ -1280,7 +1281,20 @@ export default function App() {
         <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
       )}
 
-      {tab === 'trials' && <TrialsTab demo={demo} ready={status === 'ready'} />}
+      {tab === 'trials' && (
+        <TrialsTab
+          demo={demo}
+          ready={status === 'ready'}
+          onJump={(name) => {
+            setTab('inv');
+            runSearch(name);
+            setTimeout(
+              () => document.getElementById('inv-search')?.scrollIntoView(),
+              60,
+            );
+          }}
+        />
+      )}
 
       {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}
 

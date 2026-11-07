@@ -20,7 +20,15 @@ interface CoverRow {
   lk: number;
 }
 
-export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boolean }) {
+export default function TrialsTab({
+  demo,
+  ready,
+  onJump,
+}: {
+  demo: boolean;
+  ready: boolean;
+  onJump: (name: string) => void;
+}) {
   const [bounds, setBounds] = useState<{ lo: number; hi: number } | null>(null);
   const [y0, setY0] = useState<number | null>(null);
   const [y1, setY1] = useState<number | null>(null);
@@ -378,7 +386,12 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
             </thead>
             <tbody>
               {kols.map((r) => (
-                <tr key={`${r.name}-${r.country}`}>
+                <tr
+                  key={`${r.name}-${r.country}`}
+                  className="pickable"
+                  title="Search in US Investigators"
+                  onClick={() => onJump(r.name)}
+                >
                   <td>{r.name}</td>
                   <td>{r.country}</td>
                   <td>{fmtInt.format(r.n)}</td>
@@ -391,7 +404,7 @@ export default function TrialsTab({ demo, ready }: { demo: boolean; ready: boole
         <p className="caption">
           BMIS persons by linked CT.gov trials in range (strong + weak tiers). Skews toward study
           chairs and KOLs — most trials name only study-level officials, so most investigators
-          cannot appear here.
+          cannot appear here. Click a row to search that name in US Investigators.
         </p>
       </section>
 
