@@ -31,6 +31,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ctgov
+import ctgov_ta
 from ctgov_link import LOC_FILTER
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -204,8 +205,11 @@ def run(refresh: bool = False, audit_n: int = 10) -> dict[str, pd.DataFrame]:
         off = offs.merge(trials[["nct", "sponsor_raw", "sponsor", "phase", "start_y"]],
                          on="nct", how="left")
         off["sponsor_disp"] = off["sponsor_raw"]
+        ta_map = ctgov_ta.load_cond_tas() if ctgov_ta.COND_CACHE.exists() else {}
+        off["ta"] = off["nct"].map(lambda n: ";".join(ta_map.get(n, [])))
+        print(f"people: TA attached to {(off['ta'] != '').mean():.1%} of officials")
         tables["ctgov_officials"] = off[["nct", "name_raw", "role", "affiliation",
-                                        "sponsor", "sponsor_disp", "phase",
+                                        "sponsor", "sponsor_disp", "phase", "ta",
                                         "start_y"]].reset_index(drop=True)
         lk = link_persons(offs)
         print(f"people: {lk['person_id'].nunique():,} persons linked "
