@@ -6,8 +6,10 @@ vintage, not investigator activity -- there is no longitudinal signal, so
 YoY reads as registry composition by vintage, never retention.
 
 Person = (investigator_name_zh, institution_id) pair: bare names collide
-across institutions (~23% do), so name-only counts are reported alongside
-pair counts with the collision caveat.
+across institutions (~13% span >1 institution, mostly common-name collision
+like 张伟, not mobility), so name-only counts are reported alongside
+pair counts with the collision caveat. Rows are exact-deduped at ingest
+(the extract repeats ~35% of rows); pairs are unaffected by construction.
 """
 
 from __future__ import annotations
@@ -34,9 +36,21 @@ USECOLS = ["investigator_name_zh", "canonical_institution_id", "filing_number",
            "province", "city"]
 
 
+DEDUP_KEY = ["investigator_name_zh", "canonical_institution_id", "filing_number",
+             "specialty_name_zh", "role_as_reported", "province", "city"]
+
+
 def load_china() -> pd.DataFrame:
     t0 = time.time()
     df = pd.read_csv(RAW_FILE, usecols=USECOLS, low_memory=False, dtype=str)
+    raw_n = len(df)
+    # Normalize the person key: spaces in Chinese names are extract noise.
+    # Then drop exact-duplicate rows (same name+institution+filing+
+    # specialty+role+locale): extract redundancy, not extra affiliations.
+    # Institution-name aliases within one ID are resolved downstream by mode.
+    df["investigator_name_zh"] = (
+        df["investigator_name_zh"].str.replace(" ", "", regex=False).str.strip())
+    df = df.drop_duplicates(subset=DEDUP_KEY).reset_index(drop=True)
     df["filing_year"] = (df["filing_number"].str.extract(YEAR_RE)[0].astype(int))
     assert df["filing_year"].notna().all(), "unparsed filing years"
     assert df["filing_year"].between(2019, 2026).all(), "filing year out of range"
@@ -50,10 +64,13 @@ def load_china() -> pd.DataFrame:
     df["province_en"] = df["province"].map(PROVINCE_EN).fillna(df["province"])
     df["city_en"] = df["city"].map(CITY_EN)
     df["role_en"] = df["role_as_reported"].map(ROLE_EN).fillna(df["role_as_reported"])
-    print(f"china: {len(df):,} rows, {df['pair_id'].nunique():,} pairs, "
+    multi = (df.groupby("investigator_name_zh")["canonical_institution_id"]
+             .nunique().gt(1).mean())
+    print(f"china: {raw_n:,} raw rows -> {len(df):,} deduped rows, "
+          f"{df['pair_id'].nunique():,} pairs, "
           f"{df['investigator_name_zh'].nunique():,} names, "
-          f"{df['canonical_institution_id'].nunique():,} institutions "
-          f"({time.time()-t0:.0f}s)")
+          f"{df['canonical_institution_id'].nunique():,} institutions, "
+          f"multi-institution names {multi:.3f} ({time.time()-t0:.0f}s)")
     other = (df["group_en"] == "Other").mean()
     print(f"china: ungrouped specialty share: {other:.3f}; "
           f"specialty_en coverage: {df['specialty_en'].notna().mean():.3f}")

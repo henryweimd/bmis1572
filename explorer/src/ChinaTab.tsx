@@ -375,6 +375,12 @@ export default function ChinaTab({
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.specs) : '—'}</span>
         </div>
       </section>
+      <p className="caption">
+        Pairs count affiliations, not humans: one person at two institutions = two pairs, while two
+        same-named people at one institution = one pair (common names such as 张伟 collide across
+        institutions and are not mobility). Rows are exact-deduped at ingest; the 2020 bulk filing
+        captured the registry stock at once, so totals read as roster size, not trial activity.
+      </p>
 
       <section className="panel">
         <h2>Registry by filing vintage</h2>
