@@ -1304,7 +1304,21 @@ export default function App() {
                   Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in
                   that year (n = investigators). Cells show the share of that vintage still active k years
                   later (percent). Gray cells are right-censored (vintage too recent to observe). 2008
-                  excluded: file ramp-up distorts the base.
+                  excluded: file ramp-up distorts the base.{' '}
+                  {!!ret.length && (
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        downloadCsv(
+                          `vintage-attrition-${version}.csv`,
+                          ['vintage', 'n', ...ret[0].cells.map((_, k) => `k${k}_pct`)],
+                          ret.map((r) => [r.cohort, r.n, ...r.cells.map((c) => c ?? '')]),
+                        )
+                      }
+                    >
+                      CSV
+                    </button>
+                  )}
                 </p>
               </>
             )}
