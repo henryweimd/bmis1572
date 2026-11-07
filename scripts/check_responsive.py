@@ -76,6 +76,18 @@ def main() -> int:
     ]
     check("no fixed-pixel layout widths", not bad, "; ".join(bad[:3]))
 
+    # Filters: long <select> option text must not stretch the page on narrow
+    # screens (US CROs/US IRBs overflowed at 390px before this rule).
+    m = re.search(r"\.filters label \{(.*?)\}", css, re.S)
+    check(".filters label can shrink",
+          bool(m) and "min-width: 0" in m.group(1) and "max-width: 100%" in m.group(1))
+    m = re.search(r"\.filters select \{(.*?)\}", css, re.S)
+    check(".filters select capped at container",
+          bool(m) and "min-width: 0" in m.group(1) and "max-width: 100%" in m.group(1))
+    m = re.search(r"\.table-scroll \{(.*?)\}", css, re.S)
+    check(".table-scroll capped at container",
+          bool(m) and "max-width: 100%" in m.group(1))
+
     # Touch: buttons keep a usable hit area (padding-based, >= ~28px tall).
     m = re.search(r"\.btn \{(.*?)\}", css, re.S)
     check(".btn has padding hit area", bool(m) and "padding:" in m.group(1))
