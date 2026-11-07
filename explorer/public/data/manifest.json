@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T17:27:30.636729+00:00",
+  "generated_at": "2026-11-07T17:32:12.677460+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -1313,6 +1313,22 @@
         "province_zh",
         "province_en",
         "inst_en"
+      ]
+    },
+    {
+      "id": "ctgov_trials",
+      "title": "CT.gov US industry trials: sponsor/phase/start per NCT (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/ctgov_trials.parquet"
+      ],
+      "row_count": 53543,
+      "columns": [
+        "nct",
+        "sponsor",
+        "sponsor_disp",
+        "phase",
+        "start_y"
       ]
     },
     {

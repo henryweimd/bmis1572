@@ -5,6 +5,7 @@ import { CategoryBars, MultiLineChart, StackedBars, StackedMultiBars, VintageHea
 import type { LineSeries, VintageRow } from './charts';
 import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
+import TrialsTab from './TrialsTab';
 import ChinaTab from './ChinaTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
@@ -233,8 +234,8 @@ export default function App() {
   const [receipts, setReceipts] = useState<RcRow[]>([]);
   const [rcTotal, setRcTotal] = useState(0);
   const [linked, setLinked] = useState<LinkRow[]>([]);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'china' | 'about'>(() =>
-    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'china', 'about'] as const, 'inv'),
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'trials' | 'china' | 'about'>(() =>
+    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'trials', 'china', 'about'] as const, 'inv'),
   );
 
   useEffect(() => {
@@ -251,7 +252,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'china' ? 'China' : 'About'
+      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'trials' ? 'US Trials' : tab === 'china' ? 'China' : 'About'
     } · Global Clinical Trial Investigator Talent Supply Data Explorer`;
   }, [tab]);
 
@@ -597,6 +598,14 @@ export default function App() {
           onClick={() => setTab('site')}
         >
           US Sites
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'trials'}
+          className={tab === 'trials' ? 'active' : ''}
+          onClick={() => setTab('trials')}
+        >
+          US Trials
         </button>
         <button
           role="tab"
@@ -1200,6 +1209,8 @@ export default function App() {
       {tab === 'site' && (
         <SiteTab bands={BANDS} yearMin={YEAR_MIN} yearMax={YEAR_MAX} latestFull={LATEST_FULL} demo={demo} ready={status === 'ready'} />
       )}
+
+      {tab === 'trials' && <TrialsTab demo={demo} ready={status === 'ready'} />}
 
       {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}
 
