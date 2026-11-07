@@ -75,6 +75,8 @@ def build_china_tables(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     new_inst = df.groupby("canonical_institution_id")["filing_year"].min().value_counts()
     fy["cum_pairs"] = fy["year"].map(new_pairs).fillna(0).cumsum().astype(int)
     fy["cum_institutions"] = fy["year"].map(new_inst).fillna(0).cumsum().astype(int)
+    fy["n_new_pairs"] = fy["year"].map(new_pairs).fillna(0).astype(int)
+    fy["n_new_inst"] = fy["year"].map(new_inst).fillna(0).astype(int)
     tables["cn_filing_year"] = fy
 
     tables["cn_province_year"] = (
