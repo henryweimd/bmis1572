@@ -108,6 +108,7 @@ export default function SiteTab({
   const [churn, setChurn] = useState<LineSeries[]>([]);
   const [top, setTop] = useState<SiteTopRow[]>([]);
   const [sret, setSret] = useState<VintageRow[]>([]);
+  const [sret5, setSret5] = useState<{ d: string; v: number }[]>([]);
   const [info, setInfo] = useState<SiteInfo | null>(null);
   const [detail, setDetail] = useState<{ y: number; invs: number; joins: number; ends: number }[]>([]);
   const [roster, setRoster] = useState<{ name: string; country: string; n: number }[]>([]);
@@ -130,7 +131,7 @@ export default function SiteTab({
           band === 'all'
             ? ''
             : ` AND s.band = '${escapeLiteral(band)}' AND i.band = '${escapeLiteral(band)}'`;
-        const [k, bb, st, ss, ch, rt, t, mi] = await Promise.all([
+        const [k, bb, st, ss, ch, rt, r5, t, mi] = await Promise.all([
           query<{ active: number; r25: number; r09: number; ever: number }>(
             `SELECT CAST(SUM(CASE WHEN year = ${latestFull} THEN n_sites ELSE 0 END) AS DOUBLE) AS active,` +
               ` CAST(SUM(CASE WHEN year = ${latestFull} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
@@ -162,6 +163,10 @@ export default function SiteTab({
               ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
               ` CAST(n_active AS INTEGER) AS na FROM site_retention` +
               ` WHERE version = '${ver}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${SITE_KMAX} ORDER BY 1, 2`,
+          ).catch(() => []),
+          query<{ c: number; v: number }>(
+            `SELECT CAST(cohort AS INTEGER) AS c, CAST(100 * retention AS DOUBLE) AS v` +
+              ` FROM site_retention WHERE version = '${ver}' AND k = 5 AND cohort BETWEEN 2009 AND 2020 ORDER BY 1`,
           ).catch(() => []),
           query<SiteTopRow>(
             `SELECT CAST(site_id AS VARCHAR) AS site_id, CAST(site_n AS INTEGER) AS site_n,` +
@@ -225,6 +230,7 @@ export default function SiteTab({
         );
         setTop(t);
         setMeanInv(mi.map((r) => ({ d: String(r.y), v: num0(r.m) })));
+        setSret5(r5.map((r) => ({ d: String(r.c), v: num0(r.v) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -540,6 +546,12 @@ export default function SiteTab({
       <section className="panel">
         <h2>Site vintage attrition</h2>
         <VintageHeatmap rows={sret} kMax={SITE_KMAX} unit="sites" />
+        <h3>Five-year retention by vintage</h3>
+        <TrendChart data={sret5} />
+        <p className="caption">
+          Share of each site vintage still active 5 years later (percent). Cohorts 2009–2020
+          only. Site retention has roughly halved since 2009.
+        </p>
         <p className="caption">
           Of the sites first seen in a given year (their vintage), the share active again k years
           later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;

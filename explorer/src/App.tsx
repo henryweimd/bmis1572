@@ -224,6 +224,7 @@ export default function App() {
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
   const [pbins, setPbins] = useState<{ category: string; v: number }[]>([]);
   const [oadBand, setOadBand] = useState<{ b: string; n: number; s: number }[]>([]);
+  const [workload, setWorkload] = useState<{ d: string; v: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
   const [ret5, setRet5] = useState<{ d: string; v: number }[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
@@ -293,6 +294,10 @@ export default function App() {
       try {
         const v = escapeLiteral(version);
         const bandClause = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
+        const bcJ =
+          band === 'all'
+            ? ''
+            : ` AND s.band = '${escapeLiteral(band)}' AND i.band = '${escapeLiteral(band)}'`;
         const k = await query<{ active: number; active09: number; nnew: number }>(
           `SELECT CAST(SUM(CASE WHEN year = ${LATEST_FULL} THEN n_active ELSE 0 END) AS DOUBLE) AS active,` +
             ` CAST(SUM(CASE WHEN year = 2009 THEN n_active ELSE 0 END) AS DOUBLE) AS active09,` +
@@ -327,7 +332,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const [ot, ti, tser, bn, pb, ob, rt, r5, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, pb, ob, rt, r5, wl, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -366,6 +371,14 @@ export default function App() {
           query<{ c: number; v: number }>(
             `SELECT CAST(cohort AS INTEGER) AS c, CAST(100 * retention AS DOUBLE) AS v` +
               ` FROM retention WHERE version = '${v}' AND k = 5 AND cohort BETWEEN 2009 AND 2020 ORDER BY 1`,
+          ),
+          query<{ y: number; m: number }>(
+            `SELECT CAST(s.year AS INTEGER) AS y,` +
+              ` CAST(SUM(s.n_receipts) AS DOUBLE) / NULLIF(SUM(i.n_active), 0) AS m` +
+              ` FROM sites_year_geo s JOIN investigators_year_geo i` +
+              ` ON i.version = s.version AND i.year = s.year AND i.band = s.band` +
+              ` WHERE s.version = '${v === 'raw' ? 'strict' : v}' AND s.year BETWEEN ${y0} AND ${y1}${bcJ}` +
+              ` GROUP BY 1 ORDER BY 1`,
           ),
           query<{ y: number; t1: number; t10: number; g: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(top1_share AS DOUBLE) AS t1,` +
@@ -459,6 +472,7 @@ export default function App() {
             })),
         );
         setRet5(r5.map((r) => ({ d: String(r.c), v: num0(r.v) })));
+        setWorkload(wl.map((r) => ({ d: String(r.y), v: num0(r.m) })));
         const concDefs: { label: string; color: string; key: 't1' | 't10' | 'g' }[] = [
           { label: 'Top 1% share', color: '#d62728', key: 't1' },
           { label: 'Top 10% share', color: '#1f77b4', key: 't10' },
@@ -954,6 +968,22 @@ export default function App() {
             <p className="caption">
               Strict persons, all years. Repeat-investigator supply concentrates in the US
               (43% one-and-done) vs 57–67% across non-US bands — thinner benches abroad.
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Mean receipts per active investigator</h2>
+        {demo ? (
+          <p className="muted">Run the pipeline for workload data.</p>
+        ) : (
+          <>
+            <TrendChart data={workload} />
+            <p className="caption">
+              IND references ÷ active investigators per year (follows band filter; raw
+              version falls back to strict — site roll-ups exist for strict/merged only).
+              Workload per head has risen since the mid-2010s.
             </p>
           </>
         )}
