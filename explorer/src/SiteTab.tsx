@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, MultiLineChart } from './charts';
+import { CategoryBars, StackedMultiBars } from './charts';
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv } from './csv';
@@ -429,30 +429,31 @@ export default function SiteTab({
 
       <section className="panel">
         <h2>Active sites per year{band === 'all' ? ' by band' : `: ${band}`}</h2>
-        <MultiLineChart series={byBand} />
+        <StackedMultiBars series={byBand} allTicks />
         <p className="caption">
           Distinct site addresses with ≥1 investigator receipt that year · 2008 (ramp-up) and 2026 (thru Aug)
-          are partial.
+          are partial. Toggle 100% for yearly share.
         </p>
       </section>
 
       <section className="panel">
         <h2>Site size mix: investigators per site</h2>
-        <MultiLineChart series={sizeTrend} />
+        <StackedMultiBars series={sizeTrend} allTicks />
         <h3>Mix in {y1}</h3>
         <CategoryBars data={sizeSnap} />
         <p className="caption">
           Global (all bands): sites grouped by distinct investigators active that year. Solo sites dominate;
-          21+ sites are mega-centers.
+          21+ sites are mega-centers. Toggle 100% for yearly share.
         </p>
       </section>
 
       <section className="panel">
         <h2>Roster churn: investigators joining vs last seen</h2>
-        <MultiLineChart series={churn} />
+        <StackedMultiBars series={churn} allTicks />
         <p className="caption">
           Global (all bands): per investigator-site link, joined = first receipt year at the site, last seen =
           last receipt year. Right edge is censored (2026 links look ended); gap years read as continuous.
+          Toggle 100% for the join/end split.
         </p>
       </section>
 
@@ -612,7 +613,8 @@ export default function SiteTab({
             {info.first_year}–{info.last_year} ({info.n_years} active years) · {info.n_variants} address variants
           </p>
           <h3>Investigators active per year</h3>
-          <MultiLineChart
+          <StackedMultiBars
+            allTicks
             series={[
               {
                 label: 'Active investigators',
@@ -622,7 +624,8 @@ export default function SiteTab({
             ]}
           />
           <h3>Roster flow: joined vs last seen</h3>
-          <MultiLineChart
+          <StackedMultiBars
+            allTicks
             series={[
               { label: 'Joined', color: '#2ca02c', points: detail.map((d) => ({ x: d.y, y: d.joins })) },
               { label: 'Last seen', color: '#d62728', points: detail.map((d) => ({ x: d.y, y: d.ends })) },
