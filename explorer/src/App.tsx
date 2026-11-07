@@ -221,6 +221,7 @@ export default function App() {
 
   const [tight, setTight] = useState<LineSeries[]>([]);
   const [bins, setBins] = useState<{ category: string; v: number }[]>([]);
+  const [pbins, setPbins] = useState<{ category: string; v: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
@@ -323,7 +324,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const [ot, ti, tser, bn, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, pb, rt, cn, lb, cy, sy, ch, en] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -342,6 +343,10 @@ export default function App() {
           query<BinRow>(
             `SELECT CAST(bin AS VARCHAR) AS bin, CAST(SUM(n_active) AS DOUBLE) AS n` +
               ` FROM active_bins WHERE version = '${v}' GROUP BY 1`,
+          ),
+          query<BinRow>(
+            `SELECT CASE WHEN n_trials >= 15 THEN '15+' ELSE CAST(n_trials AS VARCHAR) END AS bin,` +
+              ` CAST(COUNT(*) AS DOUBLE) AS n FROM person_index GROUP BY 1`,
           ),
           query<{ cohort: number; k: number; v: number; n: number; na: number }>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
@@ -405,6 +410,11 @@ export default function App() {
         const binOrder = [...Array.from({ length: 14 }, (_, i) => String(i + 1)), '15+'];
         setBins(
           bn
+            .map((r) => ({ category: r.bin, v: num0(r.n) }))
+            .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
+        );
+        setPbins(
+          pb
             .map((r) => ({ category: r.bin, v: num0(r.n) }))
             .sort((a, b) => binOrder.indexOf(a.category) - binOrder.indexOf(b.category)),
         );
@@ -830,6 +840,27 @@ export default function App() {
             <>
               <CategoryBars data={bins} />
               <p className="caption">One row = one IND reference; bin by person lifetime total.</p>
+            </>
+          )}
+        </div>
+        <div className="panel">
+          <h2>Investigators by lifetime trials (persons)</h2>
+          {demo ? (
+            <p className="muted">Run the pipeline for distribution data.</p>
+          ) : (
+            <>
+              <CategoryBars data={pbins} />
+              <p className="caption">
+                Strict persons by lifetime IND references (all years, global).{' '}
+                {pbins.length > 0 &&
+                  (() => {
+                    const tot = pbins.reduce((a, r) => a + r.v, 0);
+                    const one = pbins.find((r) => r.category === '1')?.v ?? 0;
+                    return tot > 0
+                      ? `${((100 * one) / tot).toFixed(1)}% are one-and-done.`
+                      : '';
+                  })()}
+              </p>
             </>
           )}
         </div>
