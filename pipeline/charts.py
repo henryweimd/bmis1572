@@ -486,8 +486,38 @@ def chart_linkage_coverage(lk: pd.DataFrame, pi: pd.DataFrame, out: Path) -> Non
     plt.close(fig)
 
 
+def chart_intensification(iyg: pd.DataFrame, syg: pd.DataFrame,
+                          out: Path) -> None:
+    iv = (iyg[(iyg["version"] == "strict") & (iyg["year"] >= 2008)]
+          .groupby("year")["n_active"].sum())
+    sv = (syg[(syg["version"] == "strict") & (syg["year"] >= 2008)]
+          .groupby("year").agg(n_sites=("n_sites", "sum"),
+                               n_receipts=("n_receipts", "sum")))
+    panels = [
+        (sv["n_receipts"] / iv, "Mean IND references per active investigator",
+         "References per CI", "#d62728", "workload.png",
+         DEFINITIONS["trials_per_person"]),
+        (iv / sv["n_sites"], "Mean investigators per active site",
+         "CIs per site", "#1f77b4", "site_teams.png",
+         DEFINITIONS["site"]),
+    ]
+    for s, title, ylabel, color, fname, extra in panels:
+        fig, ax = plt.subplots(figsize=(10, 4.6))
+        ax.plot(s.index, s.values, marker="o", color=color)
+        _partial_shade(ax, s.index)
+        ax.set_title(title + " (Strict)")
+        ax.set_xlabel("Year")
+        ax.set_ylabel(ylabel)
+        fig.tight_layout(rect=(0, 0.14, 1, 1))
+        _caption(fig, "DEFINITIONS: " + DEFINITIONS["active"] + " " + extra)
+        fig.savefig(out / fname, bbox_inches="tight")
+        plt.close(fig)
+
+
 def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
     out.mkdir(parents=True, exist_ok=True)
+    chart_intensification(tables["investigators_year_geo"],
+                          tables["sites_year_geo"], out)
     chart_investigators_geo(tables["investigators_year_geo"], out)
     chart_investigators_geo_share(tables["investigators_year_geo"], out)
     chart_new_returning(tables["investigators_year_geo"], out)

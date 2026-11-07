@@ -85,6 +85,13 @@ def load_numbers(stats: dict) -> dict:
         CURATED / "irb_index.parquet").sort_values("n_receipts", ascending=False).iloc[0]["irb"]
     syg = pd.read_parquet(CURATED / "sites_year_geo.parquet")
     n["sites25"] = syg[(syg["version"] == "strict") & (syg["year"] == 2025)]["n_sites"].sum()
+    iv = iyg[iyg["version"] == "strict"].groupby("year")["n_active"].sum()
+    sv = syg[syg["version"] == "strict"].groupby("year").agg(
+        n_sites=("n_sites", "sum"), n_receipts=("n_receipts", "sum"))
+    n["wl09"] = sv.loc[2009, "n_receipts"] / iv.loc[2009]
+    n["wl25"] = sv.loc[2025, "n_receipts"] / iv.loc[2025]
+    n["mi09"] = iv.loc[2009] / sv.loc[2009, "n_sites"]
+    n["mi25"] = iv.loc[2025] / sv.loc[2025, "n_sites"]
     sx = pd.read_parquet(CURATED / "site_index.parquet")
     top = sx[sx["site_id"].str.startswith("strict:")].sort_values(
         "n_receipts", ascending=False).iloc[0]
@@ -200,6 +207,12 @@ def build_slides(n: dict) -> list[dict]:
                      f"All-time leader: {n['site_top'][0]} "
                      f"({f(n['site_top'][1])} CIs, {f(n['site_top'][2])} refs)."],
          "footnotes": ["Site = street address; branches of one org stay split."]},
+        {"kind": "charts2", "title": "Intensification: fewer hands, more load",
+         "images": ["workload.png", "site_teams.png"],
+         "bullets": [f"References per active CI: {n['wl09']:.2f} \u2192 {n['wl25']:.2f}.",
+                     f"CIs per active site: {n['mi09']:.2f} \u2192 {n['mi25']:.2f}.",
+                     "Work concentrates on repeat investigators at busier sites."],
+         "footnotes": ["Strict persons/addresses; 2008 and 2026 partial."]},
         {"kind": "charts2", "title": "CROs and IRBs in context",
          "images": ["cro_trends.png", "irb_trends.png"],
          "bullets": [f"{f(n['cro25'])} CROs and {f(n['irb25'])} IRBs active in 2025.",
@@ -208,7 +221,7 @@ def build_slides(n: dict) -> list[dict]:
         {"kind": "bullets", "title": "Limitations & what\u2019s next",
          "bullets": [
              "No therapeutic-area or phase fields in BMIS; rows carry date + site only.",
-             "No person\u2194trial linkage; CT.gov cross-check is institution\u00d7city (experimental).",
+             "Person\u2194trial linkage is name-based, thin and KOL-skewed; site cross-check is institution\u00d7city (both experimental).",
              "Person/site counts are ranges across versions, not exact headcounts.",
              "Next: therapeutic-area mix via matched trials; global linkage; cross-site tracking.",
          ],
