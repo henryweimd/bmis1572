@@ -702,7 +702,7 @@ export default function ChinaTab({
                     downloadCsv(
                       'china-affiliations.csv',
                       ['filed', 'institution_zh', 'institution_en', 'specialty_zh', 'specialty_en', 'group_zh', 'group_en', 'role_zh', 'role_en', 'province_zh', 'province_en'],
-                      affs.map((r) => [r.year, r.inst, r.inste, r.spec, r.spece, r.groupz, r.group, r.role, r.rolee, r.prov, r.prove]),
+                      affs.map((r) => [r.year, r.inst ?? '', r.inste ?? '', r.spec ?? '', r.spece ?? '', r.groupz ?? '', r.group ?? '', r.role ?? '', r.rolee ?? '', r.prov ?? '', r.prove ?? '']),
                     )
                   }
                 >
