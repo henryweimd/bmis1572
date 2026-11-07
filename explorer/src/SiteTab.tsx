@@ -107,6 +107,7 @@ export default function SiteTab({
   const [xc, setXc] = useState<{ n: number; ns: number; j: number; samp: string; fac: string; sib: number } | null>(null);
   const [tamix, setTamix] = useState<{ category: string; v: number }[]>([]);
   const [phasemix, setPhasemix] = useState<{ category: string; v: number }[]>([]);
+  const [sampTrials, setSampTrials] = useState<{ nct: string; sponsor: string; phase: string; ta: string }[]>([]);
   const [note, setNote] = useState('');
 
   const yearOpts: number[] = [];
@@ -200,6 +201,7 @@ export default function SiteTab({
       setXc(null);
       setTamix([]);
       setPhasemix([]);
+      setSampTrials([]);
       return;
     }
     let cancelled = false;
@@ -254,6 +256,25 @@ export default function SiteTab({
         setXc(xq[0] ? { n: num0(xq[0].n), ns: num0(xq[0].ns), j: num0(xq[0].j), samp: xq[0].samp, fac: xq[0].fac, sib: num0(xq[0].sib) } : null);
         setTamix(tq.map((r) => ({ category: r.category, v: num0(r.v) })));
         setPhasemix(pq.map((r) => ({ category: r.category, v: num0(r.v) })));
+        const sampNcts = (xq[0]?.samp ?? '')
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, 5);
+        if (sampNcts.length) {
+          const str = await query<{ nct: string; sponsor: string; phase: string; ta: string }>(
+            `SELECT CAST(nct AS VARCHAR) AS nct, CAST(sponsor_disp AS VARCHAR) AS sponsor,` +
+              ` CAST(phase AS VARCHAR) AS phase, CAST(ta AS VARCHAR) AS ta FROM ctgov_trials` +
+              ` WHERE nct IN (${sampNcts.map((n) => `'${escapeLiteral(n)}'`).join(',')})`,
+          ).catch(() => [] as { nct: string; sponsor: string; phase: string; ta: string }[]);
+          if (cancelled) return;
+          const byNct = new Map(str.map((r) => [r.nct, r]));
+          setSampTrials(
+            sampNcts.map((n) => byNct.get(n) ?? { nct: n, sponsor: '', phase: '', ta: '' }),
+          );
+        } else {
+          setSampTrials([]);
+        }
       } catch (e) {
         if (cancelled) return;
         setNote(`Site detail failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -645,12 +666,27 @@ export default function SiteTab({
               {fmtInt.format(xc.n)} plausible industry trials ({fmtInt.format(xc.ns)} strong), shared across{' '}
               {xc.sib} {xc.sib === 1 ? 'address' : 'addresses'} of this institution — e.g. matched facility “
               {xc.fac}”. Sample:{' '}
-              {xc.samp.split(';').map((nct, i) => (
-                <span key={nct}>
-                  {i > 0 && ', '}
-                  <a href={`https://clinicaltrials.gov/study/${nct}`} target="_blank" rel="noreferrer">
-                    {nct}
+              {(sampTrials.length
+                ? sampTrials
+                : xc.samp
+                    .split(';')
+                    .map((n) => n.trim())
+                    .filter(Boolean)
+                    .map((nct) => ({ nct, sponsor: '', phase: '', ta: '' }))
+              ).map((t, i) => (
+                <span key={t.nct}>
+                  {i > 0 && '; '}
+                  <a href={`https://clinicaltrials.gov/study/${t.nct}`} target="_blank" rel="noreferrer">
+                    {t.nct}
                   </a>
+                  {t.sponsor && (
+                    <span className="muted">
+                      {' '}
+                      ({t.sponsor}
+                      {t.phase && t.phase !== 'NA' ? ` · ${t.phase}` : ''}
+                      {t.ta ? ` · ${t.ta.replace(/;/g, ', ')}` : ''})
+                    </span>
+                  )}
                 </span>
               ))}
               . Counts are institution × city, not address-level (see Definitions: site_xcheck).
