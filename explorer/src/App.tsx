@@ -967,7 +967,7 @@ export default function App() {
             </div>
             <p className="caption">
               Strict persons, all years. Repeat-investigator supply concentrates in the US
-              (43% one-and-done) vs 57–67% across non-US bands — thinner benches abroad.
+              (43% one-and-done) vs 54–67% across non-US bands — thinner benches abroad.
             </p>
           </>
         )}

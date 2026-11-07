@@ -148,6 +148,14 @@ Without step 1, the explorer falls back to a committed demo CSV
   coverage ≈7%, ex-US ≈1%.
 - Site vintage: the 2009 site cohort (10,842 addresses) is 25% active a year later,
   ~16% a decade later — sites outlive investigators (19%/~9%).
+- One-and-done by geography: US 43% vs 54–67% across non-US bands (South Asia
+  highest at 67%) — repeat-investigator supply concentrates in the US.
+- Intensification: references per active CI 1.38 → 1.73 and CIs per active site
+  1.38 → 1.85 (2009→2025) — fewer hands, more load per head.
+- Five-year retention by vintage is falling: 2009 CIs 13.6% still active at k=5
+  vs ~9% for 2016–2020 vintages; sites fall faster (20.4% → 9.7%).
+- Demand concentration: top-10 sponsors hold 20% of US industry trials (Pfizer
+  leads); tightness chart now toggles adjusted/unadjusted scope in the app.
 - China CFDI extract (partial): 42,117 investigator-institution pairs
   (34,077 names, 1,818 institutions); 79% of pairs sit at 2020-vintage
   filings (bulk registration). Internal Medicine leads specialties;
