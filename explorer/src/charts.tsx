@@ -417,6 +417,8 @@ export interface VintageRow {
 const VINTAGE_UNIT: Record<string, { head: string; who: string }> = {
   investigators: { head: 'CI vintage (year investigators first filed)', who: 'investigators' },
   sites: { head: 'Site vintage (year sites first filed)', who: 'sites' },
+  cro: { head: 'CRO vintage (year companies first filed)', who: 'companies' },
+  irb: { head: 'IRB vintage (year boards first filed)', who: 'boards' },
 };
 
 function vintageColor(v: number): string {
@@ -434,7 +436,7 @@ export function VintageHeatmap({
 }: {
   rows: VintageRow[];
   kMax: number;
-  unit?: 'investigators' | 'sites';
+  unit?: 'investigators' | 'sites' | 'cro' | 'irb';
 }) {
   if (!rows.length) return <p className="muted">No data.</p>;
   const ks: number[] = [];

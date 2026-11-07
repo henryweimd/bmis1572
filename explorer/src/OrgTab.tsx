@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
-import { CategoryBars, StackedMultiBars } from './charts';
-import type { LineSeries } from './charts';
+import { CategoryBars, StackedMultiBars, VintageHeatmap } from './charts';
+import type { LineSeries, VintageRow } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv } from './csv';
 
+const ORG_KMAX = 10;
 const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
 const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num0 = (v: unknown): number =>
@@ -103,6 +104,7 @@ export default function OrgTab({
   const orgCol = cfg.table === 'CROs' ? 'cro' : 'irb';
   const [ent, setEnt] = useState<LineSeries[]>([]);
   const [top, setTop] = useState<OrgTopRow[]>([]);
+  const [oret, setOret] = useState<VintageRow[]>([]);
   const [note, setNote] = useState('');
 
   const yearOpts: number[] = [];
@@ -115,7 +117,7 @@ export default function OrgTab({
       try {
         const bc = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
         const cc = sel === 'all' ? '' : ` AND ${cfg.keyCol} = '${escapeLiteral(sel)}'`;
-        const [o, k, nco, t, entRows] = await Promise.all([
+        const [o, k, nco, t, entRows, rt] = await Promise.all([
           query<{ org: string; n: number }>(
             `SELECT CAST(${cfg.keyCol} AS VARCHAR) AS org, CAST(n_receipts AS DOUBLE) AS n` +
               ` FROM ${cfg.indexTable} ORDER BY n DESC LIMIT 200`,
@@ -140,8 +142,30 @@ export default function OrgTab({
             `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_entities) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
               ` WHERE year BETWEEN ${y0} AND ${y1}${bc}${cc} GROUP BY 1 ORDER BY 1`,
           ),
+          query<{ cohort: number; k: number; v: number; n: number; na: number }>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
+              ` CAST(n_active AS INTEGER) AS na FROM org_retention` +
+              ` WHERE org_type = '${kind}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${ORG_KMAX} ORDER BY 1, 2`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
+        const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
+        for (const r of rt) {
+          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>(), c: new Map<number, number>() };
+          e.n = r.n;
+          e.m.set(r.k, num0(r.v) * 100);
+          e.c.set(r.k, num0(r.na));
+          byVintage.set(r.cohort, e);
+        }
+        setOret(
+          [...byVintage.entries()].map(([cohort, e]) => ({
+            cohort,
+            n: e.n,
+            cells: Array.from({ length: ORG_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
+            counts: Array.from({ length: ORG_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
+          })),
+        );
         setOpts(o.map((r) => ({ org: r.org, n: num0(r.n) })));
         setKpi({ active: num0(k[0]?.active), receipts: num0(k[0]?.r25), receipts09: num0(k[0]?.r09), orgs: num0(nco[0]?.n) });
         setTop(t);
@@ -379,6 +403,32 @@ export default function OrgTab({
               CSV
             </button>
           )}
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>
+          {cfg.singular} vintage attrition{' '}
+          {!!oret.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `${kind}-vintage-attrition.csv`,
+                  ['vintage', 'n', ...oret[0].cells.map((_, k) => `k${k}_pct`)],
+                  oret.map((r) => [r.cohort, r.n, ...r.cells.map((c) => c ?? '')]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </h2>
+        <VintageHeatmap rows={oret} kMax={ORG_KMAX} unit={kind} />
+        <p className="caption">
+          Of the {cfg.table} first seen in a given year (their vintage), the share active
+          again k years later. Right-censored; 2008 excluded (file ramp-up). Company/board
+          keys carry residual spelling splits — see Definitions: org_retention.
         </p>
       </section>
 
