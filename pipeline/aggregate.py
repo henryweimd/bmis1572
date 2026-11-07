@@ -194,6 +194,22 @@ DEFINITIONS = {
         "investigator activity: most institutions filed in a 2019-2020 bulk "
         "wave. YoY reads as registry composition, never retention."
     ),
+    "who": (
+        "WHO ICTRP (International Clinical Trials Registry Platform) "
+        "aggregate counts from the public Search Portal Advanced Search "
+        "(https://trialsearch.who.int/AdvSearch.aspx): 'N records for M "
+        "trials found' per query. One country per search (or none = "
+        "global), Recruitment Status = ALL, optional Date-of-registration "
+        "year window. Multi-country trials count in every listed country; "
+        "country sums therefore exceed the global total. See also: "
+        "https://www.who.int/clinical-trials-registry-platform."
+    ),
+    "who_records": (
+        "ICTRP records vs trials: records are registry entries across the "
+        "primary registries feeding ICTRP (including ClinicalTrials.gov); "
+        "trials are deduplicated studies. Records >= trials; the gap "
+        "reflects multi-registry registration."
+    ),
     "china_i18n": (
         "ZH is authoritative. EN covers provinces, cities, roles, specialty "
         "groups, top-30 sites (curated) and pattern-derived site/specialty "

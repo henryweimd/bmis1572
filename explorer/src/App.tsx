@@ -7,6 +7,7 @@ import OrgTab from './OrgTab';
 import SiteTab from './SiteTab';
 import TrialsTab from './TrialsTab';
 import ChinaTab from './ChinaTab';
+import WHOTab from './WHOTab';
 import About from './About';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
@@ -139,6 +140,8 @@ const DEF_TITLES: [string, string][] = [
   ['china', 'China CFDI extract'],
   ['china_filing', 'China filing vintage'],
   ['china_i18n', 'China translations'],
+  ['who', 'WHO ICTRP counts'],
+  ['who_records', 'ICTRP records vs trials'],
 ];
 
 function years(): number[] {
@@ -245,8 +248,8 @@ export default function App() {
   const [rcTotal, setRcTotal] = useState(0);
   const [linked, setLinked] = useState<LinkRow[]>([]);
   const [colleagues, setColleagues] = useState<HitRow[]>([]);
-  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'trials' | 'china' | 'about'>(() =>
-    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'trials', 'china', 'about'] as const, 'inv'),
+  const [tab, setTab] = useState<'inv' | 'cro' | 'irb' | 'site' | 'trials' | 'china' | 'who' | 'about'>(() =>
+    pick(hashInit.t, ['inv', 'cro', 'irb', 'site', 'trials', 'china', 'who', 'about'] as const, 'inv'),
   );
 
   useEffect(() => {
@@ -263,7 +266,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'trials' ? 'US Trials' : tab === 'china' ? 'China' : 'About'
+      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'trials' ? 'US Trials' : tab === 'china' ? 'China' : tab === 'who' ? 'WHO ICTRP' : 'About'
     } · Global Clinical Trial Investigator Talent Supply Data Explorer`;
   }, [tab]);
 
@@ -702,6 +705,14 @@ export default function App() {
           onClick={() => setTab('china')}
         >
           China
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'who'}
+          className={tab === 'who' ? 'active' : ''}
+          onClick={() => setTab('who')}
+        >
+          WHO ICTRP
         </button>
         <button
           role="tab"
@@ -1592,6 +1603,7 @@ export default function App() {
       )}
 
       {tab === 'china' && <ChinaTab demo={demo} ready={status === 'ready'} />}
+      {tab === 'who' && <WHOTab demo={demo} ready={status === 'ready'} />}
 
       {tab === 'about' && <About stats={manifest?.stats} />}
 

@@ -160,6 +160,10 @@ Without step 1, the explorer falls back to a committed demo CSV
   (34,077 names, 1,818 institutions); 79% of pairs sit at 2020-vintage
   filings (bulk registration). Internal Medicine leads specialties;
   Guangdong/Beijing/Jiangsu lead provinces.
+- WHO ICTRP (7 Nov 2026, ALL statuses): 1.176M deduplicated trials / 1.286M
+  registry records globally. US (214k), China (196k), India (127k) lead; EU
+  shows ~2:1 records-to-trials (multi-registry registration). Multi-country
+  trials repeat per country — never sum countries (see `docs/who.md`).
 
 ## Limitations
 
