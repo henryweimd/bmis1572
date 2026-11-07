@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T17:32:12.677460+00:00",
+  "generated_at": "2026-11-07T17:41:07.489124+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -772,6 +772,13 @@
       "strict": 27.8,
       "merged": 16.2,
       "raw": 29.3
+    },
+    "linkage": {
+      "persons_linked": 12808,
+      "strong": 10957,
+      "weak": 11611,
+      "trials": 53543,
+      "sponsors": 7940
     }
   },
   "exports": [
@@ -1328,6 +1335,7 @@
         "sponsor",
         "sponsor_disp",
         "phase",
+        "ta",
         "start_y"
       ]
     },

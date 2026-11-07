@@ -1,4 +1,11 @@
-export default function About() {
+const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const num = (v: unknown): number | null =>
+  typeof v === 'number' && !Number.isNaN(v) ? v : null;
+
+export default function About({ stats }: { stats?: Record<string, unknown> }) {
+  const lk = ((stats ?? {}).linkage ?? {}) as Record<string, unknown>;
+  const linked = num(lk.persons_linked);
+  const ever = num(((stats ?? {}).persons_ever as Record<string, unknown> | undefined)?.strict);
   return (
     <section className="panel">
       <h2>About this explorer</h2>
@@ -96,8 +103,18 @@ export default function About() {
           bounds, not exact censuses of humans.
         </li>
         <li>
-          CT.gov person linkage covers 12,808 of 288,855 strict persons (4.4%): only study-level
-          officials can match, so linked investigators skew toward chairs and KOLs.
+          {linked !== null && ever ? (
+            <>
+              CT.gov person linkage covers {fmtInt.format(linked)} of {fmtInt.format(ever)} strict
+              persons ({((linked / ever) * 100).toFixed(1)}%): only study-level officials can match,
+              so linked investigators skew toward chairs and KOLs.
+            </>
+          ) : (
+            <>
+              CT.gov person linkage covers ~4% of strict persons: only study-level officials can
+              match, so linked investigators skew toward chairs and KOLs.
+            </>
+          )}
         </li>
       </ul>
 

@@ -507,7 +507,7 @@ def headline_stats(persons, tables) -> dict:
         return round((d[(v, b)] - d[(v, a)]) / d[(v, a)] * 100, 1) \
             if d[(v, a)] else None
 
-    return {
+    stats = {
         "persons_ever": {v: int(len(persons[v])) for v in VERSIONS},
         "strict_one_trial_share": round(float((s["n_trials"] == 1).mean()), 4),
         "strict_median_trials": float(s["n_trials"].median()),
@@ -517,6 +517,17 @@ def headline_stats(persons, tables) -> dict:
         "us_active_2009_2025": {v: [us[(v, 2009)], us[(v, 2025)]] for v in VERSIONS},
         "us_active_growth_pct_09_25": {v: growth(v, us) for v in VERSIONS},
     }
+    if "person_ctgov_link" in tables and "ctgov_trials" in tables:
+        lk = tables["person_ctgov_link"]
+        tr = tables["ctgov_trials"]
+        stats["linkage"] = {
+            "persons_linked": int(lk["person_id"].nunique()),
+            "strong": int((lk["tier"] == "strong").sum()),
+            "weak": int((lk["tier"] == "weak").sum()),
+            "trials": int(tr["nct"].nunique()),
+            "sponsors": int(tr["sponsor"].nunique()),
+        }
+    return stats
 
 
 def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
