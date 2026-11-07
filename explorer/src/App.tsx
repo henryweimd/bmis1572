@@ -247,8 +247,8 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'Investigators' : tab === 'cro' ? 'CROs' : tab === 'irb' ? 'IRBs' : tab === 'site' ? 'Sites' : tab === 'china' ? 'China' : 'About'
-    } · Investigator Supply Explorer`;
+      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'china' ? 'China' : 'About'
+    } · Global Clinical Trial Investigator Talent Supply Data Explorer`;
   }, [tab]);
 
   useEffect(() => {
@@ -523,7 +523,7 @@ export default function App() {
   if (status === 'error') {
     return (
       <div className="wrap">
-        <h1>Investigator Supply Explorer</h1>
+        <h1>Global Clinical Trial Investigator Talent Supply Data Explorer</h1>
         <p className="error">Could not load: {error}</p>
         <p className="muted">
           Run the pipeline first: <code>uv run python pipeline/build.py</code> from the repo root.
@@ -545,7 +545,7 @@ export default function App() {
     <div className="wrap">
       <header>
         <div>
-          <h1>Investigator Supply Explorer</h1>
+          <h1>Global Clinical Trial Investigator Talent Supply Data Explorer</h1>
           <p className="muted">
             {demo ? 'Demo sample (strict, yearly geo)' : 'FDA BMIS investigators vs. industry trials'}
             {manifest && !demo && ` · built ${manifest.generated_at.slice(0, 16).replace('T', ' ')} UTC`}
@@ -569,7 +569,7 @@ export default function App() {
           className={tab === 'inv' ? 'active' : ''}
           onClick={() => setTab('inv')}
         >
-          Investigators
+          US Investigators
         </button>
         <button
           role="tab"
@@ -577,7 +577,7 @@ export default function App() {
           className={tab === 'cro' ? 'active' : ''}
           onClick={() => setTab('cro')}
         >
-          CROs
+          US CROs
         </button>
         <button
           role="tab"
@@ -585,7 +585,7 @@ export default function App() {
           className={tab === 'irb' ? 'active' : ''}
           onClick={() => setTab('irb')}
         >
-          IRBs
+          US IRBs
         </button>
         <button
           role="tab"
@@ -593,7 +593,7 @@ export default function App() {
           className={tab === 'site' ? 'active' : ''}
           onClick={() => setTab('site')}
         >
-          Sites
+          US Sites
         </button>
         <button
           role="tab"
