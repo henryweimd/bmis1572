@@ -39,9 +39,10 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
   const [cyCountry, setCyCountry] = useState('all');
   const [cyY0, setCyY0] = useState(2000);
   const [cyY1, setCyY1] = useState(2026);
-  const [cySort, setCySort] = useState<{ key: 'c' | 'y' | 'n' | 'r'; dir: 1 | -1 }>({
-    key: 'y',
-    dir: 1,
+  const [cyMetric, setCyMetric] = useState<'n' | 'r'>('n');
+  const [cySort, setCySort] = useState<{ key: string; dir: 1 | -1 }>({
+    key: 'total',
+    dir: -1,
   });
   const [note, setNote] = useState('');
 
@@ -107,27 +108,54 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
     };
   }, [ready, demo]);
 
+  const cyTotals = useMemo(() => {
+    const t = new Map<string, number>();
+    for (const r of cyRows) t.set(r.c, (t.get(r.c) ?? 0) + r.n);
+    return t;
+  }, [cyRows]);
   const cyCountries = useMemo(
-    () => [...new Set(cyRows.map((r) => r.c))].sort(),
-    [cyRows],
+    () => [...cyTotals.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c),
+    [cyTotals],
   );
   const cyYears = useMemo(
     () => [...new Set(cyRows.map((r) => r.y))].sort((a, b) => a - b),
     [cyRows],
   );
+  const cyCols = useMemo(
+    () => cyYears.filter((y) => y >= cyY0 && y <= cyY1),
+    [cyYears, cyY0, cyY1],
+  );
   const cyShown = useMemo(() => {
-    const f = cyRows.filter(
-      (r) =>
-        (cyCountry === 'all' || r.c === cyCountry) && r.y >= cyY0 && r.y <= cyY1,
-    );
+    const keep =
+      cyCountry === 'all' ? cyCountries : cyCountries.filter((c) => c === cyCountry);
+    const cell = new Map<string, { n: number; r: number }>();
+    for (const row of cyRows) cell.set(`${row.c}|${row.y}`, { n: row.n, r: row.r });
+    const rows = keep.map((c) => {
+      const vals = new Map<number, number>();
+      let total = 0;
+      for (const y of cyCols) {
+        const v = cell.get(`${c}|${y}`)?.[cyMetric] ?? 0;
+        vals.set(y, v);
+        total += v;
+      }
+      return { c, total, vals };
+    });
     const { key, dir } = cySort;
-    return [...f].sort((a, b) =>
-      key === 'c' ? dir * a.c.localeCompare(b.c) : dir * (a[key] - b[key]),
+    return rows.sort((a, b) =>
+      key === 'country'
+        ? dir * a.c.localeCompare(b.c)
+        : key === 'total'
+          ? dir * (a.total - b.total)
+          : dir * ((a.vals.get(Number(key)) ?? 0) - (b.vals.get(Number(key)) ?? 0)),
     );
-  }, [cyRows, cyCountry, cyY0, cyY1, cySort]);
-  const cySortBy = (key: 'c' | 'y' | 'n' | 'r') =>
-    setCySort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
-  const cyArrow = (key: 'c' | 'y' | 'n' | 'r') =>
+  }, [cyRows, cyCountries, cyCols, cyCountry, cyMetric, cySort]);
+  const cySortBy = (key: string) =>
+    setCySort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === 1 ? -1 : 1 }
+        : { key, dir: key === 'country' ? 1 : -1 },
+    );
+  const cyArrow = (key: string) =>
     cySort.key === key ? (cySort.dir === 1 ? ' ▲' : ' ▼') : '';
 
   if (demo) return <p className="muted">Run the pipeline for WHO data.</p>;
@@ -212,7 +240,9 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         <p className="caption">
           Registration-year trials for the top 8 countries plus other top-20. Only the top 20
           countries were scraped by year — 179 smaller countries are excluded here, so this
-          understates the global total (see trend above). Toggle 100% for yearly share.{' '}
+          understates the global total (see trend above). Yearly figures can also double-count
+          trials first registered in different years across registries — visibly for the EU —
+          so compare shapes, not levels, against all-time totals. Toggle 100% for yearly share.{' '}
           {!!stack.length && (
             <button
               className="btn"
@@ -227,6 +257,22 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       <section className="panel">
         <h2>Top-20 countries by year (stack data)</h2>
         <div className="filters">
+          <div className="seg" role="group" aria-label="WHO metric">
+            <button
+              className={cyMetric === 'n' ? 'active' : ''}
+              onClick={() => setCyMetric('n')}
+              title="Deduplicated trials (matches the stack chart)"
+            >
+              Trials
+            </button>
+            <button
+              className={cyMetric === 'r' ? 'active' : ''}
+              onClick={() => setCyMetric('r')}
+              title="Registry records across primary registries"
+            >
+              Records
+            </button>
+          </div>
           <label>
             Country
             <select value={cyCountry} onChange={(e) => setCyCountry(e.target.value)}>
@@ -263,51 +309,61 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           <table>
             <thead>
               <tr>
-                <th>
-                  <button className="btn" onClick={() => cySortBy('c')}>
-                    Country{cyArrow('c')}
+                <th style={{ position: 'sticky', left: 0 }}>
+                  <button className="btn" onClick={() => cySortBy('country')}>
+                    Country{cyArrow('country')}
                   </button>
                 </th>
                 <th>
-                  <button className="btn" onClick={() => cySortBy('y')}>
-                    Year{cyArrow('y')}
+                  <button className="btn" onClick={() => cySortBy('total')}>
+                    Total{cyArrow('total')}
                   </button>
                 </th>
-                <th>
-                  <button className="btn" onClick={() => cySortBy('n')}>
-                    Trials{cyArrow('n')}
-                  </button>
-                </th>
-                <th>
-                  <button className="btn" onClick={() => cySortBy('r')}>
-                    Records{cyArrow('r')}
-                  </button>
-                </th>
+                {cyCols.map((y) => (
+                  <th key={y}>
+                    <button className="btn" onClick={() => cySortBy(String(y))}>
+                      {y}
+                      {cyArrow(String(y))}
+                    </button>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {cyShown.map((r) => (
-                <tr key={`${r.c}-${r.y}`}>
-                  <td>{r.c}</td>
-                  <td>{r.y}</td>
-                  <td>{fmtInt.format(r.n)}</td>
-                  <td>{fmtInt.format(r.r)}</td>
+                <tr key={r.c}>
+                  <td style={{ position: 'sticky', left: 0, background: 'var(--surface)' }}>
+                    {r.c}
+                  </td>
+                  <td>
+                    <strong>{fmtInt.format(r.total)}</strong>
+                  </td>
+                  {cyCols.map((y) => (
+                    <td key={y}>{fmtInt.format(r.vals.get(y) ?? 0)}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="caption">
-          The exact numbers behind the stack chart above: {cyShown.length} of {cyRows.length}{' '}
-          country-years. Click a header to sort; 100%-mode shares derive from these trials.{' '}
+          The exact numbers behind the stack chart above, pivoted: one row per country
+          (most→fewest trials by default), one column per registration year. Click any
+          header to sort; totals respect the year range. 100%-mode shares derive from
+          these trials. Row totals can exceed all-time country totals: a trial registered
+          in different years across registries counts in each year (notably EU).{' '}
           {!!cyShown.length && (
             <button
               className="btn"
               onClick={() =>
                 downloadCsv(
                   'who-top20-by-year.csv',
-                  ['country', 'year', 'trials', 'records'],
-                  cyShown.map((r) => [r.c, r.y, r.n, r.r]),
+                  ['country', 'total', ...cyCols.map(String)],
+                  cyShown.map((r) => [
+                    r.c,
+                    r.total,
+                    ...cyCols.map((y) => r.vals.get(y) ?? 0),
+                  ]),
                 )
               }
             >
