@@ -385,7 +385,7 @@ export default function TrialsTab({
                         <tr
                           key={`${r.name}-${i}`}
                           className="pickable"
-                          title="Search in US Investigators"
+                          title="Search in FDA Investigators"
                           onClick={() => onJump(r.name)}
                         >
                           <td>{r.name}</td>
@@ -445,7 +445,7 @@ export default function TrialsTab({
                 <tr
                   key={`${r.name}-${r.country}`}
                   className="pickable"
-                  title="Search in US Investigators"
+                  title="Search in FDA Investigators"
                   onClick={() => onJump(r.name)}
                 >
                   <td>{r.name}</td>
@@ -460,7 +460,7 @@ export default function TrialsTab({
         <p className="caption">
           BMIS persons by linked CT.gov trials in range (strong + weak tiers). Skews toward study
           chairs and KOLs — most trials name only study-level officials, so most investigators
-          cannot appear here. Click a row to search that name in US Investigators.
+          cannot appear here. Click a row to search that name in FDA Investigators.
         </p>
       </section>
 
