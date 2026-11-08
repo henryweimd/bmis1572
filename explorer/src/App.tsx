@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createViews, escapeLiteral, loadManifest, query } from './duckdb';
 import type { Manifest } from './duckdb';
 import { CategoryBars, MultiLineChart, StackedBars, StackedMultiBars, TrendChart, VintageHeatmap } from './charts';
@@ -94,6 +94,46 @@ interface EntRow {
   type: string;
   n: number;
 }
+interface EuObsRow {
+  y: number;
+  n: number;
+}
+interface EuExpRow {
+  y: number;
+  e: number;
+}
+interface EuSumRow {
+  run: string;
+  band: string;
+  gn: number;
+  gs: number;
+  verdict: string;
+}
+interface DecompRow {
+  cohort: number;
+  k: number;
+  n: number;
+  c: number;
+  re: number;
+}
+interface MoverRow {
+  name: string;
+  np: number;
+  verdict: string;
+  countries: string;
+  y0: number;
+  y1: number;
+  nt: number;
+}
+interface MoverSum {
+  nc: number;
+  mv: number;
+  co: number;
+  am: number;
+  pic: number;
+  adjAll: number;
+  adjMv: number;
+}
 interface Kpi {
   active: number;
   active09: number;
@@ -119,6 +159,7 @@ const DEF_TITLES: [string, string][] = [
   ['one_trial', 'One-trial'],
   ['trials_per_year', 'Trials/year rate'],
   ['retention', 'Vintage attrition'],
+  ['vintage_decomp', 'Vintage decomposition'],
   ['concentration', 'Work concentration'],
   ['scope_unadjusted', 'Unadjusted benchmark'],
   ['scope_adjusted', 'Adjusted benchmark'],
@@ -142,6 +183,8 @@ const DEF_TITLES: [string, string][] = [
   ['china_i18n', 'China translations'],
   ['who', 'WHO ICTRP counts'],
   ['who_records', 'ICTRP records vs trials'],
+  ['eu_break', 'EU break study'],
+  ['movers', 'Cross-site movers (experimental)'],
 ];
 
 function years(): number[] {
@@ -231,6 +274,11 @@ export default function App() {
   const [oadBand, setOadBand] = useState<{ b: string; n: number; s: number }[]>([]);
   const [workload, setWorkload] = useState<{ d: string; v: number }[]>([]);
   const [ret, setRet] = useState<VintageRow[]>([]);
+  const [retMode, setRetMode] = useState<'attrition' | 'reentry'>('attrition');
+  const [retBand, setRetBand] = useState<string>('all');
+  const [retD, setRetD] = useState<DecompRow[]>([]);
+  const [mvTop, setMvTop] = useState<MoverRow[]>([]);
+  const [mvSum, setMvSum] = useState<MoverSum | null>(null);
   const [ret5, setRet5] = useState<{ d: string; v: number }[]>([]);
   const [conc, setConc] = useState<LineSeries[]>([]);
   const [leaders, setLeaders] = useState<LeaderRow[]>([]);
@@ -238,6 +286,8 @@ export default function App() {
   const [states, setStates] = useState<{ category: string; v: number }[]>([]);
   const [cohorts, setCohorts] = useState<CohortRow[]>([]);
   const [ents, setEnts] = useState<LineSeries[]>([]);
+  const [euSeries, setEuSeries] = useState<LineSeries[]>([]);
+  const [euSum, setEuSum] = useState<EuSumRow[]>([]);
   const [q, setQ] = useState('');
   const [searchBand, setSearchBand] = useState('all');
   const [minTrials, setMinTrials] = useState('');
@@ -350,7 +400,7 @@ export default function App() {
           setNote('');
           return;
         }
-        const [ot, ti, tser, bn, pb, ob, rt, r5, wl, cn, lb, cy, sy, ch, en] = await Promise.all([
+        const [ot, ti, tser, bn, pb, ob, rt, r5, wl, cn, lb, cy, sy, ch, en, euO, euE, euS, rdd, mvt, mvs] = await Promise.all([
           query<{ v: number | null }>(
             `SELECT CAST(SUM(CASE WHEN bin = '1' THEN n_active ELSE 0 END) AS DOUBLE) /` +
               ` NULLIF(CAST(SUM(n_active) AS DOUBLE), 0) AS v FROM active_bins` +
@@ -438,6 +488,40 @@ export default function App() {
               ` WHERE type IN ('IRB', 'CRO') AND year BETWEEN ${y0} AND ${y1}` +
               ` GROUP BY 1, 2 ORDER BY 1, 2`,
           ),
+          query<EuObsRow>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(n_active AS DOUBLE) AS n` +
+              ` FROM investigators_year_geo WHERE version = 'merged'` +
+              ` AND band = 'Europe (EU+UK)' AND year BETWEEN 2009 AND 2025 ORDER BY 1`,
+          ),
+          query<EuExpRow>(
+            `SELECT CAST(year AS INTEGER) AS y, CAST(exp_n AS DOUBLE) AS e` +
+              ` FROM eu_break_band WHERE run = '2021' AND band = 'Europe (EU+UK)' ORDER BY 1`,
+          ),
+          query<EuSumRow>(
+            `SELECT CAST(run AS VARCHAR) AS run, CAST(band AS VARCHAR) AS band,` +
+              ` CAST(post_gap_n AS DOUBLE) AS gn, CAST(post_gap_share AS DOUBLE) AS gs,` +
+              ` CAST(verdict AS VARCHAR) AS verdict FROM eu_break_summary ORDER BY 1, 2`,
+          ),
+          query<DecompRow>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
+              ` CAST(SUM(n_cohort) AS DOUBLE) AS n, CAST(SUM(n_continuous) AS DOUBLE) AS c,` +
+              ` CAST(SUM(n_reentered) AS DOUBLE) AS re FROM retention_decomp` +
+              ` WHERE version = '${v}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX}` +
+              (retBand === 'all' ? '' : ` AND band = '${escapeLiteral(retBand)}'`) +
+              ` GROUP BY 1, 2 ORDER BY 1, 2`,
+          ),
+          query<MoverRow>(
+            `SELECT CAST(display_name AS VARCHAR) AS name, CAST(n_persons AS INTEGER) AS np,` +
+              ` CAST(verdict AS VARCHAR) AS verdict, CAST(countries AS VARCHAR) AS countries,` +
+              ` CAST(first_year AS INTEGER) AS y0, CAST(last_year AS INTEGER) AS y1,` +
+              ` CAST(n_trials AS INTEGER) AS nt FROM mover_cluster ORDER BY n_persons DESC LIMIT 25`,
+          ),
+          query<MoverSum>(
+            `SELECT CAST(n_clusters AS INTEGER) AS nc, CAST(n_mover_likely AS INTEGER) AS mv,` +
+              ` CAST(n_collision_likely AS INTEGER) AS co, CAST(n_ambiguous AS INTEGER) AS am,` +
+              ` CAST(persons_in_clusters AS INTEGER) AS pic, CAST(adj_merge_all AS INTEGER) AS adjAll,` +
+              ` CAST(adj_movers_only AS INTEGER) AS adjMv FROM mover_summary LIMIT 1`,
+          ),
         ]);
         if (cancelled) return;
         setKpi({
@@ -514,6 +598,22 @@ export default function App() {
             points: en.filter((r) => r.type === t).map((r) => ({ x: r.y, y: num0(r.n) })),
           })),
         );
+        setEuSeries([
+          {
+            label: 'EU observed',
+            color: '#ff7f0e',
+            points: euO.map((r) => ({ x: r.y, y: num0(r.n) })),
+          },
+          {
+            label: 'Pre-trend expected',
+            color: '#333',
+            points: euE.map((r) => ({ x: r.y, y: num0(r.e) })),
+          },
+        ]);
+        setEuSum(euS);
+        setRetD(rdd);
+        setMvTop(mvt);
+        setMvSum(mvs[0] ?? null);
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -523,7 +623,40 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo, tightScope]);
+  }, [status, version, band, y0, y1, leaderGeo, leaderSort, demo, tightScope, retBand]);
+
+  const retShow = useMemo<VintageRow[]>(() => {
+    if (retMode === 'attrition' && retBand === 'all') return ret;
+    const byCohort = new Map<number, Map<number, DecompRow>>();
+    for (const r of retD) {
+      let m = byCohort.get(r.cohort);
+      if (!m) {
+        m = new Map();
+        byCohort.set(r.cohort, m);
+      }
+      m.set(r.k, r);
+    }
+    return [...byCohort.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([c, m]) => {
+        const first = m.get(0) ?? [...m.values()][0];
+        const n = num0(first?.n);
+        const cells = Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => {
+          const r = m.get(k);
+          if (!r || !num0(r.n)) return null;
+          if (retMode === 'attrition') return ((num0(r.c) + num0(r.re)) / num0(r.n)) * 100;
+          if (k === 0) return null;
+          const a = num0(r.c) + num0(r.re);
+          return a > 0 ? (num0(r.re) / a) * 100 : null;
+        });
+        const counts = Array.from({ length: VINTAGE_KMAX + 1 }, (_, k) => {
+          const r = m.get(k);
+          if (!r) return null;
+          return retMode === 'attrition' ? num0(r.c) + num0(r.re) : num0(r.re);
+        });
+        return { cohort: c, n, cells, counts };
+      });
+  }, [ret, retD, retMode, retBand]);
 
 
   const runSearch = async (override?: string) => {
@@ -872,6 +1005,126 @@ export default function App() {
           </a>{' '}
           for European countries.
         </p>
+      </section>
+
+      <section className="panel">
+        <h2>EU break study: observed vs pre-trend</h2>
+        {demo ? (
+          <p className="muted">Run the pipeline for break-study data.</p>
+        ) : (
+          <>
+            <MultiLineChart series={euSeries} />
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Break</th>
+                    <th>Band</th>
+                    <th>Level gap/yr</th>
+                    <th>Share gap</th>
+                    <th>Verdict</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {euSum.map((r) => (
+                    <tr key={`${r.run}-${r.band}`}>
+                      <td>{r.run}</td>
+                      <td>{r.band}</td>
+                      <td>{fmtInt.format(Math.round(r.gn))}</td>
+                      <td>{`${(r.gs * 100).toFixed(1)}pp`}</td>
+                      <td>{r.verdict || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="caption">
+              Merged persons; OLS on 2009–20 extrapolated to 2021–25 (placebos: 2016, 2017).
+              The EU runs ≈4,340 CIs/yr (−62% of pre-mean) below trend while no control
+              band collapses in level terms; the US share &lsquo;surge&rsquo; is the
+              compositional mirror of the EU exit. Pre-registered verdict: descriptive-only
+              (see Definitions → EU break study).{' '}
+              {!!euSum.length && (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    downloadCsv(
+                      'eu-break-summary.csv',
+                      ['run', 'band', 'post_gap_n', 'post_gap_share', 'verdict'],
+                      euSum.map((r) => [r.run, r.band, Math.round(r.gn), r.gs, r.verdict]),
+                    )
+                  }
+                >
+                  CSV
+                </button>
+              )}
+            </p>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Cross-site movers (experimental)</h2>
+        {demo || !mvSum ? (
+          <p className="muted">Run the pipeline for mover data.</p>
+        ) : (
+          <>
+            <p>
+              {fmtInt.format(mvSum.nc)} same-name clusters ({fmtInt.format(mvSum.pic)} merged
+              persons): {fmtInt.format(mvSum.mv)} mover-likely, {fmtInt.format(mvSum.am)}{' '}
+              ambiguous, {fmtInt.format(mvSum.co)} collision-likely. Merging only mover-likely
+              clusters would cut {fmtInt.format(mvSum.adjMv)} persons; merging every cluster{' '}
+              {fmtInt.format(mvSum.adjAll)} — bounds, not a revised headline.
+            </p>
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Persons</th>
+                    <th>Verdict</th>
+                    <th>Countries</th>
+                    <th>Span</th>
+                    <th>Trials</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mvTop.map((r) => (
+                    <tr key={r.name}>
+                      <td>{r.name}</td>
+                      <td>{r.np}</td>
+                      <td>{r.verdict}</td>
+                      <td>{r.countries}</td>
+                      <td>
+                        {r.y0}–{r.y1}
+                      </td>
+                      <td>{fmtInt.format(r.nt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="caption">
+              Name-only linkage over merged persons; sequential active years suggest a mover,
+              overlapping years across countries suggest a collision (see Definitions). Top 25
+              clusters by size.{' '}
+              {!!mvTop.length && (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    downloadCsv(
+                      'mover-clusters-top25.csv',
+                      ['name', 'n_persons', 'verdict', 'countries', 'first_year', 'last_year', 'n_trials'],
+                      mvTop.map((r) => [r.name, r.np, r.verdict, r.countries, r.y0, r.y1, r.nt]),
+                    )
+                  }
+                >
+                  CSV
+                </button>
+              )}
+            </p>
+          </>
+        )}
       </section>
 
       <section className="panel">
@@ -1522,7 +1775,41 @@ export default function App() {
               <p className="muted">Run the pipeline for retention data.</p>
             ) : (
               <>
-                <VintageHeatmap rows={ret} kMax={VINTAGE_KMAX} />
+                <div className="filters">
+                  <div className="seg" role="group" aria-label="Vintage view">
+                    <button
+                      className={retMode === 'attrition' ? 'active' : ''}
+                      onClick={() => setRetMode('attrition')}
+                      title="Share of each vintage still active k years later"
+                    >
+                      Attrition
+                    </button>
+                    <button
+                      className={retMode === 'reentry' ? 'active' : ''}
+                      onClick={() => setRetMode('reentry')}
+                      title="Share of actives at +k who missed at least one year since first seen"
+                    >
+                      Re-entry
+                    </button>
+                  </div>
+                  <label>
+                    Geography
+                    <select value={retBand} onChange={(e) => setRetBand(e.target.value)}>
+                      <option value="all">All bands</option>
+                      {BANDS.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <VintageHeatmap
+                  rows={retShow}
+                  kMax={VINTAGE_KMAX}
+                  mode={retMode}
+                  nullTip={retMode === 'reentry' ? 'not applicable / censored' : 'censored'}
+                />
                 <h3>Five-year retention by vintage</h3>
                 <TrendChart data={ret5} />
                 <p className="caption">
@@ -1539,18 +1826,23 @@ export default function App() {
                   )}
                 </p>
                 <p className="caption">
-                  Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in
-                  that year (n = investigators). Cells show the share of that vintage still active k years
-                  later (percent). Gray cells are right-censored (vintage too recent to observe). 2008
-                  excluded: file ramp-up distorts the base.{' '}
-                  {!!ret.length && (
+                  {retMode === 'attrition'
+                    ? 'Each row is one vintage: the clinical investigators (CIs) who first appear in BMIS in ' +
+                      'that year (n = investigators). Cells show the share of that vintage still active k years ' +
+                      'later (percent). Gray cells are right-censored (vintage too recent to observe). 2008 ' +
+                      'excluded: file ramp-up distorts the base.'
+                    : 'Re-entry view: of the vintage members active k years later, the share who missed ' +
+                      'at least one year in between (percent) — returners, not continuous stayers. +0y is ' +
+                      'not applicable (everyone is trivially continuous in their first year). Geography ' +
+                      'filters by investigator band.'}{' '}
+                  {!!retShow.length && (
                     <button
                       className="btn"
                       onClick={() =>
                         downloadCsv(
-                          `vintage-attrition-${version}.csv`,
-                          ['vintage', 'n', ...ret[0].cells.map((_, k) => `k${k}_pct`)],
-                          ret.map((r) => [r.cohort, r.n, ...r.cells.map((c) => c ?? '')]),
+                          `vintage-${retMode}-${version}${retBand === 'all' ? '' : `-${retBand}`}.csv`,
+                          ['vintage', 'n', ...retShow[0].cells.map((_, k) => `k${k}_pct`)],
+                          retShow.map((r) => [r.cohort, r.n, ...r.cells.map((c) => c ?? '')]),
                         )
                       }
                     >

@@ -497,6 +497,52 @@ def chart_who(wy: pd.DataFrame, wc: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def chart_eu_break(iyg: pd.DataFrame, band: pd.DataFrame,
+                 summ: pd.DataFrame, out: Path) -> None:
+    eu = band[(band["run"] == "2021") & (band["band"] == "Europe (EU+UK)")]
+    obs = (iyg[(iyg["version"] == "merged")
+               & (iyg["band"] == "Europe (EU+UK)")
+               & (iyg["year"] >= 2009) & (iyg["year"] <= 2025)]
+           .set_index("year")["n_active"])
+    fig, (a0, a1) = plt.subplots(1, 2, figsize=(12, 4.6))
+    a0.plot(obs.index, obs.to_numpy(), "o-", color=BAND_COLORS["Europe (EU+UK)"],
+            label="Observed active CIs")
+    pre = obs[obs.index <= 2020]
+    slope, icept = np.polyfit(pre.index.to_numpy(float),
+                              pre.to_numpy(float), 1)
+    proj_x = np.arange(2009, 2026)
+    a0.plot(proj_x, slope * proj_x + icept, "--", color="black", alpha=0.7,
+            label="Pre-trend (2009-2020 OLS)")
+    a0.axvspan(2020.5, 2025.5, color="gray", alpha=0.12)
+    a0.text(2021, a0.get_ylim()[1] * 0.96, "2021 break", fontsize=8, va="top")
+    a0.set_title("EU active CIs vs pre-trend (merged persons)")
+    a0.set_ylabel("Active CIs")
+    _year_ticks(a0, obs.index[::2])
+    a0.yaxis.set_major_formatter(_comma)
+    a0.legend(fontsize=8, loc="lower left")
+    main = summ[summ["run"] == "2021"].set_index("band")["post_gap_n"]
+    order = ["Europe (EU+UK)", "United States", "East Asia & Pacific",
+             "South America"]
+    vals = [main.loc[b] for b in order]
+    colors = [BAND_COLORS[b] for b in order]
+    a1.barh(order, vals, color=colors)
+    a1.axvline(0, color="black", lw=1)
+    a1.set_title("Post-2021 level gap vs pre-trend (mean 2021-25)")
+    a1.set_xlabel("Active CIs / year vs expected")
+    a1.xaxis.set_major_formatter(_comma)
+    for i, v in enumerate(vals):
+        a1.text(v, i, f" {v:+,.0f}", va="center", fontsize=8)
+    eug = eu["gap_n"].mean()
+    _caption(fig, f"EU 2021 gap {eug:+,.0f} CIs/yr (-62% of pre-mean); placebo EU gaps "
+                  f"-1,148 (2016) and -506 (2017). Per pre-registered spec (docs/eu_break.md) "
+                  f"the study ships descriptive-only: the US share 'surge' is the compositional "
+                  f"mirror of the EU exit and EU mid-sample volatility trips the placebo gate. "
+                  f"Timing coincides with the 1572 prohibition + 2021 NCI RCR replacement.")
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
+    fig.savefig(out / "eu_break.png")
+    plt.close(fig)
+
+
 def chart_linkage_coverage(lk: pd.DataFrame, pi: pd.DataFrame, out: Path) -> None:
     linked = set(lk["person_id"].unique().tolist())
     cov = (pi.assign(linked=pi["person_id"].isin(linked))
@@ -570,6 +616,9 @@ def build_all(tables: dict[str, pd.DataFrame], out: Path) -> list[str]:
         chart_site_retention(tables["site_retention"], out)
     if "who_year" in tables and "who_country" in tables:
         chart_who(tables["who_year"], tables["who_country"], out)
+    if "eu_break_band" in tables and "eu_break_summary" in tables:
+        chart_eu_break(tables["investigators_year_geo"],
+                       tables["eu_break_band"], tables["eu_break_summary"], out)
     if "cn_filing_year" in tables:
         chart_china_filing(tables["cn_filing_year"], out)
         chart_china_specialty(tables["cn_specialty_year"], out)

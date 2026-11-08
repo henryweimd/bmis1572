@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
 import type { LineSeries } from './charts';
@@ -35,6 +35,14 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
   const [yoy, setYoy] = useState<{ d: string; v: number }[]>([]);
   const [stack, setStack] = useState<LineSeries[]>([]);
   const [rows, setRows] = useState<WhoRow[]>([]);
+  const [cyRows, setCyRows] = useState<{ c: string; y: number; n: number; r: number }[]>([]);
+  const [cyCountry, setCyCountry] = useState('all');
+  const [cyY0, setCyY0] = useState(2000);
+  const [cyY1, setCyY1] = useState(2026);
+  const [cySort, setCySort] = useState<{ key: 'c' | 'y' | 'n' | 'r'; dir: 1 | -1 }>({
+    key: 'y',
+    dir: 1,
+  });
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -55,8 +63,8 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           query<{ y: number; n: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(trials AS DOUBLE) AS n FROM who_year ORDER BY 1`,
           ),
-          query<{ c: string; y: number; n: number }>(
-            `SELECT CAST(country AS VARCHAR) AS c, CAST(year AS INTEGER) AS y, CAST(trials AS DOUBLE) AS n FROM who_country_year ORDER BY 1, 2`,
+          query<{ c: string; y: number; n: number; r: number }>(
+            `SELECT CAST(country AS VARCHAR) AS c, CAST(year AS INTEGER) AS y, CAST(trials AS DOUBLE) AS n, CAST(records AS DOUBLE) AS r FROM who_country_year ORDER BY 1, 2`,
           ),
           query<WhoRow>(
             `SELECT CAST(country AS VARCHAR) AS country, CAST(band AS VARCHAR) AS band,` +
@@ -87,6 +95,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         });
         setStack(series);
         setRows(all);
+        setCyRows(cy.map((r) => ({ c: r.c, y: r.y, n: num0(r.n), r: num0(r.r) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -97,6 +106,29 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       cancelled = true;
     };
   }, [ready, demo]);
+
+  const cyCountries = useMemo(
+    () => [...new Set(cyRows.map((r) => r.c))].sort(),
+    [cyRows],
+  );
+  const cyYears = useMemo(
+    () => [...new Set(cyRows.map((r) => r.y))].sort((a, b) => a - b),
+    [cyRows],
+  );
+  const cyShown = useMemo(() => {
+    const f = cyRows.filter(
+      (r) =>
+        (cyCountry === 'all' || r.c === cyCountry) && r.y >= cyY0 && r.y <= cyY1,
+    );
+    const { key, dir } = cySort;
+    return [...f].sort((a, b) =>
+      key === 'c' ? dir * a.c.localeCompare(b.c) : dir * (a[key] - b[key]),
+    );
+  }, [cyRows, cyCountry, cyY0, cyY1, cySort]);
+  const cySortBy = (key: 'c' | 'y' | 'n' | 'r') =>
+    setCySort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  const cyArrow = (key: 'c' | 'y' | 'n' | 'r') =>
+    cySort.key === key ? (cySort.dir === 1 ? ' ▲' : ' ▼') : '';
 
   if (demo) return <p className="muted">Run the pipeline for WHO data.</p>;
 
@@ -126,8 +158,9 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           Records are registry entries across ICTRP&apos;s primary registries (including
           ClinicalTrials.gov); trials are deduplicated studies. Multi-country trials count in
           every listed country, so country figures sum past the global total. Three countries
-          (Côte d&apos;Ivoire, Laos, North Korea) return zero via the portal&apos;s country
-          list — likely vocabulary misses for the first two; shown as reported, not true zeros.
+          return zero via the portal&apos;s country list: verified 2026-11-07 against
+          ClinicalTrials.gov (114 studies in Côte d&apos;Ivoire, 50 in Laos, 1 in North
+          Korea), the first two are portal indexing gaps, not true zeros.
         </p>
       </section>
 
@@ -169,7 +202,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         <div className="panel">
           <h2>Trials by region band</h2>
           <CategoryBars data={bands} />
-          <p className="caption">Same bands as the US tabs; country sums, so multi-country overlap.</p>
+          <p className="caption">Same bands as the FDA tabs; country sums, so multi-country overlap.</p>
         </div>
       </section>
 
@@ -184,6 +217,99 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
             <button
               className="btn"
               onClick={() => stackedCsv('who-top-countries-by-year.csv', stack)}
+            >
+              CSV
+            </button>
+          )}
+        </p>
+      </section>
+
+      <section className="panel">
+        <h2>Top-20 countries by year (stack data)</h2>
+        <div className="filters">
+          <label>
+            Country
+            <select value={cyCountry} onChange={(e) => setCyCountry(e.target.value)}>
+              <option value="all">All top-20</option>
+              {cyCountries.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            From
+            <select value={cyY0} onChange={(e) => setCyY0(Number(e.target.value))}>
+              {cyYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            To
+            <select value={cyY1} onChange={(e) => setCyY1(Number(e.target.value))}>
+              {cyYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="table-scroll short">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <button className="btn" onClick={() => cySortBy('c')}>
+                    Country{cyArrow('c')}
+                  </button>
+                </th>
+                <th>
+                  <button className="btn" onClick={() => cySortBy('y')}>
+                    Year{cyArrow('y')}
+                  </button>
+                </th>
+                <th>
+                  <button className="btn" onClick={() => cySortBy('n')}>
+                    Trials{cyArrow('n')}
+                  </button>
+                </th>
+                <th>
+                  <button className="btn" onClick={() => cySortBy('r')}>
+                    Records{cyArrow('r')}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {cyShown.map((r) => (
+                <tr key={`${r.c}-${r.y}`}>
+                  <td>{r.c}</td>
+                  <td>{r.y}</td>
+                  <td>{fmtInt.format(r.n)}</td>
+                  <td>{fmtInt.format(r.r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="caption">
+          The exact numbers behind the stack chart above: {cyShown.length} of {cyRows.length}{' '}
+          country-years. Click a header to sort; 100%-mode shares derive from these trials.{' '}
+          {!!cyShown.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'who-top20-by-year.csv',
+                  ['country', 'year', 'trials', 'records'],
+                  cyShown.map((r) => [r.c, r.y, r.n, r.r]),
+                )
+              }
             >
               CSV
             </button>
@@ -239,7 +365,8 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         </div>
         <p className="caption">
           All-time ICTRP figures per portal country, ALL statuses. Zero rows for Côte
-          d&apos;Ivoire, Laos, and North Korea are shown as the portal reported them.
+          d&apos;Ivoire and Laos are portal indexing gaps (CT.gov lists 114 and 50 studies);
+          North Korea (≈1 study) is shown as the portal reported it.
         </p>
       </section>
     </>

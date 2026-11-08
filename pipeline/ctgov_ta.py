@@ -1,10 +1,11 @@
 """Therapeutic-area mix per site from matched CT.gov conditions (experimental).
 
 For every institution x city match from ctgov_link, maps the matched studies'
-conditionsModule entries to ~15 therapeutic areas via ordered keyword rules
+conditionsModule entries to 16 therapeutic areas via ordered keyword rules
 (first match wins; heuristic, documented below) and rolls counts up to member
 sites. Studies with no conditions contribute nothing; healthy-volunteer and
-drug-class conditions land in Other.
+drug-class conditions land in Other. Generic pain lands in Pain only after
+specific pains claim their areas (neuropathic -> Neurology, back/neck -> MSK).
 
 Usage (from repo root):
     uv run python pipeline/ctgov_ta.py
@@ -34,13 +35,14 @@ COND_CACHE = RAW / "ctgov_conditions.jsonl"
 TA_RULES: list[tuple[str, list[str]]] = [
     ("Oncology", ["CANCER", "TUMOR", "TUMOUR", "CARCINOMA", "SARCOMA", "LYMPHOMA",
                   "LEUKEMIA", "LEUKAEMIA", "MELANOMA", "MYELOMA", "NEOPLASM",
-                  "GLIOMA", "MESOTHELIOMA", "NEUROBLASTOMA", "MALIGNAN",
-                  "DYSPLASIA"]),
+                  "GLIOMA", "GLIOBLASTOMA", "MESOTHELIOMA", "NEUROBLASTOMA",
+                  "MALIGNAN", "DYSPLASIA", "MYELODYSPLASTIC", "MYELOFIBROSIS",
+                  "NSCLC", "SMALL CELL"]),
     ("Hematology", ["ANEMIA", "ANAEMIA", "HEMOPHILIA", "HAEMOPHILIA", "SICKLE",
                     "THALASSEMIA", "THROMBOCYTOPENIA", "NEUTROPENIA", "VON WILLEBRAND"]),
     ("Cardiology", ["HEART", "CARDIAC", "CARDIO", "CORONARY", "ATRIAL", "VENTRICULAR",
                     "MYOCARDIAL", "ARRHYTHMIA", "FIBRILLATION", "HYPERTENSION",
-                    "HEMODYNAMIC",
+                    "HEMODYNAMIC", "PERIPHERAL ARTER",
                     "HYPERTENSIVE", "ANEURYSM", "ATHEROSCLEROSIS", "VALVULAR",
                     "ENDOCARDITIS", "PERICARDITIS"]),
     ("Neurology", ["ALZHEIMER", "PARKINSON", "EPILEPSY", "SEIZURE", "MULTIPLE SCLEROSIS",
@@ -50,7 +52,8 @@ TA_RULES: list[tuple[str, list[str]]] = [
                    "DUCHENNE", "MUSCULAR DYSTROPHY", "FRONTOTEMPORAL", "LEWY",
                    "SPINAL MUSCULAR", "DRAVET", "LENNOX", "EPILEP", "COGNITIVE",
                    " MS"]),
-    ("Metabolic", ["DIABETES", "DIABETIC", "OBESITY", "OBESE", "THYROID", "DYSLIPIDEMIA",
+    ("Metabolic", ["DIABETES", "DIABETIC", "OBESITY", "OBESE", "OVERWEIGHT",
+                   "THYROID", "DYSLIPIDEMIA",
                    "CHOLESTEROL", "HYPERLIPIDEMIA", "LIPIDEMIA", "METABOLIC SYNDROME",
                    "GOUT", "HYPERURICEMIA", "CUSHING", "ADDISON", "ACROMEGALY"]),
     ("Immunology", ["RHEUMATOID", "ANKYLOSING", "LUPUS", "SJOGREN", "SCLERODERMA",
@@ -67,20 +70,23 @@ TA_RULES: list[tuple[str, list[str]]] = [
                      "INTERSTITIAL LUNG"]),
     ("GI/Liver", ["CROHN", "COLITIS", "ULCERATIVE", "IRRITABLE BOWEL", "GERD", "REFLUX",
                   "LIVER", "HEPATIC", "NASH", "NAFLD", "CIRRHOSIS", "PANCREATITIS",
-                  "CELIAC", "DIVERTICULITIS", "GASTROPARESIS", "BARRETT", "HEMORRHOID"]),
+                  "CELIAC", "DIVERTICULITIS", "GASTROPARESIS", "BARRETT", "HEMORRHOID",
+                  "CONSTIPATION"]),
     ("Renal", ["KIDNEY", "RENAL", "DIALYSIS", "NEPHRO", "GLOMERULO", "UREMIA",
                "UROLITHIASIS"]),
     ("Musculoskeletal", ["OSTEOARTHRITIS", "OSTEOARTHROSIS", "OSTEOPOROSIS", "FRACTURE",
-                         "BACK PAIN", "LOW BACK", "NECK PAIN", "MUSCLE", "TENDON",
+                         "BACK PAIN", "LOW BACK", "NECK PAIN", "DEGENERATIVE DISC",
+                         "MUSCLE", "TENDON",
                          "LIGAMENT", "BURSITIS", "FIBROMYALGIA", "ROTATOR", "MENISCUS",
                          "SPINAL STENOSIS", "SCIATICA", "CARPAL TUNNEL", "ARTHROPLASTY",
                          "TMJ"]),
     ("Dermatology", ["PSORIASIS", "ECZEMA", "DERMATITIS", "ACNE", "SKIN", "ROSACEA",
                      "VITILIGO", "HIDRADENITIS", "ALOPECIA", "PEMPHIGUS",
-                     "ACTINIC KERATOSIS", "WOUND"]),
+                     "ACTINIC KERATOSIS", "WOUND", "WRINKLE"]),
     ("Ophthalmology", ["MACULAR", "GLAUCOMA", "CATARACT", "RETINAL", "RETINOPATHY",
                        "UVEITIS", "DRY EYE", "KERATOCONUS", "STRABISMUS", "BLEPHARITIS",
-                       "EYE", "VISION", "OPTIC"]),
+                       "EYE", "VISION", "OPTIC", "MYOPIA", "PRESBYOPIA",
+                       "ASTIGMATISM", "GEOGRAPHIC ATROPHY", "VISUAL ACUITY"]),
     ("Psychiatry", ["DEPRESSION", "DEPRESSIVE", "ANXIETY", "SCHIZOPHRENIA", "BIPOLAR",
                     "ADHD", "ATTENTION DEFICIT", "PTSD", "POST-TRAUMATIC", "INSOMNIA",
                     "ADDICTION", "SUBSTANCE USE", "ALCOHOL USE", "OPIOID", "SMOKING",
@@ -89,6 +95,8 @@ TA_RULES: list[tuple[str, list[str]]] = [
                  "UTERINE", "FIBROID", "MENOPAUSE", "CONTRACEPTION", "INFERTILITY",
                  "BPH", "PROSTATITIS", "CYSTITIS", "OVERACTIVE BLADDER", "PREGNANCY",
                  "PREECLAMPSIA", "ECTOPIC", "AMENORRHEA"]),
+    # Last: generic pain not caught above (neuropathic -> Neurology, back/neck -> MSK).
+    ("Pain", ["PAIN"]),
 ]
 
 

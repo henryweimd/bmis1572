@@ -46,6 +46,9 @@ import ctgov_link
 import ctgov_people
 import ctgov_ta
 import deck
+import eu_break
+import movers
+import retention_decomp
 import sites
 from orgs import ALIAS_CANONICALS, normalize_cro_site, normalize_irb_site
 from aggregate import DEFINITIONS
@@ -242,7 +245,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     nonci = df[df["TYPE"] != "CI"].reset_index(drop=True)
     ci_disp = cluster.add_display_cols(ci)
     tables: dict[str, pd.DataFrame] = {}
-    iyg, cy, sy, coh, ab, lb, rt, cc = [], [], [], [], [], [], [], []
+    iyg, cy, sy, coh, ab, lb, rt, cc, rd = [], [], [], [], [], [], [], [], []
 
     receipts = (ci.groupby(["year", "band"], observed=True).size()
                 .rename("n_receipts").reset_index())
@@ -260,8 +263,11 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         coh.append(agg.cohort_summary(p, v))
         ab.append(agg.active_bins(py, v))
         rt.append(agg.retention(p, py, v))
+        rd.append(retention_decomp.build(p, py, v))
         cc.append(agg.concentration(pid, ci["year"].to_numpy(), v))
         lb.append(agg.leaderboard(p, ci_disp, pid, v))
+        if v == "merged":
+            tables.update(movers.build(p, py))
     # raw version runs over uncollapsed rows
     p = persons["raw"]
     pid = ci_raw["pid_raw"].to_numpy()
@@ -272,6 +278,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     coh.append(agg.cohort_summary(p, "raw"))
     ab.append(agg.active_bins(py, "raw"))
     rt.append(agg.retention(p, py, "raw"))
+    rd.append(retention_decomp.build(p, py, "raw"))
     cc.append(agg.concentration(pid, ci_raw["year"].to_numpy(), "raw"))
     ci_raw_disp = ci_raw.copy()
     ci_raw_disp["disp_name"] = "?"
@@ -285,6 +292,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
         "person_id": sp["person_id"].to_numpy(),
         "display_name": sp["display_name"].to_numpy(),
         "site": sp["site"].to_numpy(),
+        "city": sp["city"].fillna("").astype(str).to_numpy(),
         "country": sp["country"].to_numpy(),
         "band": sp["band"].to_numpy(),
         "state": sp["state"].to_numpy(),
@@ -360,6 +368,7 @@ def stage_aggregate(df, ci_raw, persons, entities) -> dict[str, pd.DataFrame]:
     tables["cohort_summary"] = pd.concat(coh).reset_index(drop=True)
     tables["active_bins"] = pd.concat(ab).reset_index(drop=True)
     tables["retention"] = pd.concat(rt).reset_index(drop=True)
+    tables["retention_decomp"] = pd.concat(rd).reset_index(drop=True)
     tables["concentration"] = pd.concat(cc).reset_index(drop=True)
     tables["leaderboard"] = pd.concat(lb).reset_index(drop=True)
 
@@ -400,6 +409,17 @@ def stage_china() -> dict[str, pd.DataFrame]:
                      compression="zstd", compression_level=9)
         log(f"curated/{name}.parquet: {len(t):,} rows")
     return tables
+
+
+def stage_eu_break(tables: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    out = eu_break.build(tables["investigators_year_geo"])
+    for name, t in out.items():
+        t = downcast(t)
+        out[name] = t
+        t.to_parquet(CURATED / f"{name}.parquet", index=False,
+                     compression="zstd", compression_level=9)
+        log(f"curated/{name}.parquet: {len(t):,} rows")
+    return out
 
 
 def stage_who() -> dict[str, pd.DataFrame]:
@@ -571,6 +591,10 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "cohort_summary": "Trials-per-person by first-seen cohort",
         "active_bins": "Active investigators by lifetime-trial bin",
         "retention": "Cohort retention: active share k years after first seen",
+        "retention_decomp": "Vintage decomposition: continuous/re-entered/gapped/dormant by cohort, band, k",
+        "mover_cluster": "Cross-site name clusters with mover/collision verdicts (experimental)",
+        "mover_person": "Clustered members: person to name-cluster map (experimental)",
+        "mover_summary": "Mover audit totals + implied headline adjustment bounds (experimental)",
         "concentration": "Annual top-1%/10% receipt shares + Gini",
         "leaderboard": "Top investigators by lifetime IND references",
         "trials_year": "Industry trials by year (starts vs running)",
@@ -602,11 +626,14 @@ def write_manifest(tables, persons, ingest_stats, ctgov_info, stats,
         "ctgov_officials": "CT.gov study officials + sponsor/phase per trial (experimental)",
         "ctgov_trials": "CT.gov US industry trials: sponsor/phase/start per NCT (experimental)",
         "person_ctgov_link": "BMIS person to CT.gov trial links, tiered (experimental)",
+        "link_audit_summary": "Linkage audit: tier precision proxies + coverage (experimental)",
         "site_ctgov_phase_mix": "Phase mix of matched trials per site (experimental)",
         "who_country": "WHO ICTRP trials/records by country (ALL statuses)",
         "who_year": "WHO ICTRP trials/records by registration year (global)",
         "who_country_year": "WHO ICTRP trials/records by top-20 country and year",
         "who_global": "WHO ICTRP global trial/record totals",
+        "eu_break_band": "EU break study: observed vs pre-trend by run/band/year",
+        "eu_break_summary": "EU break study: post-mean gaps + verdict",
     }
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -871,6 +898,7 @@ def main() -> None:
     tables["trials_year"] = trials
     tables["trials_band"] = band_tr
     tables.update(stage_china())
+    tables.update(stage_eu_break(tables))
     tables.update(stage_people())
     tables.update(stage_who())
     stage_tightness(tables)

@@ -140,6 +140,16 @@ def load_numbers(stats: dict) -> dict:
         wc = pd.read_parquet(CURATED / "who_country.parquet")
         wc = wc.sort_values("trials", ascending=False).head(3)
         n["who_top3"] = [(r["country"], int(r["trials"])) for _, r in wc.iterrows()]
+    n["eu_gap_n"] = None
+    if (CURATED / "eu_break_summary.parquet").exists():
+        es = pd.read_parquet(CURATED / "eu_break_summary.parquet")
+        eu = es[(es["run"] == "2021") & (es["band"] == "Europe (EU+UK)")].iloc[0]
+        n["eu_gap_n"] = float(eu["post_gap_n"])
+        n["eu_gap_s"] = float(eu["post_gap_share"]) * 100
+        n["eu_pre"] = float(eu["pre_mean_n"])
+        n["eu_verdict"] = str(eu["verdict"])
+        pl = es[(es["band"] == "Europe (EU+UK)") & (es["run"] != "2021")]
+        n["eu_pl"] = sorted(pl["post_gap_n"].tolist())
     return n
 
 
@@ -150,6 +160,7 @@ def build_slides(n: dict) -> list[dict]:
     has_ct = n["ct_trials"] is not None
     has_sr = n["sr1"] is not None
     has_who = n["who_trials"] is not None
+    has_eu = n["eu_gap_n"] is not None
     slides = [
         {"kind": "title", "title": "The U.S. Clinical-Trial Investigator Supply",
          "sub": ("A preliminary descriptive analysis of FDA BMIS Form 1572 filings, "
@@ -285,6 +296,22 @@ def build_slides(n: dict) -> list[dict]:
         ]
         slides[-1]["bullets"].insert(2, f"China: CFDI drug-institution filing extract \u2014 {CFDI_URL}")
         slides[-1]["links"].insert(2, CFDI_URL)
+    if has_eu:
+        slides[-2:-2] = [
+            {"kind": "chart", "title": "EU break: permanent, EU-specific — descriptive",
+             "images": ["eu_break.png"],
+             "bullets": [f"EU runs {f(-n['eu_gap_n'])}/yr below its 2009\u201320 pre-trend "
+                         f"({abs(n['eu_gap_n']) / n['eu_pre'] * 100:.0f}% of pre-mean); "
+                         f"share gap {n['eu_gap_s']:+.1f}pp.",
+                         f"Placebo EU gaps ({f(n['eu_pl'][0])}, {f(n['eu_pl'][1])}) are "
+                         "3\u20138\u00d7 smaller; no control band collapses in level terms.",
+                         "US share \u2018surge\u2019 is the compositional mirror of the EU exit "
+                         "(US level fell too) \u2014 the denominator collapsed.",
+                         "Pre-registered verdict: descriptive-only. Timing coincides with the "
+                         "1572 prohibition + 2021 NCI RCR replacement."],
+             "footnotes": ["Merged persons; pre-trend OLS 2009\u201320, post mean 2021\u201325. "
+                           "Spec: docs/eu_break.md."]},
+        ]
     if has_who:
         w0, w1, w2 = n["who_top3"]
         slides[-2:-2] = [

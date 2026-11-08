@@ -50,10 +50,13 @@ tables up via `stage_who()`.
   Use `who_global` as the denominator, never the country sum.
 - **Registration year ≠ start year**: CT.gov exhibits use Start Date; WHO uses
   Date of registration. Compare shapes, not levels.
-- **Zero rows**: Côte d'Ivoire, Laos, and North Korea return 0 via the portal's
-  country list. North Korea is plausibly a true zero; the other two are likely
-  portal vocabulary misses (apostrophe spellings) — shown as reported, flagged
-  in the UI, never silently dropped.
+- **Zero rows**: Cote D'Ivoire, Lao People's Democratic Republic, and Korea,
+  Democratic People's Republic of return 0 via the portal's country list
+  (listbox spellings re-verified live 2026-11-07 — not a query-spelling miss).
+  CT.gov cross-check the same day (`AREA[LocationCountry]`, all study types):
+  Côte d'Ivoire 114 studies, Laos 50, North Korea 1. So the first two are
+  ICTRP portal indexing gaps, not true zeros; North Korea is ~a true zero.
+  Shown as reported, flagged in the UI, never silently dropped.
 - **Top-20-only trends**: only the top 20 countries were scraped by year (portal
   load); the country×year stack excludes 179 smaller countries and understates
   global totals — the UI says so next to the chart.
