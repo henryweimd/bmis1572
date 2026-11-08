@@ -17,20 +17,22 @@ charts/ (tracked static PNGs with captioned definitions)
 exports/ (tracked slide-deck PPTX + PDF)
 ```
 
-Seven tabs: **US Investigators** (supply trends, new/returning, distribution, retention,
-concentration, search, leaderboards), **US CROs** and **US IRBs** (company/board trends,
-drill-downs, top tables), **US Sites** (address roll-ups, size mix, churn, CT.gov
-cross-check), **US Trials** (sponsors, phases, linked-investigator board, coverage),
-**China** (CFDI registry by filing vintage, ZH/EN toggle), **About** (data, methods,
-limitations). Stacked charts toggle Absolute/100% yearly share. Filter state syncs
-to the URL hash, so any view is shareable and bookmarkable.
+Eight tabs: **FDA Investigators** (supply trends, EU break study, movers, vintage
+attrition/re-entry, distribution, search, leaderboards), **FDA CROs** and **FDA IRBs**
+(company/board trends, drill-downs, top tables), **FDA Sites** (address roll-ups,
+size mix, churn, CT.gov cross-check), **FDA Trials** (sponsors, phases,
+linked-investigator board, coverage, linkage audit), **China** (CFDI registry by
+filing vintage, ZH/EN toggle), **WHO ICTRP** (global trial counts by country and
+registration year), **About** (data, methods, limitations). Stacked charts toggle
+Absolute/100% yearly share. Filter state syncs to the URL hash, so any view is
+shareable and bookmarkable.
 
 ## Quickstart (local)
 
 Prereqs: `uv` and Node 18+.
 
 ```sh
-# 1. Build the lake (~3 min from checkpoint: 1.86M BMIS rows + cached CT.gov)
+# 1. Build the lake (~4 min from checkpoint: 1.86M BMIS rows + cached CT.gov)
 uv run python pipeline/build.py --from-checkpoint
 
 # 2. Serve the explorer (from the explorer/ dir)
@@ -64,6 +66,12 @@ Without step 1, the explorer falls back to a committed demo CSV
 - `pipeline/ctgov_geo.py` — global industry starts by geography band.
 - `pipeline/china.py`, `pipeline/china_i18n.py` — CFDI extract ingest (row dedupe,
   pair model, ZH/EN labels).
+- `pipeline/who.py` — WHO ICTRP aggregate-count scraper (counts only) + table build.
+- `pipeline/eu_break.py` — EU break study: pre-trend extrapolation + placebo breaks
+  (pre-registered spec in `docs/eu_break.md`).
+- `pipeline/retention_decomp.py` — vintage decomposition into continuous /
+  re-entered / gapped / dormant partitions.
+- `pipeline/movers.py` — name-only cross-site clusters with mover/collision verdicts.
 - `pipeline/aggregate.py` — rollup tables + the shared `DEFINITIONS` texts.
 - `pipeline/charts.py` — static PNGs, definitions captioned on every figure.
 - `pipeline/deck.py` — slide-deck spec rendered to PPTX + PDF (caveat on every slide).
@@ -75,6 +83,7 @@ Without step 1, the explorer falls back to a committed demo CSV
 - `explorer/src/SiteTab.tsx` — sites tab (roll-ups, churn, cross-check, TA/phase mix).
 - `explorer/src/TrialsTab.tsx` — trials tab (sponsors, phases, KOL board, coverage).
 - `explorer/src/ChinaTab.tsx` — China tab (vintage, provinces, specialties, search).
+- `explorer/src/WHOTab.tsx` — WHO tab (global context, top-20 trends, country tables).
 - `explorer/` — static frontend: one DuckDB view per Parquet URL, every
   KPI/chart/table as SQL in the browser. No backend.
 - `charts/` — tracked static figures; `exports/` — tracked slide deck.
@@ -105,7 +114,8 @@ Without step 1, the explorer falls back to a committed demo CSV
   directors/chairs — median 1 per trial, though some trials list site PIs) matched
   to strict persons by normalized name + affiliation↔site token overlap. Strong =
   full name + ≥2 tokens; weak = full name + 1 token (or no affiliation) or initial
-  + ≥2 tokens. Covers 12,808/288,855 persons (4.4%), KOL-skewed.
+  + ≥2 tokens. Covers 13,956/288,855 persons (4.8%), KOL-skewed; see
+  `docs/linkage_audit.md` for the tier audit (strong ≈80%, weak ≈60%).
 - **Benchmark.** Unadjusted: all CI persons vs. global industry starts. Adjusted:
   US persons vs. US-site trials, counted as starts/year and running-in-year
   (start ≤ year, completion ≥ year or still active). Tightness = active per running
@@ -126,6 +136,9 @@ Without step 1, the explorer falls back to a committed demo CSV
 - **49.3%** of persons are one-trial (lifetime = 1 IND reference); median 2, mean 3.85.
 - No visible EU break at GDPR (May 2018); the sharp ex-US drop is 2020–21 across bands.
   EU share of active: 19.9% (2019) → 10.7% (2021) — see 2021* above.
+- EU break study (pre-registered, `docs/eu_break.md`): the EU runs ≈4,340 CIs/yr
+  (−62%) below its 2009–20 pre-trend while no control band collapses in level
+  terms; verdict descriptive-only (US share "surge" is the compositional mirror).
 - US tightness: ~3.3 investigators per running trial (2009) → ~2.5 (2025).
 - Tightness by band (starts-only, Strict 2025): US 9.5 investigators/start vs
   0.6–1.4 ex-US; multi-country trials count in every band they touch.
@@ -134,18 +147,22 @@ Without step 1, the explorer falls back to a committed demo CSV
 - Retention is steep then flat: ~19% of a cohort is active the next year, ~9% a
   decade later. Work is concentrating: top-10% receipt share 27% → 32% and Gini
   0.24 → 0.34 from 2009 to 2025.
+- Vintage decomposition: of 2015-vintage CIs active five years later, ~85% had
+  missed ≥1 year in between — late retention is re-entry, not continuous stay.
+- Movers (experimental bounds): 22,854 same-name clusters; merging only
+  mover-likely cuts 13,274 merged persons (−5.9%), merging all cuts 29,140.
 - Sites (address-first clustering): **137,049 strict → 111,480 merged**; MD
   Anderson leads (847 investigators, 5,390 refs, 143 spelling variants absorbed).
 - CT.gov cross-check (experimental, US, institution×city): 27,060/47,655 strict
   institutions match ≥1 industry trial; MD Anderson flagship ≈ 2,900 plausible
   trials (1,467 strong). See `docs/linkage.md`.
-- TA mix of matched trials (experimental): oncology 32%, cardiology 9%,
-  neurology 7%; Other 25% (healthy-volunteer, drug-class, unclassifiable).
+- TA mix of matched trials (experimental): oncology 34%, cardiology 10%,
+  neurology 7%; Other 22% (healthy-volunteer, drug-class, unclassifiable).
 - Demand side: 53,543 US industry trials from 7,940 sponsors (Pfizer leads, 1,760);
   phases P1 > P2 > P3. 38,738 trials (72%) name ≥1 official.
-- Linkage: 12,808/288,855 strict persons (4.4%) match ≥1 official (11.0k strong /
-  11.6k weak links); top linked investigator: 43 trials, all strong-tier. US
-  coverage ≈7%, ex-US ≈1%.
+- Linkage: 13,956/288,855 strict persons (4.8%) match ≥1 official (12.0k strong /
+  12.7k weak links); top linked investigator: WILLIAMS, DORIAN, 43 trials. US
+  coverage ≈8%, ex-US ≈1%.
 - Site vintage: the 2009 site cohort (10,842 addresses) is 25% active a year later,
   ~16% a decade later — sites outlive investigators (19%/~9%).
 - One-and-done by geography: US 43% vs 54–67% across non-US bands (South Asia
@@ -169,7 +186,7 @@ Without step 1, the explorer falls back to a committed demo CSV
 
 - BMIS is CDER IND drugs/biologics only, and FDA states it is **not comprehensive**
   (1572 goes to the sponsor; forwarding to FDA is voluntary-ish). No devices, CBER, non-IND.
-- Person↔trial linkage is experimental and thin (4.4% persons; most trials name only
+- Person↔trial linkage is experimental and thin (4.8% persons; most trials name only
   study-level officials); benchmarking is otherwise ecological (year-level ratios).
   Receipt rows carry date + site only.
 - BMIS has no therapeutic-area/phase fields; TA splits come from matched CT.gov trials
@@ -181,7 +198,8 @@ Without step 1, the explorer falls back to a committed demo CSV
 
 ## Parked future work
 
-- Name-only cross-site investigator tracking; curated org alias table.
+- Curated org alias table; movers-adjusted headline (mover clusters ship as
+  experimental bounds only — see the FDA Investigators tab).
 - Therapeutic-area / phase drill-downs beyond linked-trial coverage.
 - chinadrugtrials.org.cn trial-level linkage for China (in progress, separate effort).
 - R2 object storage if the shipped snapshot outgrows comfortable git size (~38MB today).

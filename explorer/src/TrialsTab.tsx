@@ -39,6 +39,9 @@ export default function TrialsTab({
   const [tas, setTas] = useState<{ category: string; v: number }[]>([]);
   const [kols, setKols] = useState<KolRow[]>([]);
   const [cover, setCover] = useState<CoverRow[]>([]);
+  const [audit, setAudit] = useState<
+    { tier: string; nl: number; np: number; sc: number; mo: number; ot: number; ol: number }[]
+  >([]);
   const [triYoy, setTriYoy] = useState<{ d: string; v: number }[]>([]);
   const [phaseTrend, setPhaseTrend] = useState<LineSeries[]>([]);
   const [note, setNote] = useState('');
@@ -103,7 +106,7 @@ export default function TrialsTab({
           return;
         }
         const yr = `start_y BETWEEN ${y0} AND ${y1}`;
-        const [k, sp, ph, ta, ko, cv, yy, pt] = await Promise.all([
+        const [k, sp, ph, ta, ko, cv, yy, pt, au] = await Promise.all([
           query<{ trials: number; withOff: number; sponsors: number; linked: number; conc: number }>(
             `SELECT (SELECT COUNT(*) FROM ctgov_trials WHERE ${yr}) AS trials,` +
               ` (SELECT COUNT(DISTINCT o.nct) FROM ctgov_officials o` +
@@ -152,6 +155,12 @@ export default function TrialsTab({
               ` CAST(COUNT(*) AS DOUBLE) AS n FROM ctgov_trials WHERE ${yr}` +
               ` GROUP BY 1, 2 ORDER BY 1, 2`,
           ),
+          query<{ tier: string; nl: number; np: number; sc: number; mo: number; ot: number; ol: number }>(
+            `SELECT CAST(tier AS VARCHAR) AS tier, CAST(n_links AS INTEGER) AS nl,` +
+              ` CAST(n_persons AS INTEGER) AS np, CAST(single_cand_share AS DOUBLE) AS sc,` +
+              ` CAST(mean_overlap AS DOUBLE) AS mo, CAST(officials_total AS INTEGER) AS ot,` +
+              ` CAST(officials_linked AS INTEGER) AS ol FROM link_audit_summary ORDER BY 1`,
+          ).catch(() => []),
         ]);
         if (cancelled) return;
         setKpi({
@@ -166,6 +175,7 @@ export default function TrialsTab({
         setTas(ta.map((r) => ({ category: r.category, v: num0(r.v) })));
         setKols(ko);
         setCover(cv);
+        setAudit(au);
         setTriYoy(yy.map((r) => ({ d: String(r.y), v: num0(r.n) })));
         const phaseOrder = ['EARLY_P1', 'P1', 'P1+P2', 'P2', 'P2+P3', 'P3', 'P4', 'NA'];
         const phaseColors = ['#9467bd', '#1f77b4', '#17becf', '#2ca02c', '#bcbd22', '#ff7f0e', '#d62728', '#7f7f7f'];
@@ -509,6 +519,42 @@ export default function TrialsTab({
           construction; gaps reflect CT.gov reporting, not investigator quality.
         </p>
       </section>
+
+      {!!audit.length && (
+        <section className="panel">
+          <h2>Linkage audit by tier (experimental)</h2>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tier</th>
+                  <th>Links</th>
+                  <th>Persons</th>
+                  <th>Single-candidate</th>
+                  <th>Mean overlap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.map((r) => (
+                  <tr key={r.tier}>
+                    <td>{r.tier}</td>
+                    <td>{fmtInt.format(r.nl)}</td>
+                    <td>{fmtInt.format(r.np)}</td>
+                    <td>{`${(r.sc * 100).toFixed(1)}%`}</td>
+                    <td>{r.mo.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="caption">
+            {fmtInt.format(audit[0].ol)} of {fmtInt.format(audit[0].ot)} officials (
+            {((audit[0].ol / audit[0].ot) * 100).toFixed(1)}%) link to ≥1 BMIS person.
+            Eyeball audit of 21 sampled links: strong ≈80% plausible-correct, weak ≈60%
+            (see docs/linkage_audit.md). Weak links may be name collisions.
+          </p>
+        </section>
+      )}
     </>
   );
 }

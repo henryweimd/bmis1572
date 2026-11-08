@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-07T19:59:01.365298+00:00",
+  "generated_at": "2026-11-08T03:17:39.731579+00:00",
   "generator": "pipeline/build.py (BMIS + CT.gov ingest)",
   "sources": {
     "bmis_file": "BMIS_2026_0831.txt",
@@ -733,6 +733,9 @@
     "china_filing": "Filing year is the INSTITUTION's registration vintage, not investigator activity: most institutions filed in a 2019-2020 bulk wave. YoY reads as registry composition, never retention.",
     "who": "WHO ICTRP (International Clinical Trials Registry Platform) aggregate counts from the public Search Portal Advanced Search (https://trialsearch.who.int/AdvSearch.aspx): 'N records for M trials found' per query. One country per search (or none = global), Recruitment Status = ALL, optional Date-of-registration year window. Multi-country trials count in every listed country; country sums therefore exceed the global total. See also: https://www.who.int/clinical-trials-registry-platform.",
     "who_records": "ICTRP records vs trials: records are registry entries across the primary registries feeding ICTRP (including ClinicalTrials.gov); trials are deduplicated studies. Records >= trials; the gap reflects multi-registry registration.",
+    "vintage_decomp": "Vintage decomposition: each first-seen cohort, k years later, is partitioned into continuously active (filed every year since), re-entered (active now after missing >=1 year), gapped (inactive now but active again later in the window), and dormant (inactive now with no later return observed). Follow-up runs through 2025, so recent cells are right-censored by construction.",
+    "movers": "Cross-site movers (experimental): merged persons sharing one normalized name, grouped across all sites and countries. Mover-likely = sequential active years (no overlap); collision-likely = overlapping years across countries or >50 same-name persons; ambiguous = overlap within one country. Headline counts are unchanged; the implied adjustment is a bound, not a revision.",
+    "eu_break": "EU break study: OLS of merged active CIs (level + share) on year over 2009-2020, extrapolated to 2021-2025; gap = observed minus expected. Treated = Europe (EU+UK); controls = US, East Asia & Pacific, South America; placebo breaks at 2016/2017. Pre-registered spec in docs/eu_break.md; verdict is descriptive-only (the US share 'surge' is the compositional mirror of the EU exit, and EU mid-sample volatility trips the placebo gate).",
     "china_i18n": "ZH is authoritative. EN covers provinces, cities, roles, specialty groups, top-30 sites (curated) and pattern-derived site/specialty labels; investigator names stay in Chinese."
   },
   "stats": {
@@ -783,9 +786,9 @@
       "raw": 29.3
     },
     "linkage": {
-      "persons_linked": 12808,
-      "strong": 10957,
-      "weak": 11611,
+      "persons_linked": 13956,
+      "strong": 11961,
+      "weak": 12696,
       "trials": 53543,
       "sponsors": 7940
     }
@@ -804,6 +807,60 @@
   ],
   "datasets": [
     {
+      "id": "mover_cluster",
+      "title": "Cross-site name clusters with mover/collision verdicts (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/mover_cluster.parquet"
+      ],
+      "row_count": 22854,
+      "columns": [
+        "cluster_id",
+        "name_key",
+        "display_name",
+        "n_persons",
+        "verdict",
+        "countries",
+        "n_countries",
+        "first_year",
+        "last_year",
+        "n_trials"
+      ]
+    },
+    {
+      "id": "mover_person",
+      "title": "Clustered members: person to name-cluster map (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/mover_person.parquet"
+      ],
+      "row_count": 51994,
+      "columns": [
+        "person_id",
+        "cluster_id"
+      ]
+    },
+    {
+      "id": "mover_summary",
+      "title": "Mover audit totals + implied headline adjustment bounds (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/mover_summary.parquet"
+      ],
+      "row_count": 1,
+      "columns": [
+        "version",
+        "n_persons_total",
+        "n_clusters",
+        "n_mover_likely",
+        "n_collision_likely",
+        "n_ambiguous",
+        "persons_in_clusters",
+        "adj_merge_all",
+        "adj_movers_only"
+      ]
+    },
+    {
       "id": "person_index",
       "title": "Investigator search index (strict persons)",
       "format": "parquet",
@@ -815,6 +872,7 @@
         "person_id",
         "display_name",
         "site",
+        "city",
         "country",
         "band",
         "state",
@@ -1056,7 +1114,7 @@
       "files": [
         "data/site_ta_mix.parquet"
       ],
-      "row_count": 422540,
+      "row_count": 440093,
       "columns": [
         "version",
         "site_n",
@@ -1161,6 +1219,27 @@
         "n_cohort",
         "n_active",
         "retention"
+      ]
+    },
+    {
+      "id": "retention_decomp",
+      "title": "Vintage decomposition: continuous/re-entered/gapped/dormant by cohort, band, k",
+      "format": "parquet",
+      "files": [
+        "data/retention_decomp.parquet"
+      ],
+      "row_count": 2964,
+      "columns": [
+        "version",
+        "cohort",
+        "band",
+        "k",
+        "n_cohort",
+        "n_continuous",
+        "n_reentered",
+        "n_gapped_future",
+        "n_dormant",
+        "followup"
       ]
     },
     {
@@ -1366,6 +1445,45 @@
       ]
     },
     {
+      "id": "eu_break_band",
+      "title": "EU break study: observed vs pre-trend by run/band/year",
+      "format": "parquet",
+      "files": [
+        "data/eu_break_band.parquet"
+      ],
+      "row_count": 56,
+      "columns": [
+        "run",
+        "year",
+        "band",
+        "n_active",
+        "share",
+        "exp_share",
+        "exp_n",
+        "gap_share",
+        "gap_n"
+      ]
+    },
+    {
+      "id": "eu_break_summary",
+      "title": "EU break study: post-mean gaps + verdict",
+      "format": "parquet",
+      "files": [
+        "data/eu_break_summary.parquet"
+      ],
+      "row_count": 12,
+      "columns": [
+        "run",
+        "band",
+        "post_gap_share",
+        "post_gap_n",
+        "pre_mean_n",
+        "dib_share",
+        "dib_n",
+        "verdict"
+      ]
+    },
+    {
       "id": "ctgov_trials",
       "title": "CT.gov US industry trials: sponsor/phase/start per NCT (experimental)",
       "format": "parquet",
@@ -1389,7 +1507,7 @@
       "files": [
         "data/ctgov_officials.parquet"
       ],
-      "row_count": 46645,
+      "row_count": 46638,
       "columns": [
         "nct",
         "name_raw",
@@ -1409,7 +1527,7 @@
       "files": [
         "data/person_ctgov_link.parquet"
       ],
-      "row_count": 22568,
+      "row_count": 24657,
       "columns": [
         "person_id",
         "nct",
@@ -1418,6 +1536,25 @@
         "tier",
         "affil_overlap",
         "n_cands"
+      ]
+    },
+    {
+      "id": "link_audit_summary",
+      "title": "Linkage audit: tier precision proxies + coverage (experimental)",
+      "format": "parquet",
+      "files": [
+        "data/link_audit_summary.parquet"
+      ],
+      "row_count": 2,
+      "columns": [
+        "tier",
+        "n_links",
+        "n_persons",
+        "single_cand_share",
+        "mean_overlap",
+        "median_cands",
+        "officials_total",
+        "officials_linked"
       ]
     },
     {

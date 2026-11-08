@@ -433,10 +433,14 @@ export function VintageHeatmap({
   rows,
   kMax,
   unit = 'investigators',
+  mode = 'attrition',
+  nullTip = 'censored',
 }: {
   rows: VintageRow[];
   kMax: number;
   unit?: 'investigators' | 'sites' | 'cro' | 'irb';
+  mode?: 'attrition' | 'reentry';
+  nullTip?: string;
 }) {
   if (!rows.length) return <p className="muted">No data.</p>;
   const ks: number[] = [];
@@ -463,9 +467,12 @@ export function VintageHeatmap({
                 const na = r.counts?.[i] ?? null;
                 const tip =
                   c === null
-                    ? `${r.cohort} vintage: censored`
-                    : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of ${u.who} active` +
-                      (na !== null ? ` (${na.toLocaleString('en-US')} of ${r.n.toLocaleString('en-US')})` : '');
+                    ? `${r.cohort} vintage: ${nullTip}`
+                    : mode === 'attrition'
+                      ? `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of ${u.who} active` +
+                        (na !== null ? ` (${na.toLocaleString('en-US')} of ${r.n.toLocaleString('en-US')})` : '')
+                      : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of active ${u.who} re-entered after a gap` +
+                        (na !== null ? ` (${na.toLocaleString('en-US')} re-entered)` : '');
                 return (
                   <td
                     key={i}

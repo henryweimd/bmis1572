@@ -210,6 +210,32 @@ DEFINITIONS = {
         "trials are deduplicated studies. Records >= trials; the gap "
         "reflects multi-registry registration."
     ),
+    "vintage_decomp": (
+        "Vintage decomposition: each first-seen cohort, k years later, is "
+        "partitioned into continuously active (filed every year since), "
+        "re-entered (active now after missing >=1 year), gapped (inactive "
+        "now but active again later in the window), and dormant (inactive "
+        "now with no later return observed). Follow-up runs through 2025, "
+        "so recent cells are right-censored by construction."
+    ),
+    "movers": (
+        "Cross-site movers (experimental): merged persons sharing one "
+        "normalized name, grouped across all sites and countries. "
+        "Mover-likely = sequential active years (no overlap); "
+        "collision-likely = overlapping years across countries or >50 "
+        "same-name persons; ambiguous = overlap within one country. "
+        "Headline counts are unchanged; the implied adjustment is a bound, "
+        "not a revision."
+    ),
+    "eu_break": (
+        "EU break study: OLS of merged active CIs (level + share) on year "
+        "over 2009-2020, extrapolated to 2021-2025; gap = observed minus "
+        "expected. Treated = Europe (EU+UK); controls = US, East Asia & "
+        "Pacific, South America; placebo breaks at 2016/2017. Pre-registered "
+        "spec in docs/eu_break.md; verdict is descriptive-only (the US "
+        "share 'surge' is the compositional mirror of the EU exit, and EU "
+        "mid-sample volatility trips the placebo gate)."
+    ),
     "china_i18n": (
         "ZH is authoritative. EN covers provinces, cities, roles, specialty "
         "groups, top-30 sites (curated) and pattern-derived site/specialty "

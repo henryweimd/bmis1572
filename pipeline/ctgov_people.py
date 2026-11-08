@@ -57,6 +57,9 @@ _WS = re.compile(r"\s+")
 _CORP = re.compile(
     r"\b(INC|INCORPORATED|LLC|LTD|LIMITED|CORP|CORPORATION|CO|COMPANY|"
     r"LP|LLP|PLC|AG|GMBH|SA|SAS|BV|NV|PTY|HOLDINGS|HOLDING)\.?$", re.I)
+_SUFFIX = re.compile(r"\b(JR|SR|II|III|IV|V|2ND|3RD)\b\.?", re.I)
+_EMAIL = re.compile(r"\S+@\S+")
+_PARENS = re.compile(r"\([^)]*\)")
 _ASTOP = {"THE", "AND", "OF", "FOR", "AT", "DE", "LA", "EL", "INC", "LLC",
           "LTD", "CORP", "CO", "UNIVERSITY", "UNIV", "HOSPITAL", "HOSP",
           "MEDICAL", "MED", "CENTER", "CENTRE", "CTR", "CLINIC", "HEALTH",
@@ -71,7 +74,8 @@ def parse_name(raw: str) -> tuple[str, str]:
     """
     if not raw:
         return "", ""
-    s = _CRED.sub(" ", str(raw).upper())
+    s = _SUFFIX.sub(" ", str(raw))
+    s = _CRED.sub(" ", s.upper())
     s = s.replace("'", "").replace("-", " ").replace(".", " ")
     s = _WS.sub(" ", _NONLET.sub(" ", s)).strip().strip(",").strip()
     if "," in s:
@@ -90,7 +94,10 @@ def parse_name(raw: str) -> tuple[str, str]:
 
 
 def _tokens(s: str) -> set[str]:
-    return {t for t in _WS.sub(" ", re.sub(r"[^A-Z0-9 ]", " ", str(s).upper())).split()
+    s = _EMAIL.sub(" ", str(s or ""))
+    s = _PARENS.sub(" ", s)
+    s = _CRED.sub(" ", s)
+    return {t for t in _WS.sub(" ", re.sub(r"[^A-Z0-9 ]", " ", s.upper())).split()
             if len(t) >= 4 and t not in _ASTOP}
 
 
@@ -134,15 +141,17 @@ def flatten(records: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
 def link_persons(offs: pd.DataFrame) -> pd.DataFrame:
     """Link officials to BMIS strict persons by name + affiliation overlap."""
     pi = pd.read_parquet(CURATED / "person_index.parquet",
-                         columns=["person_id", "display_name", "site", "state"])
+                         columns=["person_id", "display_name", "site",
+                                  "city", "state"])
     pl = [parse_name(n) for n in pi["display_name"].tolist()]
     pi = pi.assign(last=[p[0] for p in pl], first=[p[1] for p in pl])
     pi = pi[pi["last"] != ""].reset_index(drop=True)
     by_last: dict[str, list[int]] = {}
     for i, last in enumerate(pi["last"].tolist()):
         by_last.setdefault(last, []).append(i)
-    site_tok = [_tokens(f"{s} {st}") for s, st in
-                zip(pi["site"].tolist(), pi["state"].tolist())]
+    site_tok = [_tokens(f"{s} {c} {st}") for s, c, st in
+                zip(pi["site"].tolist(), pi["city"].tolist(),
+                    pi["state"].tolist())]
     links = []
     for o in offs.itertuples():
         cands = by_last.get(o.last, [])
@@ -224,6 +233,16 @@ def run(refresh: bool = False, audit_n: int = 10) -> dict[str, pd.DataFrame]:
               f"({(lk['tier'] == 'strong').sum():,} strong / "
               f"{(lk['tier'] == 'weak').sum():,} weak links)")
         tables["person_ctgov_link"] = lk
+        aud = (lk.groupby("tier")
+               .agg(n_links=("nct", "size"),
+                    n_persons=("person_id", "nunique"),
+                    single_cand_share=("n_cands", lambda s: float((s == 1).mean())),
+                    mean_overlap=("affil_overlap", "mean"),
+                    median_cands=("n_cands", "median"))
+               .reset_index())
+        aud["officials_total"] = offs["nct"].count()
+        aud["officials_linked"] = lk["nct"].nunique()
+        tables["link_audit_summary"] = aud.reset_index(drop=True)
         if audit_n and len(lk):
             print(f"--- audit {audit_n} strong ---")
             for _, r in lk[lk["tier"] == "strong"].head(audit_n).iterrows():
