@@ -266,7 +266,7 @@ export default function App() {
 
   useEffect(() => {
     document.title = `${
-      tab === 'inv' ? 'US Investigators' : tab === 'cro' ? 'US CROs' : tab === 'irb' ? 'US IRBs' : tab === 'site' ? 'US Sites' : tab === 'trials' ? 'US Trials' : tab === 'china' ? 'China' : tab === 'who' ? 'WHO ICTRP' : 'About'
+      tab === 'inv' ? 'FDA Investigators' : tab === 'cro' ? 'FDA CROs' : tab === 'irb' ? 'FDA IRBs' : tab === 'site' ? 'FDA Sites' : tab === 'trials' ? 'FDA Trials' : tab === 'china' ? 'China' : tab === 'who' ? 'WHO ICTRP' : 'About'
     } · Global Clinical Trial Investigator Talent Supply Data Explorer`;
   }, [tab]);
 
@@ -664,7 +664,7 @@ export default function App() {
           className={tab === 'inv' ? 'active' : ''}
           onClick={() => setTab('inv')}
         >
-          US Investigators
+          FDA Investigators
         </button>
         <button
           role="tab"
@@ -672,7 +672,7 @@ export default function App() {
           className={tab === 'cro' ? 'active' : ''}
           onClick={() => setTab('cro')}
         >
-          US CROs
+          FDA CROs
         </button>
         <button
           role="tab"
@@ -680,7 +680,7 @@ export default function App() {
           className={tab === 'irb' ? 'active' : ''}
           onClick={() => setTab('irb')}
         >
-          US IRBs
+          FDA IRBs
         </button>
         <button
           role="tab"
@@ -688,7 +688,7 @@ export default function App() {
           className={tab === 'site' ? 'active' : ''}
           onClick={() => setTab('site')}
         >
-          US Sites
+          FDA Sites
         </button>
         <button
           role="tab"
@@ -696,7 +696,7 @@ export default function App() {
           className={tab === 'trials' ? 'active' : ''}
           onClick={() => setTab('trials')}
         >
-          US Trials
+          FDA Trials
         </button>
         <button
           role="tab"

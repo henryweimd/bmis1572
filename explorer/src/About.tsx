@@ -73,16 +73,16 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
           distinct trials. <strong>Trials/year</strong> divides that by the inclusive first–last span.
         </li>
         <li>
-          <strong>US CROs / US IRBs tabs</strong> group organization rows by normalized
+          <strong>FDA CROs / FDA IRBs tabs</strong> group organization rows by normalized
           company/board name (giant aliases, stopword rules, state disambiguation; residual
           variants audited per row).
         </li>
         <li>
-          <strong>US Sites tab</strong> rolls rows up to street addresses (Strict exact, Merged
+          <strong>FDA Sites tab</strong> rolls rows up to street addresses (Strict exact, Merged
           fuzzy-unioned) and tracks investigators per site plus roster churn over time.
         </li>
         <li>
-          <strong>US Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases,
+          <strong>FDA Trials tab</strong> rolls up the CT.gov demand side itself: sponsors, phases,
           therapeutic areas, the most-linked investigators, NCT lookup, and linkage coverage —
           with a year-range filter, experimental.
         </li>

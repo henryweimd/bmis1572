@@ -861,7 +861,7 @@ export default function SiteTab({
                     <tr
                       key={`${r.name}-${i}`}
                       className="pickable"
-                      title="Search in US Investigators"
+                      title="Search in FDA Investigators"
                       onClick={() => onJump(r.name)}
                     >
                       <td>{r.name}</td>
@@ -877,7 +877,7 @@ export default function SiteTab({
           )}
           <p className="caption">
             No trial IDs in BMIS: roster shows who filed from this address, not which trials. Last-seen years
-            include right-censored recent links. Click a row to search that name in US Investigators.
+            include right-censored recent links. Click a row to search that name in FDA Investigators.
           </p>
         </section>
       )}
