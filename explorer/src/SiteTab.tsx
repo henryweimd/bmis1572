@@ -7,6 +7,18 @@ import { downloadCsv, trendCsv } from './csv';
 import { BAND_COLORS, SERIES_COLORS, VINTAGE_KMAX } from './lib/constants';
 import { clampYearPair, fmtInt, growthPct, num0, pivotVintage, yearRange } from './lib/format';
 import type { RawVintageRow } from './lib/format';
+import { useShortlist } from './lib/shortlist';
+import { IconBookmark } from './components/Icons';
+import type { FeasibilityPreset } from './OverviewTab';
+
+type SiteSection = 'all' | 'trends' | 'retention' | 'directory';
+
+const SITE_SECTIONS: readonly { id: SiteSection; label: string }[] = [
+  { id: 'all', label: 'All sections' },
+  { id: 'trends', label: 'Trends & Size Mix' },
+  { id: 'retention', label: 'Churn & Vintage' },
+  { id: 'directory', label: 'Top Sites & Search' },
+];
 
 const SIZE_BIN_ORDER = ['1', '2-5', '6-20', '21+'] as const;
 
@@ -58,6 +70,7 @@ export default function SiteTab({
   demo,
   ready,
   onJump,
+  onLaunchFeasibility,
 }: {
   bands: string[];
   yearMin: number;
@@ -66,8 +79,11 @@ export default function SiteTab({
   demo: boolean;
   ready: boolean;
   onJump: (name: string) => void;
+  onLaunchFeasibility?: (preset: FeasibilityPreset) => void;
 }) {
   const [hashInit] = useState(readHash);
+  const [section, setSection] = useState<SiteSection>('all');
+  const { hasSite, toggleSite } = useShortlist();
   const [band, setBand] = useState(() => pick(hashInit['site.b'], ['all', ...bands], 'all'));
   const [[y0, y1], setYears] = useState<[number, number]>(() =>
     clampYearPair(
@@ -425,10 +441,38 @@ export default function SiteTab({
 
   const growth = growthPct(kpi?.receipts, kpi?.receipts09);
   const detailYears = detail.map((d) => d.y);
+  const showSec = (id: Exclude<SiteSection, 'all'>) => section === 'all' || section === id;
 
   return (
     <>
       {note && <p className="banner">{note}</p>}
+      <div className="subnav" role="navigation" aria-label="Site sections">
+        {SITE_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`chip${section === s.id ? ' active' : ''}`}
+            onClick={() => setSection(s.id)}
+          >
+            {s.label}
+          </button>
+        ))}
+        {onLaunchFeasibility && (
+          <button
+            type="button"
+            className="chip chip-accent"
+            onClick={() =>
+              onLaunchFeasibility({
+                mode: 'sites',
+                band: band === 'all' ? 'United States' : band,
+                minYear: 2023,
+              })
+            }
+          >
+            Filter by TA &amp; Phase in Feasibility →
+          </button>
+        )}
+      </div>
       <p className="banner">
         CT.gov trial matches are institution×city estimates shared across that institution&apos;s
         addresses — not confirmed site trials. Preliminary analysis only; see{' '}
@@ -528,6 +572,8 @@ export default function SiteTab({
         </div>
       </section>
 
+      {showSec('trends') && (
+      <>
       <section className="panel">
         <h2>Active sites per year{band === 'all' ? ' by band' : `: ${band}`}</h2>
         <StackedMultiBars series={byBand} marks={{ 2021: '*' }} allTicks />
@@ -567,7 +613,11 @@ export default function SiteTab({
           expand.
         </p>
       </section>
+      </>
+      )}
 
+      {showSec('retention') && (
+      <>
       <section className="panel">
         <h2>Roster churn: investigators joining vs last seen</h2>
         <StackedMultiBars series={churn} allTicks />
@@ -619,7 +669,11 @@ export default function SiteTab({
           see Definitions: site_retention.
         </p>
       </section>
+      </>
+      )}
 
+      {showSec('directory') && (
+      <>
       <section className="panel">
         <div className="panel-head">
           <h2>Top sites{band === 'all' ? '' : `: ${band}`}</h2>
@@ -678,6 +732,7 @@ export default function SiteTab({
           <table>
             <thead>
               <tr>
+                <th>Save</th>
                 <th>Site</th>
                 <th>City</th>
                 <th>Country</th>
@@ -689,24 +744,51 @@ export default function SiteTab({
               </tr>
             </thead>
             <tbody>
-              {top.map((r) => (
-                <tr
-                  key={r.site_id}
-                  onClick={() => setSel({ id: r.site_id, n: r.site_n })}
-                  className={sel?.id === r.site_id ? 'picked' : 'pickable'}
-                >
-                  <td>{r.name}</td>
-                  <td>{r.city}</td>
-                  <td>{r.country}</td>
-                  <td className="num">{fmtInt.format(r.n_inv)}</td>
-                  <td className="num">{fmtInt.format(r.n_receipts)}</td>
-                  <td className="num">{r.tpy.toFixed(2)}</td>
-                  <td>
-                    {r.first_year}–{r.last_year}
-                  </td>
-                  <td className="num">{r.n_variants}</td>
-                </tr>
-              ))}
+              {top.map((r) => {
+                const saved = hasSite(r.site_id);
+                return (
+                  <tr
+                    key={r.site_id}
+                    onClick={() => setSel({ id: r.site_id, n: r.site_n })}
+                    className={sel?.id === r.site_id ? 'picked' : 'pickable'}
+                  >
+                    <td>
+                      <button
+                        type="button"
+                        className={`icon-btn star-btn${saved ? ' saved' : ''}`}
+                        aria-label={saved ? `Remove ${r.name}` : `Shortlist ${r.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSite({
+                            site_id: r.site_id,
+                            site_n: r.site_n,
+                            version: ver,
+                            name: r.name,
+                            city: r.city,
+                            country: r.country,
+                            n_inv: r.n_inv,
+                            n_receipts: r.n_receipts,
+                            first_year: r.first_year,
+                            last_year: r.last_year,
+                          });
+                        }}
+                      >
+                        <IconBookmark filled={saved} />
+                      </button>
+                    </td>
+                    <td>{r.name}</td>
+                    <td>{r.city}</td>
+                    <td>{r.country}</td>
+                    <td className="num">{fmtInt.format(r.n_inv)}</td>
+                    <td className="num">{fmtInt.format(r.n_receipts)}</td>
+                    <td className="num">{r.tpy.toFixed(2)}</td>
+                    <td>
+                      {r.first_year}–{r.last_year}
+                    </td>
+                    <td className="num">{r.n_variants}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -794,14 +876,43 @@ export default function SiteTab({
           </div>
         )}
       </section>
+      </>
+      )}
 
       {sel && info && (
-        <section className="panel">
+        <section className="panel dossier-panel">
           <div className="panel-head">
             <h2>{info.name}</h2>
-            <button type="button" className="btn btn-ghost" onClick={() => setSel(null)}>
-              Close
-            </button>
+            <div className="header-actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  toggleSite({
+                    site_id: sel.id,
+                    site_n: sel.n,
+                    version: ver,
+                    name: info.name,
+                    addr: info.addr,
+                    city: info.city,
+                    state: info.state,
+                    country: info.country,
+                    band: info.band,
+                    n_inv: info.n_inv,
+                    n_receipts: info.n_receipts,
+                    first_year: info.first_year,
+                    last_year: info.last_year,
+                    ctgov_plausible: xc?.n,
+                    ctgov_strong: xc?.ns,
+                  })
+                }
+              >
+                {hasSite(sel.id) ? 'Shortlisted ✓' : 'Add to Shortlist'}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setSel(null)}>
+                Close
+              </button>
+            </div>
           </div>
           <p className="muted">
             {info.addr} · {info.city}, {info.state} {info.country} · {info.band} ·{' '}
@@ -865,11 +976,24 @@ export default function SiteTab({
           <h3>Therapeutic-area mix (experimental)</h3>
           {tamix.length ? (
             <>
-              <CategoryBars data={tamix} />
+              <CategoryBars
+                data={tamix}
+                onSelect={
+                  onLaunchFeasibility
+                    ? (selectedTa) =>
+                        onLaunchFeasibility({
+                          mode: 'sites',
+                          ta: selectedTa,
+                          band: 'United States',
+                          minYear: 2023,
+                        })
+                    : undefined
+                }
+              />
               <p className="caption">
                 Matched trials bucketed by CT.gov conditions text (~15 keyword areas; multi-area
-                studies count once per area). Inherits all cross-check caveats; see Definitions:
-                site_ta.
+                studies count once per area). Click any bar to screen similar US sites in
+                Feasibility.
               </p>
             </>
           ) : (
@@ -878,10 +1002,23 @@ export default function SiteTab({
           <h3>Phase mix (experimental)</h3>
           {phasemix.length ? (
             <>
-              <CategoryBars data={phasemix} />
+              <CategoryBars
+                data={phasemix}
+                onSelect={
+                  onLaunchFeasibility
+                    ? (selectedPhase) =>
+                        onLaunchFeasibility({
+                          mode: 'sites',
+                          phase: selectedPhase,
+                          band: 'United States',
+                          minYear: 2023,
+                        })
+                    : undefined
+                }
+              />
               <p className="caption">
-                Matched trials by CT.gov phase (exact per-trial field). Inherits all cross-check
-                caveats; see Definitions: site_xcheck.
+                Matched trials by CT.gov phase (exact per-trial field). Click any bar to screen
+                similar US sites in Feasibility.
               </p>
             </>
           ) : (

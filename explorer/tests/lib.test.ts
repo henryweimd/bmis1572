@@ -17,6 +17,7 @@ import {
   vintageCellStyle,
 } from '../src/lib/format.ts';
 import { escapeLike, escapeLiteral, readerFor } from '../src/lib/sql.ts';
+import { serializeShortlistMarkdown } from '../src/lib/shortlistFormat.ts';
 
 test('format helpers handle edge values cleanly', () => {
   assert.equal(num(null), null);
@@ -72,12 +73,12 @@ test('CSV escaping handles commas, quotes, CR/LF, and CJK', () => {
 });
 
 test('hash parsing, serialization, pick, and intIn', () => {
-  const parsed = parseHashString('#t=site&site.b=Europe%20(EU%2BUK)&bad=%E0%A4%A');
-  assert.equal(parsed.t, 'site');
-  assert.equal(parsed['site.b'], 'Europe (EU+UK)');
+  const parsed = parseHashString('#t=feas&feas.b=Europe%20(EU%2BUK)&bad=%E0%A4%A');
+  assert.equal(parsed.t, 'feas');
+  assert.equal(parsed['feas.b'], 'Europe (EU+UK)');
   assert.equal(parsed.bad, undefined);
 
-  assert.equal(serializeHash({ t: 'inv', empty: '', v: 'strict' }), 't=inv&v=strict');
+  assert.equal(serializeHash({ t: 'overview', empty: '', v: 'strict' }), 't=overview&v=strict');
   assert.equal(pick('strict', ['strict', 'merged'] as const, 'merged'), 'strict');
   assert.equal(pick('bogus', ['strict', 'merged'] as const, 'merged'), 'merged');
   assert.equal(intIn('2020', 2008, 2026, 2008), 2020);
@@ -104,4 +105,43 @@ test('vintageCellStyle maintains strong contrast across 0..100%', () => {
   }
   assert.equal(vintageCellStyle(0).color, '#0f1714');
   assert.equal(vintageCellStyle(100).color, '#ffffff');
+});
+
+test('serializeShortlistMarkdown formats sites and investigators cleanly', () => {
+  const md = serializeShortlistMarkdown(
+    [
+      {
+        site_id: 'strict:42',
+        site_n: 42,
+        version: 'strict',
+        name: 'MD Anderson | Cancer Ctr',
+        city: 'HOUSTON',
+        state: 'TX',
+        country: 'USA',
+        n_inv: 847,
+        n_receipts: 5390,
+        first_year: 2008,
+        last_year: 2026,
+        ctgov_plausible: 2900,
+        ctgov_strong: 1467,
+      },
+    ],
+    [
+      {
+        person_id: 'S:1',
+        display_name: 'SMITH, JANE',
+        site: 'MD Anderson',
+        country: 'USA',
+        n_trials: 42,
+        n_years: 10,
+        first_year: 2015,
+        last_year: 2025,
+        linked_trials: 8,
+      },
+    ],
+  );
+  assert.match(md, /MD Anderson \/ Cancer Ctr/);
+  assert.match(md, /HOUSTON, TX, USA/);
+  assert.match(md, /2900 \(1467\)/);
+  assert.match(md, /SMITH, JANE/);
 });

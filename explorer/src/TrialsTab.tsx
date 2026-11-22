@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
 import type { LineSeries } from './charts';
+import { DataTable } from './components/DataTable';
+import type { ColumnDef } from './components/DataTable';
 import { intIn, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
 import { clampYearPair, fmtInt, num0, yearRange } from './lib/format';
+import type { FeasibilityPreset } from './OverviewTab';
 
 interface KolRow {
   name: string;
@@ -25,11 +28,15 @@ const PHASE_COLORS = ['#9467bd', '#1f77b4', '#17becf', '#2ca02c', '#bcbd22', '#f
 export default function TrialsTab({
   demo,
   ready,
+  jumpTrial,
   onJump,
+  onLaunchFeasibility,
 }: {
   demo: boolean;
   ready: boolean;
+  jumpTrial?: { nct: string; seq: number } | null;
   onJump: (name: string) => void;
+  onLaunchFeasibility?: (preset: FeasibilityPreset) => void;
 }) {
   const [hashInit] = useState(readHash);
   const [bounds, setBounds] = useState<{ lo: number; hi: number } | null>(null);
@@ -60,11 +67,16 @@ export default function TrialsTab({
     { name: string; site: string; country: string; tier: string }[]
   >([]);
   const [searched, setSearched] = useState(false);
+  const [selectedSponsor, setSelectedSponsor] = useState<string | null>(null);
+  const [sponsorTrials, setSponsorTrials] = useState<
+    { nct: string; phase: string; ta: string; start_y: number | null }[]
+  >([]);
   const lookupSeq = useRef(0);
 
-  const lookupTrial = async (e?: React.FormEvent) => {
+  const lookupTrial = async (e?: React.FormEvent, overrideNct?: string) => {
     e?.preventDefault();
-    const nct = nctIn.trim().toUpperCase();
+    const nct = (overrideNct ?? nctIn).trim().toUpperCase();
+    if (overrideNct !== undefined) setNctIn(nct);
     if (!nct) return;
     const seq = ++lookupSeq.current;
     const id = escapeLiteral(nct);
@@ -96,6 +108,16 @@ export default function TrialsTab({
       setNote(`Trial lookup failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
     }
   };
+
+  useEffect(() => {
+    if (!jumpTrial || !ready || demo) return;
+    void lookupTrial(undefined, jumpTrial.nct);
+    const t = setTimeout(() => {
+      document.getElementById('trial-lookup')?.scrollIntoView({ behavior: 'smooth' });
+    }, 80);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTrial?.seq, ready, demo]);
 
   useEffect(() => {
     if (!ready || demo) return;
@@ -152,7 +174,7 @@ export default function TrialsTab({
               ` CAST(COUNT(DISTINCT t.sponsor) AS INTEGER) AS sponsors` +
               ` FROM person_ctgov_link l JOIN person_index p ON p.person_id = l.person_id` +
               ` JOIN ctgov_trials t ON t.nct = l.nct WHERE t.${yr}` +
-              ` GROUP BY 1, 2 ORDER BY 3 DESC, 1 LIMIT 25`,
+              ` GROUP BY 1, 2 ORDER BY 3 DESC, 1 LIMIT 100`,
           ),
           query<CoverRow>(
             `SELECT CAST(p.band AS VARCHAR) AS band, CAST(COUNT(*) AS INTEGER) AS n,` +
@@ -215,6 +237,63 @@ export default function TrialsTab({
       writeHash({ 'tr.y0': String(y0), 'tr.y1': String(y1) });
     }
   }, [y0, y1]);
+
+  useEffect(() => {
+    if (!ready || demo || !selectedSponsor || y0 === null || y1 === null) {
+      setSponsorTrials([]);
+      return;
+    }
+    let cancelled = false;
+    query<{ nct: string; phase: string; ta: string; start_y: number | null }>(
+      `SELECT CAST(nct AS VARCHAR) AS nct, CAST(phase AS VARCHAR) AS phase,` +
+        ` CAST(ta AS VARCHAR) AS ta, CAST(start_y AS INTEGER) AS start_y` +
+        ` FROM ctgov_trials WHERE sponsor_disp = '${escapeLiteral(selectedSponsor)}'` +
+        ` AND start_y BETWEEN ${y0} AND ${y1} ORDER BY start_y DESC NULLS LAST, nct LIMIT 50`,
+    )
+      .then((rows) => {
+        if (!cancelled) setSponsorTrials(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, selectedSponsor, y0, y1]);
+
+  const kolColumns = useMemo<ColumnDef<KolRow>[]>(
+    () => [
+      {
+        key: 'name',
+        label: 'Investigator',
+        sortValue: (r) => r.name,
+        csvValue: (r) => r.name,
+        render: (r) => <strong>{r.name}</strong>,
+      },
+      {
+        key: 'country',
+        label: 'Country',
+        sortValue: (r) => r.country,
+        csvValue: (r) => r.country,
+        render: (r) => r.country,
+      },
+      {
+        key: 'n',
+        label: 'CT.gov trials',
+        align: 'right',
+        sortValue: (r) => r.n,
+        csvValue: (r) => r.n,
+        render: (r) => fmtInt.format(r.n),
+      },
+      {
+        key: 'sponsors',
+        label: 'Sponsors',
+        align: 'right',
+        sortValue: (r) => r.sponsors,
+        csvValue: (r) => r.sponsors,
+        render: (r) => r.sponsors,
+      },
+    ],
+    [],
+  );
 
   if (demo) return <p className="muted">Run the pipeline for trials data.</p>;
 
@@ -314,15 +393,92 @@ export default function TrialsTab({
       <section className="panels">
         <div className="panel">
           <h2>Top sponsors by US trials</h2>
-          <CategoryBars data={sponsors} />
-          <p className="caption">Exact per-trial lead sponsor; name variants merged by key.</p>
+          <CategoryBars
+            data={sponsors}
+            activeCategory={selectedSponsor ?? undefined}
+            onSelect={(sp) => setSelectedSponsor((cur) => (cur === sp ? null : sp))}
+          />
+          <p className="caption">
+            Exact per-trial lead sponsor; name variants merged by key. Click any sponsor bar to
+            inspect its recent US trials below.
+          </p>
         </div>
         <div className="panel">
           <h2>Trials by phase</h2>
-          <CategoryBars data={phases} />
-          <p className="caption">NA = no phase listed; combos (e.g. P2+P3) kept whole.</p>
+          <CategoryBars
+            data={phases}
+            onSelect={
+              onLaunchFeasibility
+                ? (p) =>
+                    p !== 'NA' &&
+                    onLaunchFeasibility({
+                      mode: 'sites',
+                      phase: p,
+                      band: 'United States',
+                      minYear: 2023,
+                    })
+                : undefined
+            }
+          />
+          <p className="caption">
+            NA = no phase listed; combos (e.g. P2+P3) kept whole. Click any phase bar to find US
+            sites in Feasibility.
+          </p>
         </div>
       </section>
+
+      {selectedSponsor && (
+        <section className="panel dossier-panel">
+          <div className="panel-head">
+            <h2>
+              Sponsor Drill-Down: {selectedSponsor}{' '}
+              <span className="muted">· latest 50 US trials ({y0}–{y1})</span>
+            </h2>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setSelectedSponsor(null)}
+            >
+              Close
+            </button>
+          </div>
+          {sponsorTrials.length ? (
+            <div className="table-scroll short">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Trial (click to inspect)</th>
+                    <th>Phase</th>
+                    <th>Therapeutic Area</th>
+                    <th className="num">Start Year</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sponsorTrials.map((r) => (
+                    <tr
+                      key={r.nct}
+                      className="pickable"
+                      onClick={() => {
+                        void lookupTrial(undefined, r.nct);
+                        document.getElementById('trial-lookup')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                    >
+                      <td>
+                        <strong>{r.nct}</strong>
+                      </td>
+                      <td>{r.phase}</td>
+                      <td>{r.ta ? r.ta.replace(/;/g, ', ') : '—'}</td>
+                      <td className="num">{r.start_y ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">No trials found for this sponsor in range.</p>
+          )}
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-head">
@@ -345,14 +501,27 @@ export default function TrialsTab({
 
       <section className="panel">
         <h2>Trials by therapeutic area</h2>
-        <CategoryBars data={tas} />
+        <CategoryBars
+          data={tas}
+          onSelect={
+            onLaunchFeasibility
+              ? (selectedTa) =>
+                  onLaunchFeasibility({
+                    mode: 'sites',
+                    ta: selectedTa,
+                    band: 'United States',
+                    minYear: 2023,
+                  })
+              : undefined
+          }
+        />
         <p className="caption">
-          Keyword classification of CT.gov conditions text; multi-area trials count once per area;
-          trials with no conditions excluded.
+          Keyword classification of CT.gov conditions text; multi-area trials count once per area.
+          Click any therapeutic area bar to screen active US sites in Feasibility.
         </p>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="trial-lookup">
         <h2>Trial lookup by NCT number</h2>
         <form className="filters" onSubmit={(e) => void lookupTrial(e)}>
           <label>
@@ -453,50 +622,19 @@ export default function TrialsTab({
       </section>
 
       <section className="panel">
-        <div className="panel-head">
-          <h2>Most-linked investigators (study officials)</h2>
-          {!!kols.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  `kol-board-${y0}-${y1}.csv`,
-                  ['investigator', 'country', 'ctgov_trials', 'sponsors'],
-                  kols.map((r) => [r.name, r.country, r.n, r.sponsors]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
-        </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Investigator</th>
-                <th>Country</th>
-                <th className="num">CT.gov trials</th>
-                <th className="num">Sponsors</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kols.map((r) => (
-                <tr
-                  key={`${r.name}-${r.country}`}
-                  className="pickable"
-                  title="Search in FDA Investigators"
-                  onClick={() => onJump(r.name)}
-                >
-                  <td>{r.name}</td>
-                  <td>{r.country}</td>
-                  <td className="num">{fmtInt.format(r.n)}</td>
-                  <td className="num">{r.sponsors}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <h2>Most-linked investigators (study officials, top 100)</h2>
+        <DataTable
+          rows={kols}
+          columns={kolColumns}
+          rowKey={(r) => `${r.name}-${r.country}`}
+          defaultSort={{ key: 'n', dir: -1 }}
+          filterPlaceholder="Filter officials by name or country…"
+          filterText={(r) => `${r.name} ${r.country}`}
+          onRowClick={(r) => onJump(r.name)}
+          rowTitle={() => 'Search in FDA Investigators'}
+          csvFilename={`kol-board-${y0}-${y1}.csv`}
+          pageSize={25}
+        />
         <p className="caption">
           BMIS persons by linked CT.gov trials in range (strong + weak tiers). Skews toward study
           chairs and KOLs — most trials name only study-level officials, so most investigators cannot

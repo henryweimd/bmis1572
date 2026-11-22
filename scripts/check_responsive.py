@@ -49,12 +49,13 @@ def main() -> int:
             check(f"{sel} adapts under @media", in_media)
 
     # Tables must live inside horizontal scroll containers.
-    for tsx in sorted(SRC.glob("*.tsx")):
+    for tsx in sorted(SRC.rglob("*.tsx")):
         text = tsx.read_text()
         n_table = len(re.findall(r"<table[\s>]", text))
         n_scroll = len(re.findall(r"table-scroll", text))
         if n_table:
-            check(f"{tsx.name}: tables in .table-scroll", n_scroll >= n_table,
+            rel = tsx.relative_to(SRC)
+            check(f"{rel}: tables in .table-scroll", n_scroll >= n_table,
                   f"{n_table} <table>, {n_scroll} table-scroll")
 
     # Charts: every svg scales via viewBox + width:100%.
@@ -101,10 +102,10 @@ def main() -> int:
 
     # SQL safety: user-driven LIKE queries must escape wildcards or use normName.
     unsafe_like = []
-    for tsx in sorted(SRC.glob("*.tsx")):
+    for tsx in sorted(SRC.rglob("*.tsx")):
         text = tsx.read_text()
         if "LIKE '" in text and "escapeLike(" not in text and "normName(" not in text:
-            unsafe_like.append(tsx.name)
+            unsafe_like.append(str(tsx.relative_to(SRC)))
     check("LIKE queries escape wildcards", not unsafe_like, ", ".join(unsafe_like))
 
     print(f"\n{len(findings)} finding(s).")

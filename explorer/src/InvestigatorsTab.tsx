@@ -28,6 +28,20 @@ import {
   yearRange,
 } from './lib/format';
 import type { RawVintageRow } from './lib/format';
+import { useShortlist } from './lib/shortlist';
+import { IconBookmark } from './components/Icons';
+import type { FeasibilityPreset } from './OverviewTab';
+
+type InvSection = 'all' | 'supply' | 'eu-break' | 'tightness' | 'retention' | 'search';
+
+const INV_SECTIONS: readonly { id: InvSection; label: string }[] = [
+  { id: 'all', label: 'All sections' },
+  { id: 'supply', label: 'Supply & Geography' },
+  { id: 'eu-break', label: 'EU Break & Movers' },
+  { id: 'tightness', label: 'Tightness & Distribution' },
+  { id: 'retention', label: 'Retention & Concentration' },
+  { id: 'search', label: 'Search & Leaderboards' },
+];
 
 interface GeoRow {
   y: number;
@@ -155,15 +169,29 @@ export default function InvestigatorsTab({
   demo,
   manifest,
   jumpRequest,
+  sectionRequest,
   onJumpSite,
+  onLaunchFeasibility,
+  onJumpDefinition,
 }: {
   ready: boolean;
   demo: boolean;
   manifest: Manifest | null;
   jumpRequest: { name: string; seq: number } | null;
+  sectionRequest?: { section: string; seq: number } | null;
   onJumpSite: (siteN: number) => void;
+  onLaunchFeasibility?: (preset: FeasibilityPreset) => void;
+  onJumpDefinition?: (term: string) => void;
 }) {
   const [hashInit] = useState(readHash);
+  const [section, setSection] = useState<InvSection>(() =>
+    pick(
+      hashInit.sec,
+      ['all', 'supply', 'eu-break', 'tightness', 'retention', 'search'] as const,
+      'all',
+    ),
+  );
+  const { hasPi, togglePi } = useShortlist();
   const [version, setVersion] = useState<Version>(() => pick(hashInit.v, VERSIONS, 'strict'));
   const [band, setBand] = useState(() => pick(hashInit.b, ['all', ...BANDS], 'all'));
   const [[y0, y1], setYears] = useState<[number, number]>(() =>
@@ -231,6 +259,17 @@ export default function InvestigatorsTab({
   const [colleagues, setColleagues] = useState<HitRow[]>([]);
 
   useEffect(() => {
+    if (!sectionRequest) return;
+    const valid = pick(
+      sectionRequest.section,
+      ['all', 'supply', 'eu-break', 'tightness', 'retention', 'search'] as const,
+      'all',
+    );
+    setSection(valid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionRequest?.seq]);
+
+  useEffect(() => {
     writeHash({
       v: version,
       b: band,
@@ -241,8 +280,9 @@ export default function InvestigatorsTab({
       ts: tightScope,
       rm: retMode,
       rb: retBand,
+      sec: section === 'all' ? '' : section,
     });
-  }, [version, band, y0, y1, leaderGeo, leaderSort, tightScope, retMode, retBand]);
+  }, [version, band, y0, y1, leaderGeo, leaderSort, tightScope, retMode, retBand, section]);
 
   // 1. Core geo, new/returning, workload, and IRB/CRO entity context.
   useEffect(() => {
@@ -662,17 +702,19 @@ export default function InvestigatorsTab({
   // Handle cross-tab jump requests (from Sites / Trials tabs).
   useEffect(() => {
     if (!jumpRequest || !ready || demo) return;
+    setSection('search');
     runSearch(jumpRequest.name);
     const t = setTimeout(() => {
       document.getElementById('inv-search')?.scrollIntoView({ behavior: 'smooth' });
-    }, 60);
+    }, 80);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpRequest?.seq, ready, demo]);
 
   const inspectName = (name: string) => {
+    setSection('search');
     runSearch(name);
-    document.getElementById('inv-search')?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => document.getElementById('inv-search')?.scrollIntoView({ behavior: 'smooth' }), 60);
   };
 
   const selectPerson = async (id: string, name: string) => {
@@ -731,10 +773,35 @@ export default function InvestigatorsTab({
   }, [receipts]);
 
   const growth = growthPct(coreKpi?.active, coreKpi?.active09);
+  const showSec = (id: Exclude<InvSection, 'all'>) => section === 'all' || section === id;
 
   return (
     <>
       {note && <p className="banner">{note}</p>}
+      <div className="subnav" role="navigation" aria-label="Investigators sections">
+        {INV_SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`chip${section === s.id ? ' active' : ''}`}
+            onClick={() => setSection(s.id)}
+          >
+            {s.label}
+          </button>
+        ))}
+        {onLaunchFeasibility && (
+          <button
+            type="button"
+            className="chip chip-accent"
+            onClick={() =>
+              onLaunchFeasibility({ mode: 'pis', band: band === 'all' ? 'United States' : band, minYear: 2023 })
+            }
+          >
+            Screen PIs in Feasibility →
+          </button>
+        )}
+      </div>
+
       <section className="panel controls">
         <div className="filters">
           <div className="seg" role="group" aria-label="Person version">
@@ -838,17 +905,29 @@ export default function InvestigatorsTab({
         </div>
       </section>
 
+      {showSec('supply') && (
       <section className="panel">
         <div className="panel-head">
           <h2>Active investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
-          {!!geo.length && (
-            <button
-              className="btn"
-              onClick={() => stackedCsv(`active-investigators-${version}.csv`, geo)}
-            >
-              CSV
-            </button>
-          )}
+          <div className="header-actions">
+            {onJumpDefinition && (
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => onJumpDefinition('2021* EU 1572 note')}
+              >
+                2021* note
+              </button>
+            )}
+            {!!geo.length && (
+              <button
+                className="btn"
+                onClick={() => stackedCsv(`active-investigators-${version}.csv`, geo)}
+              >
+                CSV
+              </button>
+            )}
+          </div>
         </div>
         <StackedMultiBars series={geo} marks={{ 2021: '*' }} />
         <p className="caption">
@@ -878,7 +957,10 @@ export default function InvestigatorsTab({
           for European countries.
         </p>
       </section>
+      )}
 
+      {showSec('eu-break') && (
+      <>
       <section className="panel">
         <div className="panel-head">
           <h2>EU break study: observed vs pre-trend</h2>
@@ -1006,7 +1088,11 @@ export default function InvestigatorsTab({
           </>
         )}
       </section>
+      </>
+      )}
 
+      {showSec('supply') && (
+      <>
       <section className="panel">
         <div className="panel-head">
           <h2>New investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
@@ -1042,7 +1128,11 @@ export default function InvestigatorsTab({
         <StackedMultiBars series={newret} />
         <p className="caption">New = first receipt ever in that year (2008–09 inflated by file start).</p>
       </section>
+      </>
+      )}
 
+      {showSec('tightness') && (
+      <>
       <section className="panels">
         <div className="panel">
           <div className="panel-head">
@@ -1194,7 +1284,11 @@ export default function InvestigatorsTab({
           </>
         )}
       </section>
+      </>
+      )}
 
+      {showSec('search') && (
+      <>
       <section className="panel" id="inv-search">
         <h2>Search investigators</h2>
         {demo ? (
@@ -1271,36 +1365,62 @@ export default function InvestigatorsTab({
             {!!hits.length && (
               <div className="table-scroll short">
                 <table>
-                  <thead>
-                    <tr>
-                      <th>Investigator</th>
-                      <th>Site</th>
-                      <th>Country</th>
-                      <th className="num">IND refs</th>
-                      <th className="num">/yr</th>
-                      <th className="num">Years</th>
-                      <th>Span</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {hits.map((r) => (
-                      <tr
-                        key={r.person_id}
-                        className={sel?.id === r.person_id ? 'picked' : 'pickable'}
-                        onClick={() => selectPerson(r.person_id, r.display_name)}
-                      >
-                        <td>{r.display_name}</td>
-                        <td>{r.site ?? ''}</td>
-                        <td>{r.country}</td>
-                        <td className="num">{fmtInt.format(r.n_trials)}</td>
-                        <td className="num">{(r.n_trials / (r.last_year - r.first_year + 1)).toFixed(2)}</td>
-                        <td className="num">{r.n_years}</td>
-                        <td>
-                          {r.first_year}–{r.last_year}
-                        </td>
+                    <thead>
+                      <tr>
+                        <th>Save</th>
+                        <th>Investigator</th>
+                        <th>Site</th>
+                        <th>Country</th>
+                        <th className="num">IND refs</th>
+                        <th className="num">/yr</th>
+                        <th className="num">Years</th>
+                        <th>Span</th>
                       </tr>
-                    ))}
-                  </tbody>
+                    </thead>
+                    <tbody>
+                      {hits.map((r) => {
+                        const saved = hasPi(r.person_id);
+                        return (
+                          <tr
+                            key={r.person_id}
+                            className={sel?.id === r.person_id ? 'picked' : 'pickable'}
+                            onClick={() => selectPerson(r.person_id, r.display_name)}
+                          >
+                            <td>
+                              <button
+                                type="button"
+                                className={`icon-btn star-btn${saved ? ' saved' : ''}`}
+                                aria-label={saved ? `Remove ${r.display_name}` : `Shortlist ${r.display_name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePi({
+                                    person_id: r.person_id,
+                                    display_name: r.display_name,
+                                    site: r.site ?? '',
+                                    country: r.country,
+                                    n_trials: r.n_trials,
+                                    n_years: r.n_years,
+                                    first_year: r.first_year,
+                                    last_year: r.last_year,
+                                  });
+                                }}
+                              >
+                                <IconBookmark filled={saved} />
+                              </button>
+                            </td>
+                            <td>{r.display_name}</td>
+                            <td>{r.site ?? ''}</td>
+                            <td>{r.country}</td>
+                            <td className="num">{fmtInt.format(r.n_trials)}</td>
+                            <td className="num">{(r.n_trials / (r.last_year - r.first_year + 1)).toFixed(2)}</td>
+                            <td className="num">{r.n_years}</td>
+                            <td>
+                              {r.first_year}–{r.last_year}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
                 </table>
               </div>
             )}
@@ -1636,7 +1756,10 @@ export default function InvestigatorsTab({
           <p className="muted">No rows.</p>
         )}
       </section>
+      </>
+      )}
 
+      {showSec('supply') && (
       <section className="panels">
         <div className="panel">
           <h2>Top countries, {LATEST_FULL}</h2>
@@ -1644,10 +1767,29 @@ export default function InvestigatorsTab({
         </div>
         <div className="panel">
           <h2>Top US states, {LATEST_FULL}</h2>
-          {demo ? <p className="muted">Run the pipeline.</p> : <CategoryBars data={states} />}
+          {demo ? (
+            <p className="muted">Run the pipeline.</p>
+          ) : (
+            <>
+              <CategoryBars
+                data={states}
+                onSelect={
+                  onLaunchFeasibility
+                    ? () => onLaunchFeasibility({ mode: 'pis', band: 'United States', minYear: 2023 })
+                    : undefined
+                }
+              />
+              {onLaunchFeasibility && (
+                <p className="caption">Click any state bar to open the US Feasibility PI Finder.</p>
+              )}
+            </>
+          )}
         </div>
       </section>
+      )}
 
+      {showSec('retention') && (
+      <>
       <section className="panels">
         <div className="panel">
           <h2>Cohort detail (first-seen year)</h2>
@@ -1806,6 +1948,8 @@ export default function InvestigatorsTab({
           </>
         )}
       </section>
+      </>
+      )}
     </>
   );
 }

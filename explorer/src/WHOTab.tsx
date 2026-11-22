@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
 import type { LineSeries } from './charts';
+import { DataTable } from './components/DataTable';
+import type { ColumnDef } from './components/DataTable';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { BAND_COLORS, SERIES_COLORS } from './lib/constants';
@@ -39,7 +41,6 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
     key: 'total',
     dir: -1,
   });
-  const [countryFilter, setCountryFilter] = useState('');
   const [note, setNote] = useState('');
 
   useEffect(() => {
@@ -178,13 +179,55 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
   const cyArrow = (key: string) =>
     cySort.key === key ? (cySort.dir === 1 ? ' ▲' : ' ▼') : '';
 
-  const filteredRows = useMemo(() => {
-    const q = countryFilter.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) => r.country.toLowerCase().includes(q) || r.band.toLowerCase().includes(q),
-    );
-  }, [rows, countryFilter]);
+  const countryColumns = useMemo<ColumnDef<WhoRow>[]>(
+    () => [
+      {
+        key: 'country',
+        label: 'Country',
+        sortValue: (r) => r.country,
+        csvValue: (r) => r.country,
+        render: (r) => <strong>{r.country}</strong>,
+      },
+      {
+        key: 'band',
+        label: 'Region',
+        sortValue: (r) => r.band,
+        csvValue: (r) => r.band,
+        render: (r) => (
+          <>
+            <span className="swatch" style={{ background: BAND_COLORS[r.band] ?? '#333' }} />{' '}
+            {r.band}
+          </>
+        ),
+      },
+      {
+        key: 'trials',
+        label: 'Trials',
+        align: 'right',
+        sortValue: (r) => r.trials,
+        csvValue: (r) => r.trials,
+        render: (r) => fmtInt.format(r.trials),
+      },
+      {
+        key: 'records',
+        label: 'Records',
+        align: 'right',
+        sortValue: (r) => r.records,
+        csvValue: (r) => r.records,
+        render: (r) => fmtInt.format(r.records),
+      },
+      {
+        key: 'ratio',
+        label: 'Rec / Trial',
+        align: 'right',
+        title: 'Multi-registry registration multiplier (records ÷ deduplicated trials)',
+        sortValue: (r) => (r.trials > 0 ? r.records / r.trials : 0),
+        csvValue: (r) => (r.trials > 0 ? (r.records / r.trials).toFixed(2) : ''),
+        render: (r) => (r.trials > 0 ? `${(r.records / r.trials).toFixed(2)}×` : '—'),
+      },
+    ],
+    [],
+  );
 
   if (demo) return <p className="muted">Run the pipeline for WHO data.</p>;
 
@@ -416,69 +459,23 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       </section>
 
       <section className="panel">
-        <div className="panel-head">
-          <h2>All countries</h2>
-          {!!filteredRows.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  'who-countries.csv',
-                  ['country', 'band', 'records', 'trials'],
-                  filteredRows.map((r) => [r.country, r.band, r.records, r.trials]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
-        </div>
-        <div className="filters">
-          <label>
-            Filter country or region
-            <input
-              type="search"
-              value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              placeholder="e.g. Germany, South Asia"
-            />
-          </label>
-          <span className="muted">
-            Showing {filteredRows.length} of {rows.length} countries
-          </span>
-        </div>
-        <div className="table-scroll short">
-          <table>
-            <thead>
-              <tr>
-                <th>Country</th>
-                <th>Region</th>
-                <th className="num">Records</th>
-                <th className="num">Trials</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((r) => (
-                <tr key={r.country}>
-                  <td>{r.country}</td>
-                  <td>
-                    <span
-                      className="swatch"
-                      style={{ background: BAND_COLORS[r.band] ?? '#333' }}
-                    />{' '}
-                    {r.band}
-                  </td>
-                  <td className="num">{fmtInt.format(r.records)}</td>
-                  <td className="num">{fmtInt.format(r.trials)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <h2>All countries ({rows.length})</h2>
+        <DataTable
+          rows={rows}
+          columns={countryColumns}
+          rowKey={(r) => r.country}
+          defaultSort={{ key: 'trials', dir: -1 }}
+          filterPlaceholder="Filter country or region (e.g. Germany, South Asia)…"
+          filterText={(r) => `${r.country} ${r.band}`}
+          csvFilename="who-countries.csv"
+          pageSize={30}
+          compact
+        />
         <p className="caption">
-          All-time ICTRP figures per portal country, ALL statuses. Zero rows for Côte d&apos;Ivoire
-          and Laos are portal indexing gaps (CT.gov lists 114 and 50 studies); North Korea (≈1
-          study) is shown as the portal reported it.
+          All-time ICTRP figures per portal country, ALL statuses. Rec / Trial reflects
+          multi-registry registration (EU countries often exceed 1.8×). Zero rows for Côte
+          d&apos;Ivoire and Laos are portal indexing gaps (CT.gov lists 114 and 50 studies); North
+          Korea (≈1 study) is shown as reported.
         </p>
       </section>
     </>

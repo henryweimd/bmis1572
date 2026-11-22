@@ -19,15 +19,15 @@ charts/ (tracked static PNGs with captioned definitions)
 exports/ (tracked slide-deck PPTX + PDF)
 ```
 
-Eight tabs: **FDA Investigators** (supply trends, EU break study, movers, vintage
-attrition/re-entry, distribution, search, leaderboards), **FDA CROs** and **FDA IRBs**
-(company/board trends, drill-downs, top tables), **FDA Sites** (address roll-ups,
-size mix, churn, CT.gov cross-check), **FDA Trials** (sponsors, phases,
-linked-investigator board, coverage, linkage audit), **China** (CFDI registry by
-filing vintage, ZH/EN toggle), **WHO ICTRP** (global trial counts by country and
-registration year), **About** (data, methods, limitations). Stacked charts toggle
-Absolute/100% yearly share. Filter state syncs to the URL hash, so any view is
-shareable and bookmarkable.
+Ten views organized in a persistent workspace sidebar (collapsing to a scrollable
+mobile tab strip) plus global `⌘K` search and a saved Feasibility Shortlist drawer:
+**Overview** (executive brief, headline charts, guided pathways, regulatory links),
+**Feasibility** (multi-facet Site & PI screening by TA/phase/state/country/recency
+with dossiers, shortlist bookmarking, and CSV/Markdown export), **FDA Investigators**,
+**FDA Sites**, **FDA CROs**, **FDA IRBs**, **FDA Trials** (with sponsor drill-down
+and NCT lookup), **China (CFDI)**, **WHO ICTRP**, and **About & Guides**. Charts
+toggle Absolute/100% share and Chart/Table views. Filter state syncs to the URL hash,
+so any view is shareable and bookmarkable.
 
 ## Quickstart (local)
 
@@ -80,8 +80,11 @@ Without step 1, the explorer falls back to a committed demo CSV
 - `pipeline/geo_bands.py`, `pipeline/geo_bands.csv` — country→band mapping (auditable).
 - `data/` — local lake: `raw/` (downloads + API caches), `curated/*.parquet`,
   `manifest.json`. Gitignored except via the shipped explorer snapshot.
-- `explorer/src/App.tsx` — lazy-loaded tab shell, URL hash sync, share link, keyboard navigation.
-- `explorer/src/InvestigatorsTab.tsx` — investigators tab, search, leaderboards, EU break, movers, vintage.
+- `explorer/src/App.tsx` — workspace shell (sticky topbar, grouped sidebar, `⌘K` search, shortlist drawer, hash sync).
+- `explorer/src/OverviewTab.tsx` — executive brief, KPIs, feasibility workflow pathways, regulatory links.
+- `explorer/src/FeasibilityTab.tsx` — multi-facet Site & PI Feasibility Workbench with dossiers & shortlisting.
+- `explorer/src/InvestigatorsTab.tsx` — investigators tab with section pills, EU break, movers, vintage, search.
+- `explorer/src/components/` — reusable `DataTable`, `CommandPalette`, `ShortlistDrawer`, and uniform SVG `Icons`.
 - `explorer/src/OrgTab.tsx` — shared CRO/IRB tab component.
 - `explorer/src/SiteTab.tsx` — sites tab (roll-ups, churn, cross-check, TA/phase mix).
 - `explorer/src/TrialsTab.tsx` — trials tab (sponsors, phases, KOL board, coverage).

@@ -2,31 +2,66 @@ import { useMemo, useState } from 'react';
 import { fmtCompact, fmtInt, fmtPct1, fmtVal, vintageCellStyle } from './lib/format';
 
 type BarMode = 'abs' | 'pct';
+type ViewMode = 'chart' | 'table';
 
 export interface RefLine {
   x: number;
   label: string;
 }
 
-function ModeSeg({ mode, setMode }: { mode: BarMode; setMode: (m: BarMode) => void }) {
+function ChartToolbar({
+  mode,
+  setMode,
+  view,
+  setView,
+  showScale = false,
+}: {
+  mode?: BarMode;
+  setMode?: (m: BarMode) => void;
+  view: ViewMode;
+  setView: (v: ViewMode) => void;
+  showScale?: boolean;
+}) {
   return (
-    <div className="seg chart-mode" role="group" aria-label="Bar scale">
-      <button
-        type="button"
-        className={mode === 'abs' ? 'active' : ''}
-        onClick={() => setMode('abs')}
-        title="Bar height shows absolute counts"
-      >
-        Absolute
-      </button>
-      <button
-        type="button"
-        className={mode === 'pct' ? 'active' : ''}
-        onClick={() => setMode('pct')}
-        title="Each bar scaled to 100%; segments show share of the year"
-      >
-        100%
-      </button>
+    <div className="chart-toolbar">
+      {showScale && mode && setMode && view === 'chart' && (
+        <div className="seg" role="group" aria-label="Bar scale">
+          <button
+            type="button"
+            className={mode === 'abs' ? 'active' : ''}
+            onClick={() => setMode('abs')}
+            title="Bar height shows absolute counts"
+          >
+            Absolute
+          </button>
+          <button
+            type="button"
+            className={mode === 'pct' ? 'active' : ''}
+            onClick={() => setMode('pct')}
+            title="Each bar scaled to 100%; segments show share of the year"
+          >
+            100%
+          </button>
+        </div>
+      )}
+      <div className="seg" role="group" aria-label="Display format">
+        <button
+          type="button"
+          className={view === 'chart' ? 'active' : ''}
+          onClick={() => setView('chart')}
+          title="Visual chart view"
+        >
+          Chart
+        </button>
+        <button
+          type="button"
+          className={view === 'table' ? 'active' : ''}
+          onClick={() => setView('table')}
+          title="Underlying numeric data table"
+        >
+          Table
+        </button>
+      </div>
     </div>
   );
 }
@@ -44,8 +79,38 @@ export function TrendChart({
   const H = 224;
   const P = { l: 54, r: 16, t: 14, b: 28 };
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [view, setView] = useState<ViewMode>('chart');
 
   if (!data.length) return <p className="muted">No data.</p>;
+
+  if (view === 'table') {
+    return (
+      <div>
+        <ChartToolbar view={view} setView={setView} />
+        <div className="table-scroll short">
+          <table>
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th className="num">{label}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((p) => (
+                <tr key={p.d}>
+                  <td>{p.d}</td>
+                  <td className="num">
+                    {fmtVal(p.v)}
+                    {suffix}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   const vs = data.map((p) => p.v);
   const rawMin = Math.min(...vs);
@@ -80,77 +145,80 @@ export function TrendChart({
   const flip = hoverIdx !== null && (activeX - P.l) / (W - P.l - P.r) > 0.62;
 
   return (
-    <div className="chart-wrap">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={`${label} (${data[0].d}–${data[data.length - 1].d}, ${data.length} periods)`}
-      >
-        <title>{`${label} (${data[0].d}–${data[data.length - 1].d})`}</title>
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-              {suffix ? `${t.toFixed(t < 10 ? 1 : 0)}${suffix}` : fmtCompact.format(t)}
-            </text>
-          </g>
-        ))}
-        {data.length > 1 && (
-          <polygon
-            points={`${x(0).toFixed(1)},${H - P.b} ${pts} ${x(data.length - 1).toFixed(1)},${H - P.b}`}
-            className="area"
-          />
-        )}
-        <polyline points={pts} className="line" />
-        {showDots &&
-          data.map((p, i) => (
-            <circle
-              key={p.d}
-              cx={x(i)}
-              cy={y(p.v)}
-              r={hoverIdx === i ? 4.5 : 2.6}
-              className={hoverIdx === i ? 'dot-active' : 'dot'}
-            />
-          ))}
-        {data.map((p, i) =>
-          showTick(i) ? (
-            <text key={p.d} x={x(i)} y={H - 8} textAnchor="middle" className="tick tick-x">
-              {p.d}
-            </text>
-          ) : null,
-        )}
-        {hoverIdx !== null && (
-          <line x1={activeX} x2={activeX} y1={P.t} y2={H - P.b} className="crosshair" />
-        )}
-        <rect
-          x={P.l}
-          y={P.t}
-          width={W - P.l - P.r}
-          height={H - P.t - P.b}
-          fill="transparent"
-          onPointerMove={onMove}
-          onPointerLeave={() => setHoverIdx(null)}
-        />
-      </svg>
-      {active && (
-        <div
-          className="tooltip"
-          style={{
-            left: `${(activeX / W) * 100}%`,
-            transform: flip ? 'translate(-106%, 0)' : 'translate(6%, 0)',
-          }}
+    <div>
+      <ChartToolbar view={view} setView={setView} />
+      <div className="chart-wrap">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={`${label} (${data[0].d}–${data[data.length - 1].d}, ${data.length} periods)`}
         >
-          <strong>{active.d}</strong>
-          <div className="tooltip-row">
-            <span className="swatch" style={{ background: 'var(--accent)' }} />
-            <span className="tooltip-label">{label}</span>
-            <span className="tooltip-val">
-              {fmtVal(active.v)}
-              {suffix}
-            </span>
+          <title>{`${label} (${data[0].d}–${data[data.length - 1].d})`}</title>
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
+              <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
+                {suffix ? `${t.toFixed(t < 10 ? 1 : 0)}${suffix}` : fmtCompact.format(t)}
+              </text>
+            </g>
+          ))}
+          {data.length > 1 && (
+            <polygon
+              points={`${x(0).toFixed(1)},${H - P.b} ${pts} ${x(data.length - 1).toFixed(1)},${H - P.b}`}
+              className="area"
+            />
+          )}
+          <polyline points={pts} className="line" />
+          {showDots &&
+            data.map((p, i) => (
+              <circle
+                key={p.d}
+                cx={x(i)}
+                cy={y(p.v)}
+                r={hoverIdx === i ? 4.5 : 2.6}
+                className={hoverIdx === i ? 'dot-active' : 'dot'}
+              />
+            ))}
+          {data.map((p, i) =>
+            showTick(i) ? (
+              <text key={p.d} x={x(i)} y={H - 8} textAnchor="middle" className="tick tick-x">
+                {p.d}
+              </text>
+            ) : null,
+          )}
+          {hoverIdx !== null && (
+            <line x1={activeX} x2={activeX} y1={P.t} y2={H - P.b} className="crosshair" />
+          )}
+          <rect
+            x={P.l}
+            y={P.t}
+            width={W - P.l - P.r}
+            height={H - P.t - P.b}
+            fill="transparent"
+            onPointerMove={onMove}
+            onPointerLeave={() => setHoverIdx(null)}
+          />
+        </svg>
+        {active && (
+          <div
+            className="tooltip"
+            style={{
+              left: `${(activeX / W) * 100}%`,
+              transform: flip ? 'translate(-106%, 0)' : 'translate(6%, 0)',
+            }}
+          >
+            <strong>{active.d}</strong>
+            <div className="tooltip-row">
+              <span className="swatch" style={{ background: 'var(--accent)' }} />
+              <span className="tooltip-label">{label}</span>
+              <span className="tooltip-val">
+                {fmtVal(active.v)}
+                {suffix}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -179,6 +247,7 @@ export function MultiLineChart({
   const P = { l: 54, r: 16, t: 18, b: 30 };
   const [hover, setHover] = useState<number | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const [view, setView] = useState<ViewMode>('chart');
 
   const effectiveHidden = useMemo(() => {
     const labels = new Set(series.map((s) => s.label));
@@ -199,6 +268,45 @@ export function MultiLineChart({
   const yearSet = [...new Set(activeSeries.flatMap((s) => s.points.map((p) => p.x)))].sort(
     (a, b) => a - b,
   );
+
+  if (view === 'table') {
+    const maps = activeSeries.map((s) => new Map(s.points.map((p) => [p.x, p.y])));
+    return (
+      <div>
+        <ChartToolbar view={view} setView={setView} />
+        <div className="table-scroll short">
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                {activeSeries.map((s) => (
+                  <th key={s.label} className="num">
+                    {s.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {yearSet.map((yr) => (
+                <tr key={yr}>
+                  <td>{yr}</td>
+                  {maps.map((m, i) => {
+                    const v = m.get(yr);
+                    return (
+                      <td key={activeSeries[i].label} className="num">
+                        {v == null ? '—' : `${fmtVal(v)}${suffix}`}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   const step = yearSet.length > 10 ? 2 : 1;
   const yearTicks = yearSet.filter((_, i) => i % step === 0);
   const x0 = Math.min(...yearSet);
@@ -257,6 +365,7 @@ export function MultiLineChart({
 
   return (
     <div>
+      <ChartToolbar view={view} setView={setView} />
       <div className="chart-wrap">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${activeSeries.length} series over time`}>
           <title>{`${activeSeries.map((s) => s.label).join(', ')} (${x0}–${x1})`}</title>
@@ -274,13 +383,7 @@ export function MultiLineChart({
           {refLines?.map((rl) =>
             rl.x >= x0 && rl.x <= x1 ? (
               <g key={`ref-${rl.x}`}>
-                <line
-                  x1={x(rl.x)}
-                  x2={x(rl.x)}
-                  y1={P.t}
-                  y2={H - P.b}
-                  className="ref-line"
-                />
+                <line x1={x(rl.x)} x2={x(rl.x)} y1={P.t} y2={H - P.b} className="ref-line" />
                 <text x={x(rl.x) + 4} y={P.t + 10} className="tick ref-label">
                   {rl.label}
                 </text>
@@ -380,11 +483,7 @@ export function MultiLineChart({
           );
         })}
         {effectiveHidden.size > 0 && (
-          <button
-            type="button"
-            className="legend-reset"
-            onClick={() => setHidden(new Set())}
-          >
+          <button type="button" className="legend-reset" onClick={() => setHidden(new Set())}>
             Show all
           </button>
         )}
@@ -432,6 +531,7 @@ export function StackedMultiBars({
   const H = 244;
   const P = { l: 54, r: 14, t: 14, b: 30 };
   const [mode, setMode] = useState<BarMode>('abs');
+  const [view, setView] = useState<ViewMode>('chart');
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
 
@@ -463,6 +563,50 @@ export function StackedMultiBars({
   const totals = years.map((yr) =>
     activeSeries.reduce((a, s) => a + (lookup.get(`${s.label}|${yr}`) ?? 0), 0),
   );
+
+  if (view === 'table') {
+    return (
+      <div>
+        <ChartToolbar mode={mode} setMode={setMode} view={view} setView={setView} showScale={false} />
+        <div className="table-scroll short">
+          <table>
+            <thead>
+              <tr>
+                <th className="sticky-col">Year</th>
+                {activeSeries.length > 1 && <th className="num">Total</th>}
+                {activeSeries.map((s) => (
+                  <th key={s.label} className="num">
+                    {s.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {years.map((yr, i) => (
+                <tr key={yr}>
+                  <td className="sticky-col">
+                    {yr}
+                    {marks?.[yr] ?? ''}
+                  </td>
+                  {activeSeries.length > 1 && (
+                    <td className="num">
+                      <strong>{fmtInt.format(totals[i])}</strong>
+                    </td>
+                  )}
+                  {activeSeries.map((s) => (
+                    <td key={s.label} className="num">
+                      {fmtInt.format(lookup.get(`${s.label}|${yr}`) ?? 0)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   const max = mode === 'abs' ? Math.max(...totals) || 1 : 100;
   const scale = (v: number, t: number) => (mode === 'abs' ? v : t > 0 ? (v / t) * 100 : 0);
   const plotW = W - P.l - P.r;
@@ -504,7 +648,13 @@ export function StackedMultiBars({
 
   return (
     <div>
-      {series.length > 1 && <ModeSeg mode={mode} setMode={setMode} />}
+      <ChartToolbar
+        mode={mode}
+        setMode={setMode}
+        view={view}
+        setView={setView}
+        showScale={series.length > 1}
+      />
       <div className="chart-wrap">
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -653,7 +803,15 @@ export function StackedMultiBars({
   );
 }
 
-export function CategoryBars({ data }: { data: { category: string; v: number }[] }) {
+export function CategoryBars({
+  data,
+  onSelect,
+  activeCategory,
+}: {
+  data: { category: string; v: number }[];
+  onSelect?: (category: string) => void;
+  activeCategory?: string;
+}) {
   if (!data.length) return <p className="muted">No data.</p>;
   const max = Math.max(...data.map((d) => d.v));
   const total = data.reduce((a, d) => a + d.v, 0);
@@ -661,13 +819,29 @@ export function CategoryBars({ data }: { data: { category: string; v: number }[]
     <ul className="bars">
       {data.map((d) => {
         const share = total > 0 ? ((d.v / total) * 100).toFixed(1) : '0.0';
-        return (
-          <li key={d.category} title={`${d.category}: ${fmtInt.format(d.v)} (${share}% of shown)`}>
+        const isActive = activeCategory === d.category;
+        const inner = (
+          <>
             <span className="bar-label">{d.category}</span>
             <span className="bar-track">
               <span className="bar-fill" style={{ width: `${max ? (d.v / max) * 100 : 0}%` }} />
             </span>
             <span className="bar-value">{fmtCompact.format(d.v)}</span>
+          </>
+        );
+        return (
+          <li
+            key={d.category}
+            className={isActive ? 'bar-active' : undefined}
+            title={`${d.category}: ${fmtInt.format(d.v)} (${share}% of shown)${onSelect ? ' — click to filter' : ''}`}
+          >
+            {onSelect ? (
+              <button type="button" className="bar-row-btn" onClick={() => onSelect(d.category)}>
+                {inner}
+              </button>
+            ) : (
+              inner
+            )}
           </li>
         );
       })}

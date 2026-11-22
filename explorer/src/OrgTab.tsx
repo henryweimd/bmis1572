@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, StackedMultiBars, VintageHeatmap } from './charts';
 import type { LineSeries, VintageRow } from './charts';
+import { DataTable } from './components/DataTable';
+import type { ColumnDef } from './components/DataTable';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv } from './csv';
 import { SERIES_COLORS, VINTAGE_KMAX } from './lib/constants';
@@ -146,7 +148,7 @@ export default function OrgTab({
             ` CAST(top_country AS VARCHAR) AS top_country, CAST(n_variants AS INTEGER) AS n_variants,` +
             ` CAST(example_site AS VARCHAR) AS example_site,` +
             ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM ${cfg.indexTable}` +
-            ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : 'n_receipts DESC'} LIMIT 25`,
+            ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : 'n_receipts DESC'} LIMIT 100`,
         );
         if (cancelled) return;
         setTop(t);
@@ -270,6 +272,80 @@ export default function OrgTab({
       [`${kind}.o`]: sort,
     });
   }, [kind, band, y0, y1, sel, sort]);
+
+  const topColumns = useMemo<ColumnDef<OrgTopRow>[]>(
+    () => [
+      {
+        key: 'org',
+        label: cfg.selector,
+        sortValue: (r) => r.org,
+        csvValue: (r) => r.org,
+        render: (r) => <strong>{r.org}</strong>,
+      },
+      {
+        key: 'receipts',
+        label: 'Receipts',
+        align: 'right',
+        sortValue: (r) => r.n_receipts,
+        csvValue: (r) => r.n_receipts,
+        render: (r) => fmtInt.format(r.n_receipts),
+      },
+      {
+        key: 'tpy',
+        label: '/yr',
+        align: 'right',
+        sortValue: (r) => r.tpy,
+        csvValue: (r) => r.tpy.toFixed(2),
+        render: (r) => r.tpy.toFixed(2),
+      },
+      {
+        key: 'entities',
+        label: 'Entities',
+        align: 'right',
+        sortValue: (r) => r.n_entities,
+        csvValue: (r) => r.n_entities,
+        render: (r) => fmtInt.format(r.n_entities),
+      },
+      {
+        key: 'countries',
+        label: 'Countries',
+        align: 'right',
+        sortValue: (r) => r.n_countries,
+        csvValue: (r) => r.n_countries,
+        render: (r) => r.n_countries,
+      },
+      {
+        key: 'top_country',
+        label: 'Top country',
+        sortValue: (r) => r.top_country,
+        csvValue: (r) => r.top_country,
+        render: (r) => r.top_country,
+      },
+      {
+        key: 'span',
+        label: 'Span',
+        sortValue: (r) => r.last_year,
+        csvValue: (r) => `${r.first_year}-${r.last_year}`,
+        render: (r) => `${r.first_year}–${r.last_year}`,
+      },
+      {
+        key: 'variants',
+        label: 'Variants',
+        align: 'right',
+        sortValue: (r) => r.n_variants,
+        csvValue: (r) => r.n_variants,
+        render: (r) => r.n_variants,
+      },
+      {
+        key: 'example',
+        label: 'Top filing name',
+        sortValue: (r) => r.example_site ?? '',
+        csvValue: (r) => r.example_site ?? '',
+        render: (r) => r.example_site ?? '',
+      },
+    ],
+    [cfg.selector],
+  );
 
   if (demo) return <p className="muted">Run the pipeline for {cfg.plural} data.</p>;
 
@@ -463,34 +539,9 @@ export default function OrgTab({
         <div className="panel-head">
           <h2>
             {sort === 'rate'
-              ? `Top ${cfg.table} by trials/year rate (global)`
-              : `Top ${cfg.table} by lifetime receipts (global)`}
+              ? `Top 100 ${cfg.table} by trials/year rate (global)`
+              : `Top 100 ${cfg.table} by lifetime receipts (global)`}
           </h2>
-          {!!top.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  `${kind}-top.csv`,
-                  [cfg.selector.toLowerCase(), 'receipts', 'per_year', 'entities', 'countries', 'top_country', 'first_year', 'last_year', 'variants', 'top_filing_name'],
-                  top.map((r) => [
-                    r.org,
-                    r.n_receipts,
-                    r.tpy.toFixed(2),
-                    r.n_entities,
-                    r.n_countries,
-                    r.top_country,
-                    r.first_year,
-                    r.last_year,
-                    r.n_variants,
-                    r.example_site ?? '',
-                  ]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
         </div>
         <div className="filters">
           <div className="seg" role="group" aria-label={`${cfg.singular} sort`}>
@@ -511,45 +562,18 @@ export default function OrgTab({
           </div>
           <span className="muted">Click any row to filter charts and inspect geographic footprint.</span>
         </div>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>{cfg.selector}</th>
-                <th className="num">Receipts</th>
-                <th className="num">/yr</th>
-                <th className="num">Entities</th>
-                <th className="num">Countries</th>
-                <th>Top country</th>
-                <th>Span</th>
-                <th className="num">Variants</th>
-                <th>Top filing name</th>
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((r) => (
-                <tr
-                  key={r.org}
-                  className={sel === r.org ? 'picked' : 'pickable'}
-                  onClick={() => setSel(sel === r.org ? 'all' : r.org)}
-                  title={sel === r.org ? 'Click to show all' : `Filter to ${r.org}`}
-                >
-                  <td>{r.org}</td>
-                  <td className="num">{fmtInt.format(r.n_receipts)}</td>
-                  <td className="num">{r.tpy.toFixed(2)}</td>
-                  <td className="num">{fmtInt.format(r.n_entities)}</td>
-                  <td className="num">{r.n_countries}</td>
-                  <td>{r.top_country}</td>
-                  <td>
-                    {r.first_year}–{r.last_year}
-                  </td>
-                  <td className="num">{r.n_variants}</td>
-                  <td>{r.example_site ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={top}
+          columns={topColumns}
+          rowKey={(r) => r.org}
+          filterPlaceholder={`Filter top 100 ${cfg.table} by name or country…`}
+          filterText={(r) => `${r.org} ${r.top_country} ${r.example_site ?? ''}`}
+          onRowClick={(r) => setSel(sel === r.org ? 'all' : r.org)}
+          isSelected={(r) => sel === r.org}
+          rowTitle={(r) => (sel === r.org ? 'Click to show all' : `Filter charts to ${r.org}`)}
+          csvFilename={`${kind}-top100.csv`}
+          pageSize={25}
+        />
         <p className="caption">
           Variants = distinct raw site strings merged into the key; top filing name is the most
           frequent raw string. Residual splits remain (see Definitions).
