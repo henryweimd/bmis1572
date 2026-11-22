@@ -32,10 +32,12 @@ def _fit_gap(g: pd.DataFrame, pre0: int, pre1: int, post0: int, post1: int,
     gb = g[g["band"].isin([TREATED, *CONTROLS])]
     for band, b in gb.groupby("band", observed=True):
         bp = pre[pre["band"] == band].sort_values("year")
+        bpost = post[post["band"] == band].sort_values("year")
+        if len(bp) < 2 or len(bpost) == 0:
+            continue
         x = bp["year"].to_numpy(float)
         s_slope, s_int = np.polyfit(x, bp["share"].to_numpy(float), 1)
         n_slope, n_int = np.polyfit(x, bp["n_active"].to_numpy(float), 1)
-        bpost = post[post["band"] == band].sort_values("year")
         for _, r in bpost.iterrows():
             es = s_slope * r["year"] + s_int
             en = n_slope * r["year"] + n_int

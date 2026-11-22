@@ -77,11 +77,16 @@ def parse_name(raw: str) -> tuple[str, str]:
     s = _SUFFIX.sub(" ", str(raw))
     s = _CRED.sub(" ", s.upper())
     s = s.replace("'", "").replace("-", " ").replace(".", " ")
-    s = _WS.sub(" ", _NONLET.sub(" ", s)).strip().strip(",").strip()
-    if "," in s:
-        last, _, first = s.partition(",")
+    s = _WS.sub(" ", _NONLET.sub(" ", s)).strip()
+    # Drop empty comma-separated segments left behind after stripping credentials/suffixes
+    # (e.g. "Jane Q. Doe, Ph.D., Jr." -> "JANE Q DOE, ," -> "JANE Q DOE").
+    segs = [seg.strip() for seg in s.split(",") if seg.strip()]
+    if not segs:
+        return "", ""
+    if len(segs) >= 2:
+        last, first = segs[0], " ".join(segs[1:])
     else:
-        parts = s.split()
+        parts = segs[0].split()
         if len(parts) < 2:
             return "", ""
         *firsts, last = parts

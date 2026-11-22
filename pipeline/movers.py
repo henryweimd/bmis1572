@@ -31,9 +31,9 @@ def build(persons: pd.DataFrame, py: pd.DataFrame) -> dict[str, pd.DataFrame]:
     p = persons.reset_index(drop=True)
     key = name_key(p["display_name"].fillna(""))
     ok = ~key.isin(["", "NG", "NG NG"])
-    years: dict[int, set] = {}
-    for pid, grp in py.groupby("pid"):
-        years[int(pid)] = set(grp["year"].tolist())
+    years: dict[int, set[int]] = {}
+    for pid, yr in zip(py["pid"].to_numpy(), py["year"].to_numpy()):
+        years.setdefault(int(pid), set()).add(int(yr))
     clusters, members = [], []
     cid = 0
     for k, idx in p[ok].groupby(key[ok]).groups.items():
@@ -79,6 +79,10 @@ def build(persons: pd.DataFrame, py: pd.DataFrame) -> dict[str, pd.DataFrame]:
         mem = pd.DataFrame(members)
         mem["cluster_id"] = mem["cluster_id"].map(idmap)
     else:
+        cl = pd.DataFrame(columns=[
+            "cluster_id", "name_key", "display_name", "n_persons", "verdict",
+            "countries", "n_countries", "first_year", "last_year", "n_trials",
+        ])
         mem = pd.DataFrame(columns=["person_id", "cluster_id"])
     n_merge_all = int((cl["n_persons"] - 1).sum()) if len(cl) else 0
     mv = cl[cl["verdict"] == "mover-likely"] if len(cl) else cl

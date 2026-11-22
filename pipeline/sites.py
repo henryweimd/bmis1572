@@ -27,7 +27,7 @@ import pandas as pd
 
 SUITE_MARKERS = {
     "STE", "SUITE", "SUIT", "FL", "FLOOR", "RM", "ROOM", "BLDG", "BUILDING",
-    "APT", "APARTMENT", "UNIT", "#", "SL", "STE", "FLR",
+    "APT", "APARTMENT", "UNIT", "#", "SL", "FLR",
 }
 
 STREET_SUFFIXES = {
@@ -83,6 +83,9 @@ def _house_number(street: str) -> str:
 
 def cluster_sites(ci: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, dict]:
     """Return (strict_codes, merged_codes, diag) aligned to ci rows."""
+    if len(ci) == 0:
+        empty = np.empty(0, dtype=np.int64)
+        return empty, empty, {"n_strict": 0, "n_merged": 0, "unions": 0, "pairs": 0, "capped": 0}
     t0 = time.time()
     street = ci["SADDR"].map(street_core)
     log_t = time.time() - t0
@@ -111,12 +114,10 @@ def cluster_sites(ci: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, dict]:
             parent[rb] = ra
 
     key_tokens: dict[int, frozenset] = {}
-    key_street: dict[int, str] = {}
     for sid, s in enumerate(tmp["street"]):
         code = int(strict[sid])
         if code not in key_tokens:
             key_tokens[code] = frozenset(s.split())
-            key_street[code] = s
     block = (tmp["city"] + "|" + tmp["state"] + "|" + tmp["country"]).to_numpy()
     house = np.array([_house_number(s) for s in tmp["street"]])
     groups: dict[tuple, set[int]] = {}
@@ -160,6 +161,12 @@ def cluster_sites(ci: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, dict]:
 def build_site_index(ci: pd.DataFrame, codes: np.ndarray, pid: np.ndarray,
                      version: str, top_refine: int = 500) -> pd.DataFrame:
     """Per-site rollup: display, geography, investigators, span, variants."""
+    if len(ci) == 0:
+        return pd.DataFrame(columns=[
+            "site_n", "site_id", "display_name", "display_addr", "city",
+            "state", "country", "band", "n_inv_ever", "n_receipts",
+            "first_year", "last_year", "n_years", "n_variants", "version",
+        ])
     sidx = np.argsort(ci["RCVD_DT"].to_numpy(), kind="stable")
     n = int(codes.max()) + 1
     first_pos = np.zeros(n, dtype=np.int64)
@@ -188,13 +195,13 @@ def build_site_index(ci: pd.DataFrame, codes: np.ndarray, pid: np.ndarray,
     mode_addr = (sub["SADDR"].groupby(sub_codes, sort=True)
                  .agg(lambda s: s.value_counts().index[0]))
 
+    disp_site = disp["SITE"].to_numpy()
+    disp_addr = disp["SADDR"].to_numpy()
     idx = pd.DataFrame({
         "site_n": np.arange(n),
         "site_id": [f"{version}:{i}" for i in range(n)],
-        "display_name": [mode_name.get(c, disp["SITE"].iloc[k])
-                         for k, c in enumerate(range(n))],
-        "display_addr": [mode_addr.get(c, disp["SADDR"].iloc[k])
-                         for k, c in enumerate(range(n))],
+        "display_name": [mode_name.get(c, disp_site[c]) for c in range(n)],
+        "display_addr": [mode_addr.get(c, disp_addr[c]) for c in range(n)],
         "city": disp["CITY"].to_numpy().astype(str),
         "state": disp["STATE"].to_numpy().astype(str),
         "country": disp["COUNTRY"].to_numpy().astype(str),

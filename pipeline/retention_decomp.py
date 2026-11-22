@@ -65,9 +65,12 @@ def build(persons: pd.DataFrame, py: pd.DataFrame, version: str) -> pd.DataFrame
                                       "re": "n_reentered",
                                       "gap": "n_gapped_future",
                                       "dor": "n_dormant"}))
+    cols = ["version", "cohort", "band", "k", "n_cohort", "n_continuous",
+            "n_reentered", "n_gapped_future", "n_dormant", "followup"]
+    if not rows:
+        return pd.DataFrame(columns=cols)
     out = pd.concat(rows, ignore_index=True)
     tot = (out["n_continuous"] + out["n_reentered"]
            + out["n_gapped_future"] + out["n_dormant"])
     assert (tot == out["n_cohort"]).all(), "decomposition must partition the cohort"
-    return out[["version", "cohort", "band", "k", "n_cohort", "n_continuous",
-                "n_reentered", "n_gapped_future", "n_dormant", "followup"]]
+    return out[cols]

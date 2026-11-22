@@ -78,12 +78,16 @@ Without step 1, the explorer falls back to a committed demo CSV
 - `pipeline/geo_bands.py`, `pipeline/geo_bands.csv` — country→band mapping (auditable).
 - `data/` — local lake: `raw/` (downloads + API caches), `curated/*.parquet`,
   `manifest.json`. Gitignored except via the shipped explorer snapshot.
-- `explorer/src/App.tsx` — investigators tab, search, leaderboards, definitions.
+- `explorer/src/App.tsx` — lazy-loaded tab shell, URL hash sync, share link, keyboard navigation.
+- `explorer/src/InvestigatorsTab.tsx` — investigators tab, search, leaderboards, EU break, movers, vintage.
 - `explorer/src/OrgTab.tsx` — shared CRO/IRB tab component.
 - `explorer/src/SiteTab.tsx` — sites tab (roll-ups, churn, cross-check, TA/phase mix).
 - `explorer/src/TrialsTab.tsx` — trials tab (sponsors, phases, KOL board, coverage).
 - `explorer/src/ChinaTab.tsx` — China tab (vintage, provinces, specialties, search).
 - `explorer/src/WHOTab.tsx` — WHO tab (global context, top-20 trends, country tables).
+- `explorer/src/DefinitionsPanel.tsx` — collapsible, searchable definitions glossary.
+- `explorer/src/lib/` — shared domain constants, formatting, WCAG contrast, and SQL escaping helpers.
+- `tests/` & `explorer/tests/` — pytest pipeline/snapshot integrity suites and Node TypeScript unit tests.
 - `explorer/` — static frontend: one DuckDB view per Parquet URL, every
   KPI/chart/table as SQL in the browser. No backend.
 - `charts/` — tracked static figures; `exports/` — tracked slide deck.

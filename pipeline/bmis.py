@@ -112,7 +112,9 @@ def clean(df: pd.DataFrame, dedupe: bool = True) -> tuple[pd.DataFrame, dict]:
     stats: dict = {"raw_rows": len(df)}
 
     if dedupe:
-        df = df.drop_duplicates()
+        df = df.drop_duplicates().copy()
+    else:
+        df = df.copy()
     stats["exact_dupe_rows_removed"] = int(stats["raw_rows"] - len(df)) if dedupe else 0
 
     df["RCVD_DT"] = pd.to_datetime(df["RCVD"], format="%d-%b-%Y", errors="coerce")

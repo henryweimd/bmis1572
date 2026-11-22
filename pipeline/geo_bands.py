@@ -46,15 +46,11 @@ _SAS = {"AFG", "BGD", "BTN", "IND", "LKA", "MDV", "NPL", "PAK"}
 _EAP = {
     "AUS", "ASM", "BRN", "CHN", "COK", "FJI", "GUM", "HKG", "IDN", "JPN",
     "KHM", "KIR", "KOR", "LAO", "MHL", "MYS", "MMR", "MNG", "MNP", "NCL",
-    "NIU", "NPL", "NRU", "NZL", "PHL", "PLW", "PNG", "PYF", "SGP", "SLB",
+    "NIU", "NRU", "NZL", "PHL", "PLW", "PNG", "PYF", "SGP", "SLB",
     "THA", "TKL", "TON", "TUV", "TWN", "VNM", "VUT", "WSM",
 }
-_EAP.discard("NPL")  # Nepal is South Asia, not Pacific.
 
 _UNKNOWN_CODES = {"XXX", "", "NG", "??", "UNK"}
-
-# NPL appears in South Asia (kept out of EAP above).
-_SAS = _SAS | {"NPL"}
 
 
 def band_for(code: str) -> str:

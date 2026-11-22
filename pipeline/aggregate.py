@@ -344,6 +344,8 @@ def concentration(row_pid: np.ndarray, row_year: np.ndarray,
         v = np.sort(g["n"].to_numpy().astype(float))
         n = len(v)
         tot = v.sum()
+        if n == 0 or tot <= 0:
+            continue
         k1 = max(1, int(np.ceil(n * 0.01)))
         k10 = max(1, int(np.ceil(n * 0.10)))
         i = np.arange(1, n + 1)
@@ -352,6 +354,10 @@ def concentration(row_pid: np.ndarray, row_year: np.ndarray,
                      "top1_share": round(float(v[-k1:].sum() / tot), 4),
                      "top10_share": round(float(v[-k10:].sum() / tot), 4),
                      "gini": round(float(gini), 4)})
+    if not recs:
+        return pd.DataFrame(columns=[
+            "version", "year", "n_active", "top1_share", "top10_share", "gini", "partial"
+        ])
     out = pd.DataFrame(recs).sort_values("year").reset_index(drop=True)
     out["partial"] = out["year"].isin(PARTIAL_YEARS)
     return out
@@ -390,6 +396,8 @@ def leaderboard(persons: pd.DataFrame, rows: pd.DataFrame,
         for band, dfb in elig.groupby("band", observed=True):
             take(dfb, "band", str(band), top_band)
 
+        if not picks:
+            continue
         # Refine display name/site by mode over each picked person's rows.
         cand = np.array(sorted(picks))
         rdf = pd.DataFrame({"pid": row_pid,
@@ -419,6 +427,12 @@ def leaderboard(persons: pd.DataFrame, rows: pd.DataFrame,
                     "tpy": round(float(r["tpy"]), 4),
                 })
         frames.append(pd.DataFrame(recs))
+    if not frames:
+        return pd.DataFrame(columns=[
+            "version", "metric", "scope", "scope_value", "rank", "display_name",
+            "deg", "site", "city", "state", "country", "band", "n_trials",
+            "n_years", "first_year", "last_year", "tpy",
+        ])
     out = pd.concat(frames)
     out = out.sort_values(["metric", "scope", "scope_value", "rank"])
     return out.reset_index(drop=True)

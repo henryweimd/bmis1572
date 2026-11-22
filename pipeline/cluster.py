@@ -58,6 +58,12 @@ def _aggregate(
     df_sorted: pd.DataFrame, codes_sorted: np.ndarray,
     id_prefix: str, id_col: str,
 ) -> pd.DataFrame:
+    if len(df_sorted) == 0:
+        return pd.DataFrame(columns=[
+            id_col, "display_name", "deg", "site", "city", "state",
+            "zip", "country", "band", "first_year", "last_year",
+            "n_trials", "n_years",
+        ])
     df_sorted = df_sorted.copy()
     df_sorted["_pid"] = codes_sorted
     g = df_sorted.groupby("_pid", sort=True)
@@ -97,6 +103,9 @@ def strict_persons(ci: pd.DataFrame) -> ClusterResult:
 def merged_persons(ci: pd.DataFrame, strict_inv: np.ndarray) -> ClusterResult:
     """Union strict clusters within (name, country) blocks on shared site/city."""
     ci = ci.reset_index(drop=True)
+    if len(ci) == 0:
+        return ClusterResult(_aggregate(ci, np.empty(0, dtype=np.int64), "M", "person_id"),
+                             np.empty(0, dtype=np.int64))
     n_strict = int(strict_inv.max()) + 1
     parent = np.arange(n_strict, dtype=np.int64)
 
@@ -106,10 +115,12 @@ def merged_persons(ci: pd.DataFrame, strict_inv: np.ndarray) -> ClusterResult:
             a = parent[a]
         return a
 
-    def union(a: int, b: int) -> None:
+    def union(a: int, b: int) -> bool:
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[rb] = ra
+            return True
+        return False
 
     block = ci.groupby(BLOCK_KEYS, observed=True).ngroup().to_numpy()
     site_c, _ = pd.factorize(ci["k_site"])
@@ -133,13 +144,13 @@ def merged_persons(ci: pd.DataFrame, strict_inv: np.ndarray) -> ClusterResult:
             s = int(strict_inv[i])
             sk, ck = int(site_c[i]), int(city_c[i])
             if sk in by_site:
-                union(by_site[sk], s)
-                n_unions += 1
+                if union(by_site[sk], s):
+                    n_unions += 1
             else:
                 by_site[sk] = s
             if ck in by_city:
-                union(by_city[ck], s)
-                n_unions += 1
+                if union(by_city[ck], s):
+                    n_unions += 1
             else:
                 by_city[ck] = s
 
