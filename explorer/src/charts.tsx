@@ -1,16 +1,18 @@
-import { useState } from 'react';
-
-const fmtCompact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const fmtVal = (v: number): string => (Number.isInteger(v) ? fmtInt.format(v) : v.toFixed(2));
-const fmtPct1 = (v: number): string => `${v.toFixed(1)}%`;
+import { useMemo, useState } from 'react';
+import { fmtCompact, fmtInt, fmtPct1, fmtVal, vintageCellStyle } from './lib/format';
 
 type BarMode = 'abs' | 'pct';
+
+export interface RefLine {
+  x: number;
+  label: string;
+}
 
 function ModeSeg({ mode, setMode }: { mode: BarMode; setMode: (m: BarMode) => void }) {
   return (
     <div className="seg chart-mode" role="group" aria-label="Bar scale">
       <button
+        type="button"
         className={mode === 'abs' ? 'active' : ''}
         onClick={() => setMode('abs')}
         title="Bar height shows absolute counts"
@@ -18,6 +20,7 @@ function ModeSeg({ mode, setMode }: { mode: BarMode; setMode: (m: BarMode) => vo
         Absolute
       </button>
       <button
+        type="button"
         className={mode === 'pct' ? 'active' : ''}
         onClick={() => setMode('pct')}
         title="Each bar scaled to 100%; segments show share of the year"
@@ -28,43 +31,127 @@ function ModeSeg({ mode, setMode }: { mode: BarMode; setMode: (m: BarMode) => vo
   );
 }
 
-export function TrendChart({ data }: { data: { d: string; v: number }[] }) {
+export function TrendChart({
+  data,
+  label = 'Trend over time',
+  suffix = '',
+}: {
+  data: { d: string; v: number }[];
+  label?: string;
+  suffix?: string;
+}) {
   const W = 720;
-  const H = 220;
-  const P = { l: 52, r: 12, t: 12, b: 26 };
+  const H = 224;
+  const P = { l: 54, r: 16, t: 14, b: 28 };
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   if (!data.length) return <p className="muted">No data.</p>;
+
   const vs = data.map((p) => p.v);
-  const min = Math.min(...vs);
-  const max = Math.max(...vs);
+  const rawMin = Math.min(...vs);
+  const rawMax = Math.max(...vs);
+  const pad = (rawMax - rawMin) * 0.08 || Math.abs(rawMax) * 0.1 || 1;
+  const min = rawMin >= 0 ? Math.max(0, rawMin - pad) : rawMin - pad;
+  const max = rawMax + pad;
   const span = max - min || 1;
-  const x = (i: number) => P.l + (i / (data.length - 1 || 1)) * (W - P.l - P.r);
+
+  const x = (i: number) =>
+    data.length === 1 ? (P.l + W - P.r) / 2 : P.l + (i / (data.length - 1)) * (W - P.l - P.r);
   const y = (v: number) => P.t + (1 - (v - min) / span) * (H - P.t - P.b);
   const pts = data.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   const ticks = [0, 1, 2, 3].map((i) => min + (span * i) / 3);
-  const mid = data[Math.floor(data.length / 2)].d;
+  const step = data.length > 22 ? 4 : data.length > 10 ? 2 : 1;
+  const showDots = data.length <= 32;
+  const showTick = (i: number) =>
+    i % step === 0 || (i === data.length - 1 && (data.length - 1) % step >= Math.ceil(step / 2));
+
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (W / rect.width);
+    const frac = (px - P.l) / (W - P.l - P.r);
+    const idx = Math.round(frac * (data.length - 1));
+    setHoverIdx(Math.min(data.length - 1, Math.max(0, idx)));
+  };
+
+  const active = hoverIdx !== null ? data[hoverIdx] : null;
+  const activeX = hoverIdx !== null ? x(hoverIdx) : 0;
+  const flip = hoverIdx !== null && (activeX - P.l) / (W - P.l - P.r) > 0.62;
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Daily total across ${data.length} days`}>
-      <title>{`Daily total across ${data.length} days`}</title>
-      {ticks.map((t, i) => (
-        <g key={i}>
-          <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
-          <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-            {fmtCompact.format(t)}
-          </text>
-        </g>
-      ))}
-      <polygon points={`${P.l},${H - P.b} ${pts} ${W - P.r},${H - P.b}`} className="area" />
-      <polyline points={pts} className="line" />
-      <text x={P.l} y={H - 8} className="tick">
-        {data[0].d}
-      </text>
-      <text x={(P.l + W - P.r) / 2} y={H - 8} textAnchor="middle" className="tick">
-        {mid}
-      </text>
-      <text x={W - P.r} y={H - 8} textAnchor="end" className="tick">
-        {data[data.length - 1].d}
-      </text>
-    </svg>
+    <div className="chart-wrap">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={`${label} (${data[0].d}–${data[data.length - 1].d}, ${data.length} periods)`}
+      >
+        <title>{`${label} (${data[0].d}–${data[data.length - 1].d})`}</title>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
+            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
+              {suffix ? `${t.toFixed(t < 10 ? 1 : 0)}${suffix}` : fmtCompact.format(t)}
+            </text>
+          </g>
+        ))}
+        {data.length > 1 && (
+          <polygon
+            points={`${x(0).toFixed(1)},${H - P.b} ${pts} ${x(data.length - 1).toFixed(1)},${H - P.b}`}
+            className="area"
+          />
+        )}
+        <polyline points={pts} className="line" />
+        {showDots &&
+          data.map((p, i) => (
+            <circle
+              key={p.d}
+              cx={x(i)}
+              cy={y(p.v)}
+              r={hoverIdx === i ? 4.5 : 2.6}
+              className={hoverIdx === i ? 'dot-active' : 'dot'}
+            />
+          ))}
+        {data.map((p, i) =>
+          showTick(i) ? (
+            <text key={p.d} x={x(i)} y={H - 8} textAnchor="middle" className="tick tick-x">
+              {p.d}
+            </text>
+          ) : null,
+        )}
+        {hoverIdx !== null && (
+          <line x1={activeX} x2={activeX} y1={P.t} y2={H - P.b} className="crosshair" />
+        )}
+        <rect
+          x={P.l}
+          y={P.t}
+          width={W - P.l - P.r}
+          height={H - P.t - P.b}
+          fill="transparent"
+          onPointerMove={onMove}
+          onPointerLeave={() => setHoverIdx(null)}
+        />
+      </svg>
+      {active && (
+        <div
+          className="tooltip"
+          style={{
+            left: `${(activeX / W) * 100}%`,
+            transform: flip ? 'translate(-106%, 0)' : 'translate(6%, 0)',
+          }}
+        >
+          <strong>{active.d}</strong>
+          <div className="tooltip-row">
+            <span className="swatch" style={{ background: 'var(--accent)' }} />
+            <span className="tooltip-label">{label}</span>
+            <span className="tooltip-val">
+              {fmtVal(active.v)}
+              {suffix}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -78,14 +165,40 @@ export interface LineSeries {
   points: LinePoint[];
 }
 
-export function MultiLineChart({ series }: { series: LineSeries[] }) {
+export function MultiLineChart({
+  series,
+  suffix = '',
+  refLines,
+}: {
+  series: LineSeries[];
+  suffix?: string;
+  refLines?: RefLine[];
+}) {
   const W = 720;
-  const H = 240;
-  const P = { l: 52, r: 12, t: 12, b: 30 };
+  const H = 244;
+  const P = { l: 54, r: 16, t: 18, b: 30 };
   const [hover, setHover] = useState<number | null>(null);
-  const all = series.flatMap((s) => s.points).filter((p) => p.y !== null) as { x: number; y: number }[];
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+
+  const effectiveHidden = useMemo(() => {
+    const labels = new Set(series.map((s) => s.label));
+    const pruned = new Set([...hidden].filter((l) => labels.has(l)));
+    return pruned.size >= series.length ? new Set<string>() : pruned;
+  }, [series, hidden]);
+  const activeSeries = useMemo(
+    () => series.filter((s) => !effectiveHidden.has(s.label)),
+    [series, effectiveHidden],
+  );
+
+  const all = activeSeries
+    .flatMap((s) => s.points)
+    .filter((p) => p.y !== null) as { x: number; y: number }[];
+
   if (!all.length) return <p className="muted">No data.</p>;
-  const yearSet = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
+
+  const yearSet = [...new Set(activeSeries.flatMap((s) => s.points.map((p) => p.x)))].sort(
+    (a, b) => a - b,
+  );
   const step = yearSet.length > 10 ? 2 : 1;
   const yearTicks = yearSet.filter((_, i) => i % step === 0);
   const x0 = Math.min(...yearSet);
@@ -94,10 +207,11 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
   const min = Math.min(0, ...vs);
   const max = Math.max(...vs);
   const span = max - min || 1;
-  const x = (v: number) => P.l + ((v - x0) / (x1 - x0 || 1)) * (W - P.l - P.r);
+  const x = (v: number) =>
+    x0 === x1 ? (P.l + W - P.r) / 2 : P.l + ((v - x0) / (x1 - x0)) * (W - P.l - P.r);
   const y = (v: number) => P.t + (1 - (v - min) / span) * (H - P.t - P.b);
   const ticks = [0, 1, 2, 3].map((i) => min + (span * i) / 3);
-  const showDots = series.every((s) => s.points.length <= 30);
+  const showDots = activeSeries.every((s) => s.points.length <= 32);
 
   const runs = (pts: LinePoint[]): string[] => {
     const out: string[] = [];
@@ -115,7 +229,21 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
     return out;
   };
 
-  const onMove = (e: React.MouseEvent<SVGRectElement>) => {
+  const toggleSeries = (label: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else if (series.length - next.size > 1) {
+        next.add(label);
+      } else {
+        next.clear();
+      }
+      return next;
+    });
+  };
+
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
@@ -130,34 +258,67 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
   return (
     <div>
       <div className="chart-wrap">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${series.length} series over time`}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${activeSeries.length} series over time`}>
+          <title>{`${activeSeries.map((s) => s.label).join(', ')} (${x0}–${x1})`}</title>
           {ticks.map((t, i) => (
             <g key={i}>
               <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
               <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-                {fmtCompact.format(t)}
+                {suffix ? `${t.toFixed(0)}${suffix}` : fmtCompact.format(t)}
               </text>
             </g>
           ))}
           {yearSet.map((yr) => (
             <line key={`g${yr}`} x1={x(yr)} x2={x(yr)} y1={P.t} y2={H - P.b} className="grid grid-x" />
           ))}
+          {refLines?.map((rl) =>
+            rl.x >= x0 && rl.x <= x1 ? (
+              <g key={`ref-${rl.x}`}>
+                <line
+                  x1={x(rl.x)}
+                  x2={x(rl.x)}
+                  y1={P.t}
+                  y2={H - P.b}
+                  className="ref-line"
+                />
+                <text x={x(rl.x) + 4} y={P.t + 10} className="tick ref-label">
+                  {rl.label}
+                </text>
+              </g>
+            ) : null,
+          )}
           {yearTicks.map((yr) => (
             <text key={`t${yr}`} x={x(yr)} y={H - 8} textAnchor="middle" className="tick tick-x">
               {yr}
             </text>
           ))}
-          {series.map((s) =>
+          {activeSeries.map((s) =>
             runs(s.points).map((pts, j) => (
-              <polyline key={`${s.label}-${j}`} points={pts} fill="none" stroke={s.color} strokeWidth={2} />
+              <polyline
+                key={`${s.label}-${j}`}
+                points={pts}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={2.2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
             )),
           )}
           {showDots &&
-            series.map((s) =>
+            activeSeries.map((s) =>
               s.points
                 .filter((p) => p.y !== null)
                 .map((p) => (
-                  <circle key={`${s.label}-${p.x}`} cx={x(p.x)} cy={y(p.y as number)} r={2.6} fill={s.color} />
+                  <circle
+                    key={`${s.label}-${p.x}`}
+                    cx={x(p.x)}
+                    cy={y(p.y as number)}
+                    r={hover === p.x ? 4.2 : 2.6}
+                    fill={s.color}
+                    stroke={hover === p.x ? 'var(--surface)' : 'none'}
+                    strokeWidth={hover === p.x ? 1.5 : 0}
+                  />
                 )),
             )}
           {hover !== null && (
@@ -169,8 +330,8 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
             width={W - P.l - P.r}
             height={H - P.t - P.b}
             fill="transparent"
-            onMouseMove={onMove}
-            onMouseLeave={() => setHover(null)}
+            onPointerMove={onMove}
+            onPointerLeave={() => setHover(null)}
           />
         </svg>
         {hover !== null && (
@@ -178,17 +339,19 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
             className="tooltip"
             style={{
               left: `${(x(hover) / W) * 100}%`,
-              transform: flip ? 'translate(-105%, 0)' : 'translate(5%, 0)',
+              transform: flip ? 'translate(-106%, 0)' : 'translate(6%, 0)',
             }}
           >
             <strong>{hover}</strong>
-            {series.map((s) => {
+            {activeSeries.map((s) => {
               const p = s.points.find((pt) => pt.x === hover);
               return (
                 <div key={s.label} className="tooltip-row">
                   <span className="swatch" style={{ background: s.color }} />
                   <span className="tooltip-label">{s.label}</span>
-                  <span className="tooltip-val">{p?.y == null ? '—' : fmtVal(p.y)}</span>
+                  <span className="tooltip-val">
+                    {p?.y == null ? '—' : `${fmtVal(p.y)}${suffix}`}
+                  </span>
                 </div>
               );
             })}
@@ -196,12 +359,35 @@ export function MultiLineChart({ series }: { series: LineSeries[] }) {
         )}
       </div>
       <div className="legend">
-        {series.map((s) => (
-          <span key={s.label} className="legend-item">
-            <span className="swatch" style={{ background: s.color }} />
-            {s.label}
-          </span>
-        ))}
+        {series.map((s) => {
+          const isHidden = effectiveHidden.has(s.label);
+          return series.length > 1 ? (
+            <button
+              key={s.label}
+              type="button"
+              className={`legend-item interactive${isHidden ? ' off' : ''}`}
+              onClick={() => toggleSeries(s.label)}
+              title={isHidden ? `Show ${s.label}` : `Hide ${s.label}`}
+            >
+              <span className="swatch" style={{ background: s.color }} />
+              {s.label}
+            </button>
+          ) : (
+            <span key={s.label} className="legend-item">
+              <span className="swatch" style={{ background: s.color }} />
+              {s.label}
+            </span>
+          );
+        })}
+        {effectiveHidden.size > 0 && (
+          <button
+            type="button"
+            className="legend-reset"
+            onClick={() => setHidden(new Set())}
+          >
+            Show all
+          </button>
+        )}
       </div>
     </div>
   );
@@ -222,73 +408,14 @@ export function StackedBars({
   labels: [string, string];
   colors?: [string, string];
 }) {
-  const W = 720;
-  const H = 240;
-  const P = { l: 52, r: 12, t: 12, b: 30 };
-  const [mode, setMode] = useState<BarMode>('abs');
-  if (!data.length) return <p className="muted">No data.</p>;
   const [cBottom, cTop] = colors ?? ['#1f77b4', '#ff7f0e'];
-  const totals = data.map((d) => d.bottom + d.top);
-  const max = mode === 'abs' ? Math.max(...totals) || 1 : 100;
-  const scale = (v: number, t: number) => (mode === 'abs' ? v : t > 0 ? (v / t) * 100 : 0);
-  const share = (v: number, t: number) => (t > 0 ? fmtPct1((v / t) * 100) : '—');
-  const bw = (W - P.l - P.r) / data.length;
-  const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
-  const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
-  const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
-  const step = data.length > 10 ? 2 : 1;
   return (
-    <div>
-      <ModeSeg mode={mode} setMode={setMode} />
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={`Stacked bars, ${data.length} years, ${mode === 'pct' ? 'percent' : 'absolute'}`}
-      >
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-              {tickFmt(t)}
-            </text>
-          </g>
-        ))}
-        {data.map((d, i) => {
-          const t = totals[i];
-          const bx = P.l + i * bw + bw * 0.15;
-          const w = bw * 0.7;
-          const yTop = y(scale(d.bottom, t) + scale(d.top, t));
-          const yMid = y(scale(d.bottom, t));
-          const yBase = y(0);
-          const tip = `${d.x}: ${labels[0]} ${fmtInt.format(d.bottom)} (${share(d.bottom, t)}), ${labels[1]} ${fmtInt.format(d.top)} (${share(d.top, t)})`;
-          return (
-            <g key={d.x}>
-              <rect x={bx} y={yMid} width={w} height={Math.max(0, yBase - yMid)} fill={cBottom}>
-                <title>{tip}</title>
-              </rect>
-              <rect x={bx} y={yTop} width={w} height={Math.max(0, yMid - yTop)} fill={cTop}>
-                <title>{tip}</title>
-              </rect>
-              {i % step === 0 && (
-                <text x={bx + w / 2} y={H - 8} textAnchor="middle" className="tick tick-x">
-                  {d.x}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="legend">
-        <span className="legend-item">
-          <span className="swatch" style={{ background: cBottom }} />
-          {labels[0]}
-        </span>
-        <span className="legend-item">
-          <span className="swatch" style={{ background: cTop }} />
-          {labels[1]}
-        </span>
-      </div>
-    </div>
+    <StackedMultiBars
+      series={[
+        { label: labels[0], color: cBottom, points: data.map((d) => ({ x: d.x, y: d.bottom })) },
+        { label: labels[1], color: cTop, points: data.map((d) => ({ x: d.x, y: d.top })) },
+      ]}
+    />
   );
 }
 
@@ -302,88 +429,225 @@ export function StackedMultiBars({
   allTicks?: boolean;
 }) {
   const W = 720;
-  const H = 240;
-  const P = { l: 52, r: 12, t: 12, b: 30 };
+  const H = 244;
+  const P = { l: 54, r: 14, t: 14, b: 30 };
   const [mode, setMode] = useState<BarMode>('abs');
-  const years = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+
+  const effectiveHidden = useMemo(() => {
+    const labels = new Set(series.map((s) => s.label));
+    const pruned = new Set([...hidden].filter((l) => labels.has(l)));
+    return pruned.size >= series.length ? new Set<string>() : pruned;
+  }, [series, hidden]);
+  const activeSeries = useMemo(
+    () => series.filter((s) => !effectiveHidden.has(s.label)),
+    [series, effectiveHidden],
+  );
+
+  const years = useMemo(
+    () => [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b),
+    [series],
+  );
+
+  const lookup = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of series) {
+      for (const p of s.points) m.set(`${s.label}|${p.x}`, p.y ?? 0);
+    }
+    return m;
+  }, [series]);
+
   if (!series.length || !years.length) return <p className="muted">No data.</p>;
-  const lookup = new Map<string, number>();
-  for (const s of series) for (const p of s.points) lookup.set(`${s.label}|${p.x}`, p.y ?? 0);
+
   const totals = years.map((yr) =>
-    series.reduce((a, s) => a + (lookup.get(`${s.label}|${yr}`) ?? 0), 0),
+    activeSeries.reduce((a, s) => a + (lookup.get(`${s.label}|${yr}`) ?? 0), 0),
   );
   const max = mode === 'abs' ? Math.max(...totals) || 1 : 100;
   const scale = (v: number, t: number) => (mode === 'abs' ? v : t > 0 ? (v / t) * 100 : 0);
-  const bw = (W - P.l - P.r) / years.length;
+  const plotW = W - P.l - P.r;
+  const slotW = plotW / years.length;
+  const barW = Math.min(48, slotW * 0.72);
+  const barX = (i: number) => P.l + i * slotW + (slotW - barW) / 2;
   const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
   const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
   const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
   const step = allTicks ? 1 : years.length > 10 ? 2 : 1;
+
+  const toggleSeries = (label: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else if (series.length - next.size > 1) {
+        next.add(label);
+      } else {
+        next.clear();
+      }
+      return next;
+    });
+  };
+
+  const onMove = (e: React.PointerEvent<SVGRectElement>) => {
+    const svg = e.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const px = (e.clientX - rect.left) * (W / rect.width);
+    const idx = Math.floor((px - P.l) / slotW);
+    setHoverIdx(Math.min(years.length - 1, Math.max(0, idx)));
+  };
+
+  const hoverYear = hoverIdx !== null ? years[hoverIdx] : null;
+  const hoverTotal = hoverIdx !== null ? totals[hoverIdx] : 0;
+  const hoverCenter = hoverIdx !== null ? barX(hoverIdx) + barW / 2 : 0;
+  const flip = hoverIdx !== null && (hoverCenter - P.l) / plotW > 0.6;
+
   return (
     <div>
       {series.length > 1 && <ModeSeg mode={mode} setMode={setMode} />}
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={`Stacked bars, ${years.length} years, ${series.length} segments, ${mode === 'pct' ? 'percent' : 'absolute'}`}
-      >
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
-            <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
-              {tickFmt(t)}
-            </text>
-          </g>
-        ))}
-        {years.map((yr, i) => {
-          const t = totals[i];
-          const bx = P.l + i * bw + bw * 0.15;
-          const w = bw * 0.7;
-          let acc = 0;
-          return (
-            <g key={yr}>
-              {series.map((s) => {
-                const v = lookup.get(`${s.label}|${yr}`) ?? 0;
-                const yBase = y(acc);
-                acc += scale(v, t);
-                const yTop = y(acc);
-                const share = t > 0 ? fmtPct1((v / t) * 100) : '—';
-                return (
-                  <rect
-                    key={s.label}
-                    x={bx}
-                    y={yTop}
-                    width={w}
-                    height={Math.max(0, yBase - yTop)}
-                    fill={s.color}
+      <div className="chart-wrap">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={`Stacked bars, ${years.length} years, ${activeSeries.length} segments, ${mode === 'pct' ? 'percent' : 'absolute'}`}
+        >
+          <title>{`Stacked bars across ${years[0]}–${years[years.length - 1]}`}</title>
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} className="grid" />
+              <text x={P.l - 8} y={y(t) + 4} textAnchor="end" className="tick">
+                {tickFmt(t)}
+              </text>
+            </g>
+          ))}
+          {hoverIdx !== null && (
+            <rect
+              x={P.l + hoverIdx * slotW}
+              y={P.t}
+              width={slotW}
+              height={H - P.t - P.b}
+              className="bar-hover-band"
+            />
+          )}
+          {years.map((yr, i) => {
+            const t = totals[i];
+            const bx = barX(i);
+            let acc = 0;
+            const marked = marks?.[yr];
+            return (
+              <g key={yr}>
+                {marked && (
+                  <line
+                    x1={bx + barW / 2}
+                    x2={bx + barW / 2}
+                    y1={P.t}
+                    y2={H - P.b}
+                    className="ref-line"
+                  />
+                )}
+                {activeSeries.map((s) => {
+                  const v = lookup.get(`${s.label}|${yr}`) ?? 0;
+                  const yBase = y(acc);
+                  acc += scale(v, t);
+                  const yTop = y(acc);
+                  return (
+                    <rect
+                      key={s.label}
+                      x={bx}
+                      y={yTop}
+                      width={barW}
+                      height={Math.max(0, yBase - yTop)}
+                      fill={s.color}
+                      opacity={hoverIdx === null || hoverIdx === i ? 1 : 0.72}
+                    />
+                  );
+                })}
+                {(i % step === 0 || marked) && (
+                  <text
+                    x={bx + barW / 2}
+                    y={H - 8}
+                    textAnchor="middle"
+                    className="tick tick-x"
+                    fontWeight={marked ? 'bold' : undefined}
                   >
-                    <title>{`${yr}: ${s.label} ${fmtInt.format(v)} (${share})`}</title>
-                  </rect>
+                    {yr}
+                    {marked ?? ''}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          <rect
+            x={P.l}
+            y={P.t}
+            width={plotW}
+            height={H - P.t - P.b}
+            fill="transparent"
+            onPointerMove={onMove}
+            onPointerLeave={() => setHoverIdx(null)}
+          />
+        </svg>
+        {hoverYear !== null && (
+          <div
+            className="tooltip"
+            style={{
+              left: `${(hoverCenter / W) * 100}%`,
+              transform: flip ? 'translate(-106%, 0)' : 'translate(6%, 0)',
+            }}
+          >
+            <strong>
+              {hoverYear}
+              {marks?.[hoverYear] ?? ''} · {fmtInt.format(hoverTotal)}
+            </strong>
+            {[...activeSeries]
+              .reverse()
+              .map((s) => {
+                const v = lookup.get(`${s.label}|${hoverYear}`) ?? 0;
+                if (v === 0 && activeSeries.length > 4) return null;
+                const sh = hoverTotal > 0 ? fmtPct1((v / hoverTotal) * 100) : '—';
+                return (
+                  <div key={s.label} className="tooltip-row">
+                    <span className="swatch" style={{ background: s.color }} />
+                    <span className="tooltip-label">{s.label}</span>
+                    <span className="tooltip-val">
+                      {activeSeries.length === 1
+                        ? fmtInt.format(v)
+                        : mode === 'pct'
+                          ? `${sh} (${fmtInt.format(v)})`
+                          : `${fmtInt.format(v)} (${sh})`}
+                    </span>
+                  </div>
                 );
               })}
-              {(i % step === 0 || marks?.[yr]) && (
-                <text
-                  x={bx + w / 2}
-                  y={H - 8}
-                  textAnchor="middle"
-                  className="tick tick-x"
-                  fontWeight={marks?.[yr] ? 'bold' : undefined}
-                >
-                  {yr}
-                  {marks?.[yr] ?? ''}
-                </text>
-              )}
-            </g>
+          </div>
+        )}
+      </div>
+      <div className="legend">
+        {series.map((s) => {
+          const isHidden = effectiveHidden.has(s.label);
+          return series.length > 1 ? (
+            <button
+              key={s.label}
+              type="button"
+              className={`legend-item interactive${isHidden ? ' off' : ''}`}
+              onClick={() => toggleSeries(s.label)}
+              title={isHidden ? `Show ${s.label}` : `Hide ${s.label}`}
+            >
+              <span className="swatch" style={{ background: s.color }} />
+              {s.label}
+            </button>
+          ) : (
+            <span key={s.label} className="legend-item">
+              <span className="swatch" style={{ background: s.color }} />
+              {s.label}
+            </span>
           );
         })}
-      </svg>
-      <div className="legend">
-        {series.map((s) => (
-          <span key={s.label} className="legend-item">
-            <span className="swatch" style={{ background: s.color }} />
-            {s.label}
-          </span>
-        ))}
+        {effectiveHidden.size > 0 && (
+          <button type="button" className="legend-reset" onClick={() => setHidden(new Set())}>
+            Show all
+          </button>
+        )}
       </div>
     </div>
   );
@@ -392,17 +656,21 @@ export function StackedMultiBars({
 export function CategoryBars({ data }: { data: { category: string; v: number }[] }) {
   if (!data.length) return <p className="muted">No data.</p>;
   const max = Math.max(...data.map((d) => d.v));
+  const total = data.reduce((a, d) => a + d.v, 0);
   return (
     <ul className="bars">
-      {data.map((d) => (
-        <li key={d.category}>
-          <span className="bar-label">{d.category}</span>
-          <span className="bar-track">
-            <span className="bar-fill" style={{ width: `${max ? (d.v / max) * 100 : 0}%` }} />
-          </span>
-          <span className="bar-value">{fmtCompact.format(d.v)}</span>
-        </li>
-      ))}
+      {data.map((d) => {
+        const share = total > 0 ? ((d.v / total) * 100).toFixed(1) : '0.0';
+        return (
+          <li key={d.category} title={`${d.category}: ${fmtInt.format(d.v)} (${share}% of shown)`}>
+            <span className="bar-label">{d.category}</span>
+            <span className="bar-track">
+              <span className="bar-fill" style={{ width: `${max ? (d.v / max) * 100 : 0}%` }} />
+            </span>
+            <span className="bar-value">{fmtCompact.format(d.v)}</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -415,19 +683,13 @@ export interface VintageRow {
 }
 
 const VINTAGE_UNIT: Record<string, { head: string; who: string }> = {
-  investigators: { head: 'CI vintage (year investigators first filed)', who: 'investigators' },
-  sites: { head: 'Site vintage (year sites first filed)', who: 'sites' },
-  cro: { head: 'CRO vintage (year companies first filed)', who: 'companies' },
-  irb: { head: 'IRB vintage (year boards first filed)', who: 'boards' },
+  investigators: { head: 'CI vintage (first filed)', who: 'investigators' },
+  sites: { head: 'Site vintage (first filed)', who: 'sites' },
+  cro: { head: 'CRO vintage (first filed)', who: 'companies' },
+  irb: { head: 'IRB vintage (first filed)', who: 'boards' },
 };
 
-function vintageColor(v: number): string {
-  const t = Math.min(1, Math.max(0, v / 100));
-  const r = Math.round(255 - t * 232);
-  const g = Math.round(255 - t * 207);
-  const b = Math.round(255 - t * 149);
-  return `rgb(${r},${g},${b})`;
-}
+export { vintageCellStyle };
 
 export function VintageHeatmap({
   rows,
@@ -447,46 +709,64 @@ export function VintageHeatmap({
   for (let k = 0; k <= kMax; k++) ks.push(k);
   const u = VINTAGE_UNIT[unit];
   return (
-    <div className="table-scroll">
-      <table className="vintage">
-        <thead>
-          <tr>
-            <th>{u.head}</th>
-            {ks.map((k) => (
-              <th key={k}>+{k}y</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.cohort}>
-              <td>
-                {r.cohort} <span className="muted">n={r.n.toLocaleString('en-US')}</span>
-              </td>
-              {r.cells.map((c, i) => {
-                const na = r.counts?.[i] ?? null;
-                const tip =
-                  c === null
-                    ? `${r.cohort} vintage: ${nullTip}`
-                    : mode === 'attrition'
-                      ? `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of ${u.who} active` +
-                        (na !== null ? ` (${na.toLocaleString('en-US')} of ${r.n.toLocaleString('en-US')})` : '')
-                      : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of active ${u.who} re-entered after a gap` +
-                        (na !== null ? ` (${na.toLocaleString('en-US')} re-entered)` : '');
-                return (
-                  <td
-                    key={i}
-                    style={c === null ? { background: '#f0f0f0', color: '#999' } : { background: vintageColor(c) }}
-                    title={tip}
-                  >
-                    {c === null ? '·' : c.toFixed(1)}
-                  </td>
-                );
-              })}
+    <div>
+      <div className="table-scroll">
+        <table className="vintage">
+          <thead>
+            <tr>
+              <th>{u.head}</th>
+              {ks.map((k) => (
+                <th key={k} className="num">
+                  +{k}y
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.cohort}>
+                <td>
+                  <strong>{r.cohort}</strong>{' '}
+                  <span className="muted">n={r.n.toLocaleString('en-US')}</span>
+                </td>
+                {r.cells.map((c, i) => {
+                  const na = r.counts?.[i] ?? null;
+                  const tip =
+                    c === null
+                      ? `${r.cohort} vintage: ${nullTip}`
+                      : mode === 'attrition'
+                        ? `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of ${u.who} active` +
+                          (na !== null
+                            ? ` (${na.toLocaleString('en-US')} of ${r.n.toLocaleString('en-US')})`
+                            : '')
+                        : `${r.cohort} vintage, +${i}y: ${c.toFixed(1)}% of active ${u.who} re-entered after a gap` +
+                          (na !== null ? ` (${na.toLocaleString('en-US')} re-entered)` : '');
+                  return (
+                    <td
+                      key={i}
+                      className="num vintage-cell"
+                      style={
+                        c === null
+                          ? { background: '#eef2f0', color: '#7a8680' }
+                          : vintageCellStyle(c)
+                      }
+                      title={tip}
+                    >
+                      {c === null ? '·' : c.toFixed(1)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="vintage-scale" aria-hidden="true">
+        <span>0%</span>
+        <span className="vintage-ramp" />
+        <span>100%</span>
+        <span className="vintage-na">· {nullTip}</span>
+      </div>
     </div>
   );
 }

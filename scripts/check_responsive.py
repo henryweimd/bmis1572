@@ -88,12 +88,24 @@ def main() -> int:
     check(".table-scroll capped at container",
           bool(m) and "max-width: 100%" in m.group(1))
 
+    # Heatmaps: sticky first column documented in docs/responsive.md.
+    check(".vintage sticky first column",
+          ".vintage th:first-child" in css and "position: sticky" in css)
+
     # Touch: buttons keep a usable hit area (padding-based, >= ~28px tall).
     m = re.search(r"\.btn \{(.*?)\}", css, re.S)
     check(".btn has padding hit area", bool(m) and "padding:" in m.group(1))
     m = re.search(r"\.tabs button \{(.*?)\}", css, re.S)
     check(".tabs button keeps padding + nowrap",
           bool(m) and "padding:" in m.group(1) and "white-space: nowrap" in m.group(1))
+
+    # SQL safety: user-driven LIKE queries must escape wildcards or use normName.
+    unsafe_like = []
+    for tsx in sorted(SRC.glob("*.tsx")):
+        text = tsx.read_text()
+        if "LIKE '" in text and "escapeLike(" not in text and "normName(" not in text:
+            unsafe_like.append(tsx.name)
+    check("LIKE queries escape wildcards", not unsafe_like, ", ".join(unsafe_like))
 
     print(f"\n{len(findings)} finding(s).")
     return 1 if findings else 0

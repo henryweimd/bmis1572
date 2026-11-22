@@ -1,14 +1,20 @@
 :root {
-  --bg: #edf0ee;
+  --bg: #eef2f0;
   --surface: #ffffff;
-  --ink: #182420;
-  --muted: #5c6762;
-  --line: #dbe1dd;
+  --surface-subtle: #f6f9f7;
+  --ink: #16221e;
+  --muted: #52605a;
+  --line: #d6dfda;
+  --line-strong: #bac7c0;
   --accent: #0f766e;
-  --accent-soft: #e3f0ed;
+  --accent-hover: #0b5c56;
+  --accent-soft: #e2f2ef;
   --warn-bg: #fdf6e4;
   --warn-line: #d9b93c;
+  --warn-ink: #6d5200;
   --danger: #b3261e;
+  --shadow-sm: 0 1px 2px rgb(22 34 30 / 0.05);
+  --shadow-md: 0 6px 18px rgb(22 34 30 / 0.12);
 }
 
 * {
@@ -19,14 +25,35 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.5;
+  caret-color: var(--accent);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
   background: var(--bg);
   padding: 1px 5px;
   border-radius: 4px;
