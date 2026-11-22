@@ -3,23 +3,9 @@ import { query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
 import type { LineSeries } from './charts';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
-
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num0 = (v: unknown): number =>
-  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
-
-const WHO_COLORS = [
-  '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#17becf',
-];
-const BAND_COLORS: Record<string, string> = {
-  'United States': '#1f77b4',
-  'Europe (EU+UK)': '#ff7f0e',
-  'South America': '#2ca02c',
-  'Middle East': '#d62728',
-  'South Asia': '#9467bd',
-  'East Asia & Pacific': '#8c564b',
-  'Rest of world': '#7f7f7f',
-};
+import { intIn, pick, readHash, writeHash } from './hash';
+import { BAND_COLORS, SERIES_COLORS } from './lib/constants';
+import { clampYearPair, fmtInt, num0 } from './lib/format';
 
 interface WhoRow {
   country: string;
@@ -29,6 +15,7 @@ interface WhoRow {
 }
 
 export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean }) {
+  const [hashInit] = useState(readHash);
   const [kpi, setKpi] = useState<{ trials: number; records: number; countries: number } | null>(null);
   const [top, setTop] = useState<{ category: string; v: number }[]>([]);
   const [bands, setBands] = useState<{ category: string; v: number }[]>([]);
@@ -36,15 +23,33 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
   const [stack, setStack] = useState<LineSeries[]>([]);
   const [rows, setRows] = useState<WhoRow[]>([]);
   const [cyRows, setCyRows] = useState<{ c: string; y: number; n: number; r: number }[]>([]);
-  const [cyCountry, setCyCountry] = useState('all');
-  const [cyY0, setCyY0] = useState(2000);
-  const [cyY1, setCyY1] = useState(2026);
-  const [cyMetric, setCyMetric] = useState<'n' | 'r'>('n');
+  const [cyCountry, setCyCountry] = useState(() => hashInit['who.c'] ?? 'all');
+  const [[cyY0, cyY1], setCyYears] = useState<[number, number]>(() =>
+    clampYearPair(
+      intIn(hashInit['who.y0'], 1990, 2026, 2000),
+      intIn(hashInit['who.y1'], 1990, 2026, 2026),
+      1990,
+      2026,
+    ),
+  );
+  const [cyMetric, setCyMetric] = useState<'n' | 'r'>(() =>
+    pick(hashInit['who.m'], ['n', 'r'] as const, 'n'),
+  );
   const [cySort, setCySort] = useState<{ key: string; dir: 1 | -1 }>({
     key: 'total',
     dir: -1,
   });
+  const [countryFilter, setCountryFilter] = useState('');
   const [note, setNote] = useState('');
+
+  useEffect(() => {
+    writeHash({
+      'who.c': cyCountry,
+      'who.y0': String(cyY0),
+      'who.y1': String(cyY1),
+      'who.m': cyMetric,
+    });
+  }, [cyCountry, cyY0, cyY1, cyMetric]);
 
   useEffect(() => {
     if (!ready || demo) return;
@@ -78,21 +83,31 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         setTop(tc.map((r) => ({ category: r.c, v: num0(r.n) })));
         setBands(bd.map((r) => ({ category: r.b, v: num0(r.n) })));
         setYoy(yy.map((r) => ({ d: String(r.y), v: num0(r.n) })));
+
+        // O(N) map-based aggregation for stacked country chart.
         const totals = new Map<string, number>();
-        for (const r of cy) totals.set(r.c, (totals.get(r.c) ?? 0) + num0(r.n));
+        const byCountryYear = new Map<string, number>();
+        const byYearTotal = new Map<number, number>();
+        for (const r of cy) {
+          const n = num0(r.n);
+          totals.set(r.c, (totals.get(r.c) ?? 0) + n);
+          byCountryYear.set(`${r.c}|${r.y}`, (byCountryYear.get(`${r.c}|${r.y}`) ?? 0) + n);
+          byYearTotal.set(r.y, (byYearTotal.get(r.y) ?? 0) + n);
+        }
         const top8 = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c]) => c);
-        const years = [...new Set(cy.map((r) => r.y))].sort((a, b) => a - b);
-        const at = (y: number, pred: (c: string) => boolean): number =>
-          cy.filter((r) => r.y === y && pred(r.c)).reduce((a, r) => a + num0(r.n), 0);
+        const years = [...byYearTotal.keys()].sort((a, b) => a - b);
         const series: LineSeries[] = top8.map((c, i) => ({
           label: c,
-          color: WHO_COLORS[i % WHO_COLORS.length],
-          points: years.map((y) => ({ x: y, y: at(y, (q) => q === c) })),
+          color: SERIES_COLORS[i % SERIES_COLORS.length],
+          points: years.map((y) => ({ x: y, y: byCountryYear.get(`${c}|${y}`) ?? 0 })),
         }));
         series.push({
           label: 'Other top-20',
-          color: '#7f7f7f',
-          points: years.map((y) => ({ x: y, y: at(y, (q) => !top8.includes(q)) })),
+          color: '#94a3b8',
+          points: years.map((y) => {
+            const topSum = top8.reduce((a, c) => a + (byCountryYear.get(`${c}|${y}`) ?? 0), 0);
+            return { x: y, y: Math.max(0, (byYearTotal.get(y) ?? 0) - topSum) };
+          }),
         });
         setStack(series);
         setRows(all);
@@ -113,24 +128,27 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
     for (const r of cyRows) t.set(r.c, (t.get(r.c) ?? 0) + r.n);
     return t;
   }, [cyRows]);
+
   const cyCountries = useMemo(
     () => [...cyTotals.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c),
     [cyTotals],
   );
+
   const cyYears = useMemo(
     () => [...new Set(cyRows.map((r) => r.y))].sort((a, b) => a - b),
     [cyRows],
   );
+
   const cyCols = useMemo(
     () => cyYears.filter((y) => y >= cyY0 && y <= cyY1),
     [cyYears, cyY0, cyY1],
   );
+
   const cyShown = useMemo(() => {
-    const keep =
-      cyCountry === 'all' ? cyCountries : cyCountries.filter((c) => c === cyCountry);
+    const keep = cyCountry === 'all' ? cyCountries : cyCountries.filter((c) => c === cyCountry);
     const cell = new Map<string, { n: number; r: number }>();
     for (const row of cyRows) cell.set(`${row.c}|${row.y}`, { n: row.n, r: row.r });
-    const rows = keep.map((c) => {
+    const pivoted = keep.map((c) => {
       const vals = new Map<number, number>();
       let total = 0;
       for (const y of cyCols) {
@@ -141,7 +159,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       return { c, total, vals };
     });
     const { key, dir } = cySort;
-    return rows.sort((a, b) =>
+    return pivoted.sort((a, b) =>
       key === 'country'
         ? dir * a.c.localeCompare(b.c)
         : key === 'total'
@@ -149,14 +167,24 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           : dir * ((a.vals.get(Number(key)) ?? 0) - (b.vals.get(Number(key)) ?? 0)),
     );
   }, [cyRows, cyCountries, cyCols, cyCountry, cyMetric, cySort]);
+
   const cySortBy = (key: string) =>
     setCySort((s) =>
       s.key === key
         ? { key, dir: s.dir === 1 ? -1 : 1 }
         : { key, dir: key === 'country' ? 1 : -1 },
     );
+
   const cyArrow = (key: string) =>
     cySort.key === key ? (cySort.dir === 1 ? ' ▲' : ' ▼') : '';
+
+  const filteredRows = useMemo(() => {
+    const q = countryFilter.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) => r.country.toLowerCase().includes(q) || r.band.toLowerCase().includes(q),
+    );
+  }, [rows, countryFilter]);
 
   if (demo) return <p className="muted">Run the pipeline for WHO data.</p>;
 
@@ -164,7 +192,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
     <>
       {note && <p className="banner">{note}</p>}
       <section className="panel">
-        <p>
+        <p className="prose">
           <strong>About this data:</strong> aggregate trial counts from the WHO{' '}
           <a
             href="https://trialsearch.who.int/AdvSearch.aspx"
@@ -177,18 +205,18 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           <a href="https://www.who.int/clinical-trials-registry-platform" target="_blank" rel="noreferrer">
             who.int/clinical-trials-registry-platform
           </a>
-          ), scraped 7 Nov 2026. Each figure is the portal&apos;s own &ldquo;N records for M
-          trials found&rdquo; for one country (or global), Recruitment Status = ALL, optionally
-          windowed to a Date-of-registration year. No trial-level or investigator-level data
-          was fetched. Code: <code>pipeline/who.py</code>.
+          ), scraped 7 Nov 2026. Each figure is the portal&apos;s own &ldquo;N records for M trials
+          found&rdquo; for one country (or global), Recruitment Status = ALL, optionally windowed to
+          a Date-of-registration year. No trial-level or investigator-level data was fetched. Code:{' '}
+          <code>pipeline/who.py</code>.
         </p>
         <p className="caption">
           Records are registry entries across ICTRP&apos;s primary registries (including
-          ClinicalTrials.gov); trials are deduplicated studies. Multi-country trials count in
-          every listed country, so country figures sum past the global total. Three countries
-          return zero via the portal&apos;s country list: verified 2026-11-07 against
-          ClinicalTrials.gov (114 studies in Côte d&apos;Ivoire, 50 in Laos, 1 in North
-          Korea), the first two are portal indexing gaps, not true zeros.
+          ClinicalTrials.gov); trials are deduplicated studies. Multi-country trials count in every
+          listed country, so country figures sum past the global total. Three countries return zero
+          via the portal&apos;s country list: verified 2026-11-07 against ClinicalTrials.gov (114
+          studies in Côte d&apos;Ivoire, 50 in Laos, 1 in North Korea), the first two are portal
+          indexing gaps, not true zeros.
         </p>
       </section>
 
@@ -208,16 +236,18 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       </section>
 
       <section className="panel">
-        <h2>Global trials by registration year</h2>
-        <TrendChart data={yoy} />
-        <p className="caption">
-          ICTRP registrations per year, all countries and statuses. Retrospective imports
-          make early years sparse; 2026 is partial (search date 7 Nov 2026).{' '}
+        <div className="panel-head">
+          <h2>Global trials by registration year</h2>
           {!!yoy.length && (
             <button className="btn" onClick={() => trendCsv('who-global-by-year.csv', yoy)}>
               CSV
             </button>
           )}
+        </div>
+        <TrendChart data={yoy} label="Global ICTRP trials by registration year" />
+        <p className="caption">
+          ICTRP registrations per year, all countries and statuses. Retrospective imports make early
+          years sparse; 2026 is partial (search date 7 Nov 2026).
         </p>
       </section>
 
@@ -235,14 +265,8 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       </section>
 
       <section className="panel">
-        <h2>Top countries over time</h2>
-        <StackedMultiBars series={stack} allTicks />
-        <p className="caption">
-          Registration-year trials for the top 8 countries plus other top-20. Only the top 20
-          countries were scraped by year — 179 smaller countries are excluded here, so this
-          understates the global total (see trend above). Yearly figures can also double-count
-          trials first registered in different years across registries — visibly for the EU —
-          so compare shapes, not levels, against all-time totals. Toggle 100% for yearly share.{' '}
+        <div className="panel-head">
+          <h2>Top countries over time</h2>
           {!!stack.length && (
             <button
               className="btn"
@@ -251,11 +275,35 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
               CSV
             </button>
           )}
+        </div>
+        <StackedMultiBars series={stack} allTicks />
+        <p className="caption">
+          Registration-year trials for the top 8 countries plus other top-20. Only the top 20
+          countries were scraped by year — 179 smaller countries are excluded here, so this
+          understates the global total (see trend above). Yearly figures can also double-count
+          trials first registered in different years across registries — visibly for the EU — so
+          compare shapes, not levels, against all-time totals. Toggle 100% for yearly share.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Top-20 countries by year (stack data)</h2>
+        <div className="panel-head">
+          <h2>Top-20 countries by year (stack data)</h2>
+          {!!cyShown.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'who-top20-by-year.csv',
+                  ['country', 'total', ...cyCols.map(String)],
+                  cyShown.map((r) => [r.c, r.total, ...cyCols.map((y) => r.vals.get(y) ?? 0)]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </div>
         <div className="filters">
           <div className="seg" role="group" aria-label="WHO metric">
             <button
@@ -286,7 +334,13 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           </label>
           <label>
             From
-            <select value={cyY0} onChange={(e) => setCyY0(Number(e.target.value))}>
+            <select
+              value={cyY0}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setCyYears([v, Math.max(v, cyY1)]);
+              }}
+            >
               {cyYears.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -296,7 +350,13 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           </label>
           <label>
             To
-            <select value={cyY1} onChange={(e) => setCyY1(Number(e.target.value))}>
+            <select
+              value={cyY1}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setCyYears([Math.min(cyY0, v), v]);
+              }}
+            >
               {cyYears.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -306,22 +366,22 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           </label>
         </div>
         <div className="table-scroll short">
-          <table>
+          <table className="pivot-table">
             <thead>
               <tr>
-                <th style={{ position: 'sticky', left: 0 }}>
-                  <button className="btn" onClick={() => cySortBy('country')}>
+                <th className="sticky-col">
+                  <button type="button" className="sort-btn" onClick={() => cySortBy('country')}>
                     Country{cyArrow('country')}
                   </button>
                 </th>
-                <th>
-                  <button className="btn" onClick={() => cySortBy('total')}>
+                <th className="num">
+                  <button type="button" className="sort-btn" onClick={() => cySortBy('total')}>
                     Total{cyArrow('total')}
                   </button>
                 </th>
                 {cyCols.map((y) => (
-                  <th key={y}>
-                    <button className="btn" onClick={() => cySortBy(String(y))}>
+                  <th key={y} className="num">
+                    <button type="button" className="sort-btn" onClick={() => cySortBy(String(y))}>
                       {y}
                       {cyArrow(String(y))}
                     </button>
@@ -332,14 +392,14 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
             <tbody>
               {cyShown.map((r) => (
                 <tr key={r.c}>
-                  <td style={{ position: 'sticky', left: 0, background: 'var(--surface)' }}>
-                    {r.c}
-                  </td>
-                  <td>
+                  <td className="sticky-col">{r.c}</td>
+                  <td className="num">
                     <strong>{fmtInt.format(r.total)}</strong>
                   </td>
                   {cyCols.map((y) => (
-                    <td key={y}>{fmtInt.format(r.vals.get(y) ?? 0)}</td>
+                    <td key={y} className="num">
+                      {fmtInt.format(r.vals.get(y) ?? 0)}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -348,61 +408,57 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         </div>
         <p className="caption">
           The exact numbers behind the stack chart above, pivoted: one row per country
-          (most→fewest trials by default), one column per registration year. Click any
-          header to sort; totals respect the year range. 100%-mode shares derive from
-          these trials. Row totals can exceed all-time country totals: a trial registered
-          in different years across registries counts in each year (notably EU).{' '}
-          {!!cyShown.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  'who-top20-by-year.csv',
-                  ['country', 'total', ...cyCols.map(String)],
-                  cyShown.map((r) => [
-                    r.c,
-                    r.total,
-                    ...cyCols.map((y) => r.vals.get(y) ?? 0),
-                  ]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
+          (most→fewest trials by default), one column per registration year. Click any header to
+          sort; totals respect the year range. 100%-mode shares derive from these trials. Row totals
+          can exceed all-time country totals: a trial registered in different years across
+          registries counts in each year (notably EU).
         </p>
       </section>
 
       <section className="panel">
-        <h2>
-          All countries{' '}
-          {!!rows.length && (
+        <div className="panel-head">
+          <h2>All countries</h2>
+          {!!filteredRows.length && (
             <button
               className="btn"
               onClick={() =>
                 downloadCsv(
                   'who-countries.csv',
                   ['country', 'band', 'records', 'trials'],
-                  rows.map((r) => [r.country, r.band, r.records, r.trials]),
+                  filteredRows.map((r) => [r.country, r.band, r.records, r.trials]),
                 )
               }
             >
               CSV
             </button>
           )}
-        </h2>
+        </div>
+        <div className="filters">
+          <label>
+            Filter country or region
+            <input
+              type="search"
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              placeholder="e.g. Germany, South Asia"
+            />
+          </label>
+          <span className="muted">
+            Showing {filteredRows.length} of {rows.length} countries
+          </span>
+        </div>
         <div className="table-scroll short">
           <table>
             <thead>
               <tr>
                 <th>Country</th>
                 <th>Region</th>
-                <th>Records</th>
-                <th>Trials</th>
+                <th className="num">Records</th>
+                <th className="num">Trials</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {filteredRows.map((r) => (
                 <tr key={r.country}>
                   <td>{r.country}</td>
                   <td>
@@ -412,17 +468,17 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
                     />{' '}
                     {r.band}
                   </td>
-                  <td>{fmtInt.format(r.records)}</td>
-                  <td>{fmtInt.format(r.trials)}</td>
+                  <td className="num">{fmtInt.format(r.records)}</td>
+                  <td className="num">{fmtInt.format(r.trials)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="caption">
-          All-time ICTRP figures per portal country, ALL statuses. Zero rows for Côte
-          d&apos;Ivoire and Laos are portal indexing gaps (CT.gov lists 114 and 50 studies);
-          North Korea (≈1 study) is shown as the portal reported it.
+          All-time ICTRP figures per portal country, ALL statuses. Zero rows for Côte d&apos;Ivoire
+          and Laos are portal indexing gaps (CT.gov lists 114 and 50 studies); North Korea (≈1
+          study) is shown as the portal reported it.
         </p>
       </section>
     </>

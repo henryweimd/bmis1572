@@ -1,15 +1,11 @@
-import { useEffect, useState } from 'react';
-import { escapeLiteral, query } from './duckdb';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { escapeLike, escapeLiteral, query } from './duckdb';
 import { CategoryBars, MultiLineChart, StackedMultiBars } from './charts';
-
-const CN_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#7f7f7f'];
 import type { LineSeries } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv } from './csv';
-
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num0 = (v: unknown): number =>
-  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
+import { SERIES_COLORS } from './lib/constants';
+import { clampYearPair, fmtInt, num0 } from './lib/format';
 
 interface CnSiteRow {
   id: string;
@@ -60,18 +56,20 @@ interface CnAffRow {
   prove: string;
 }
 
-export default function ChinaTab({
-  demo,
-  ready,
-}: {
-  demo: boolean;
-  ready: boolean;
-}) {
+const YEAR_OPTS = [2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
+export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolean }) {
   const [hashInit] = useState(readHash);
   const [lang, setLang] = useState<'zh' | 'en'>(() => pick(hashInit['cn.l'], ['zh', 'en'] as const, 'zh'));
   const [prov, setProv] = useState(() => hashInit['cn.p'] ?? 'all');
-  const [y0, setY0] = useState(() => intIn(hashInit['cn.y0'], 2019, 2025, 2019));
-  const [y1, setY1] = useState(() => intIn(hashInit['cn.y1'], 2019, 2025, 2025));
+  const [[y0, y1], setYears] = useState<[number, number]>(() =>
+    clampYearPair(
+      intIn(hashInit['cn.y0'], 2019, 2025, 2019),
+      intIn(hashInit['cn.y1'], 2019, 2025, 2025),
+      2019,
+      2025,
+    ),
+  );
   const [provs, setProvs] = useState<{ zh: string; en: string }[]>([]);
   const [kpi, setKpi] = useState<{ pairs: number; names: number; insts: number; specs: number; v20: number } | null>(null);
   const [vintStack, setVintStack] = useState<LineSeries[]>([]);
@@ -98,9 +96,9 @@ export default function ChinaTab({
   const [siteMix, setSiteMix] = useState<{ category: string; v: number }[]>([]);
   const [siteInvs, setSiteInvs] = useState<{ name: string; n: number }[]>([]);
   const [note, setNote] = useState('');
+  const searchSeq = useRef(0);
 
   const zh = lang === 'zh';
-  const yearOpts = [2019, 2020, 2021, 2022, 2023, 2024, 2025];
 
   useEffect(() => {
     if (!ready || demo) return;
@@ -176,26 +174,40 @@ export default function ChinaTab({
         ]);
         if (cancelled) return;
         setProvs(pl);
-        setKpi({ pairs: num0(k[0]?.pairs), names: num0(k[0]?.names), insts: num0(k[0]?.insts), specs: num0(k[0]?.specs), v20: num0(k[0]?.v20) });
+        setKpi({
+          pairs: num0(k[0]?.pairs),
+          names: num0(k[0]?.names),
+          insts: num0(k[0]?.insts),
+          specs: num0(k[0]?.specs),
+          v20: num0(k[0]?.v20),
+        });
         const provTotals = new Map<string, number>();
-        for (const r of pv) provTotals.set(r.p, (provTotals.get(r.p) ?? 0) + num0(r.n));
+        const byProvYear = new Map<string, number>();
+        const byYearTotal = new Map<number, number>();
+        for (const r of pv) {
+          const n = num0(r.n);
+          provTotals.set(r.p, (provTotals.get(r.p) ?? 0) + n);
+          byProvYear.set(`${r.p}|${r.y}`, (byProvYear.get(`${r.p}|${r.y}`) ?? 0) + n);
+          byYearTotal.set(r.y, (byYearTotal.get(r.y) ?? 0) + n);
+        }
         const topProv = [...provTotals.entries()]
           .sort((a, b) => b[1] - a[1])
           .slice(0, 6)
           .map(([p]) => p);
-        const vyears = [...new Set(pv.map((r) => r.y))].sort((a, b) => a - b);
-        const at = (y: number, pred: (p: string) => boolean): number =>
-          pv.filter((r) => r.y === y && pred(r.p)).reduce((a, r) => a + num0(r.n), 0);
+        const vyears = [...byYearTotal.keys()].sort((a, b) => a - b);
         const stack: LineSeries[] = topProv.map((p, i) => ({
           label: p,
-          color: CN_COLORS[i % CN_COLORS.length],
-          points: vyears.map((y) => ({ x: y, y: at(y, (q) => q === p) })),
+          color: SERIES_COLORS[i % SERIES_COLORS.length],
+          points: vyears.map((y) => ({ x: y, y: byProvYear.get(`${p}|${y}`) ?? 0 })),
         }));
         if (topProv.length < provTotals.size) {
           stack.push({
             label: zh ? '其他' : 'Other',
-            color: '#7f7f7f',
-            points: vyears.map((y) => ({ x: y, y: at(y, (q) => !topProv.includes(q)) })),
+            color: '#94a3b8',
+            points: vyears.map((y) => {
+              const topSum = topProv.reduce((a, p) => a + (byProvYear.get(`${p}|${y}`) ?? 0), 0);
+              return { x: y, y: Math.max(0, (byYearTotal.get(y) ?? 0) - topSum) };
+            }),
           });
         }
         setVintStack(stack);
@@ -212,7 +224,12 @@ export default function ChinaTab({
         setSites(st);
         setSizeBins(sz.map((r) => ({ category: r.category, v: num0(r.v) })));
         setLeaders(ld);
-        setAffil(ad.map((r) => ({ category: `${r.category} institution${r.category === '1' ? '' : 's'}`, v: num0(r.v) })));
+        setAffil(
+          ad.map((r) => ({
+            category: `${r.category} institution${r.category === '1' ? '' : 's'}`,
+            v: num0(r.v),
+          })),
+        );
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -222,8 +239,7 @@ export default function ChinaTab({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, demo, prov, y0, y1, siteSort, lang]);
+  }, [ready, demo, prov, y0, y1, siteSort, zh]);
 
   useEffect(() => {
     if (!ready || demo || !sel) {
@@ -244,7 +260,7 @@ export default function ChinaTab({
         );
         if (cancelled) return;
         setAffs(r);
-      } catch (e) {
+      } catch {
         if (cancelled) return;
       }
     })();
@@ -277,7 +293,7 @@ export default function ChinaTab({
         if (cancelled) return;
         setSiteMix(mx);
         setSiteInvs(iv);
-      } catch (e) {
+      } catch {
         if (cancelled) return;
       }
     })();
@@ -298,24 +314,32 @@ export default function ChinaTab({
     });
   }, [lang, prov, y0, y1, siteSort, sel]);
 
-  async function runSearch(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!ready || demo || q.trim().length < 1) return;
-    const needle = `%${escapeLiteral(q.trim())}%`;
-    try {
-      const r = await query<CnHit>(
-        `SELECT CAST(pair_id AS INTEGER) AS id, CAST(name_zh AS VARCHAR) AS name,` +
-          ` CAST(inst_zh AS VARCHAR) AS inst, CAST(inst_en AS VARCHAR) AS inste,` +
-          ` CAST(province_zh AS VARCHAR) AS prov, CAST(province_en AS VARCHAR) AS prove,` +
-          ` CAST(n_rows AS INTEGER) AS rows, CAST(filing_year AS INTEGER) AS year` +
-          ` FROM cn_person_index WHERE name_zh LIKE '${needle}' ORDER BY n_rows DESC LIMIT 50`,
-      );
-      setHits(r);
-      setSearched(true);
-    } catch (e2) {
-      setNote(`Investigator search failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
-    }
-  }
+  const runSearch = useCallback(
+    async (e?: React.FormEvent, override?: string) => {
+      e?.preventDefault();
+      const term = (override ?? q).trim();
+      if (override !== undefined) setQ(override);
+      if (!ready || demo || term.length < 1) return;
+      const seq = ++searchSeq.current;
+      const needle = `%${escapeLike(term)}%`;
+      try {
+        const r = await query<CnHit>(
+          `SELECT CAST(pair_id AS INTEGER) AS id, CAST(name_zh AS VARCHAR) AS name,` +
+            ` CAST(inst_zh AS VARCHAR) AS inst, CAST(inst_en AS VARCHAR) AS inste,` +
+            ` CAST(province_zh AS VARCHAR) AS prov, CAST(province_en AS VARCHAR) AS prove,` +
+            ` CAST(n_rows AS INTEGER) AS rows, CAST(filing_year AS INTEGER) AS year` +
+            ` FROM cn_person_index WHERE name_zh LIKE '${needle}' ESCAPE '\\' ORDER BY n_rows DESC LIMIT 50`,
+        );
+        if (seq !== searchSeq.current) return;
+        setHits(r);
+        setSearched(true);
+      } catch (e2) {
+        if (seq !== searchSeq.current) return;
+        setNote(`Investigator search failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
+      }
+    },
+    [ready, demo, q],
+  );
 
   if (demo) return <p className="muted">Run the pipeline for China data.</p>;
 
@@ -323,8 +347,9 @@ export default function ChinaTab({
     <>
       {note && <p className="banner">{note}</p>}
       <p className="banner">
-        Partial CFDI extract (not the full registry) · filing year is institution registration vintage,
-        not investigator activity · Chinese is authoritative; EN labels are curated or pattern-derived.
+        Partial CFDI extract (not the full registry) · filing year is institution registration
+        vintage, not investigator activity · Chinese is authoritative; EN labels are curated or
+        pattern-derived.
       </p>
       <section className="panel controls">
         <div className="filters">
@@ -353,11 +378,10 @@ export default function ChinaTab({
               value={y0}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY0(v);
-                if (v > y1) setY1(v);
+                setYears([v, Math.max(v, y1)]);
               }}
             >
-              {yearOpts.map((y) => (
+              {YEAR_OPTS.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -370,11 +394,10 @@ export default function ChinaTab({
               value={y1}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY1(v);
-                if (v < y0) setY0(v);
+                setYears([Math.min(y0, v), v]);
               }}
             >
-              {yearOpts.map((y) => (
+              {YEAR_OPTS.map((y) => (
                 <option key={y} value={y}>
                   {y}
                 </option>
@@ -386,7 +409,7 @@ export default function ChinaTab({
       </section>
 
       <section className="panel">
-        <p>
+        <p className="prose">
           <strong>About this data:</strong> China&apos;s National Medical Products Administration
           (NMPA, 国家药品监督管理局) oversees drug trials through its Center for Food and Drug
           Inspection (CFDI, 食品药品审核查验中心), which operates the public filing system for
@@ -401,8 +424,8 @@ export default function ChinaTab({
             Open the CFDI public query portal
           </a>
           . This tab analyzes a partial extract of the drug-institution filings (retrieved
-          2026-11-06), not the live system: coverage is incomplete, filing year marks
-          registration vintage (bulk 2019–2020 wave), and person = (name, institution) pair.
+          2026-11-06), not the live system: coverage is incomplete, filing year marks registration
+          vintage (bulk 2019–2020 wave), and person = (name, institution) pair.
         </p>
       </section>
 
@@ -422,7 +445,7 @@ export default function ChinaTab({
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.specs) : '—'}</span>
         </div>
       </section>
-      <p className="caption">
+      <p className="caption" style={{ marginBottom: '12px' }}>
         Pairs count affiliations, not humans: one person at two institutions = two pairs, while two
         same-named people at one institution = one pair (common names such as 张伟 collide across
         institutions and are not mobility). Rows are exact-deduped at ingest; the 2020 bulk filing
@@ -430,13 +453,8 @@ export default function ChinaTab({
       </p>
 
       <section className="panel">
-        <h2>Registry by filing vintage</h2>
-        <StackedMultiBars series={vintStack} allTicks />
-        <p className="caption">
-          Investigator-institution pairs at institutions filed each year (2021+), top 6 provinces
-          plus others. Toggle 100% for yearly share. The 2020 bulk-registration spike (
-          {kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the graph; cumulative
-          registry {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.{' '}
+        <div className="panel-head">
+          <h2>Registry by filing vintage</h2>
           {!!vintStack.length && (
             <button
               className="btn"
@@ -445,6 +463,13 @@ export default function ChinaTab({
               CSV
             </button>
           )}
+        </div>
+        <StackedMultiBars series={vintStack} allTicks />
+        <p className="caption">
+          Investigator-institution pairs at institutions filed each year (2021+), top 6 provinces
+          plus others. Toggle 100% for yearly share. The 2020 bulk-registration spike (
+          {kpi ? fmtInt.format(kpi.v20) : '—'} pairs) is omitted from the graph; cumulative registry{' '}
+          {kpi ? fmtInt.format(kpi.pairs) : '—'} pairs.
         </p>
       </section>
 
@@ -453,8 +478,8 @@ export default function ChinaTab({
           <h2>Cumulative unique pairs</h2>
           <MultiLineChart series={cumline} />
           <p className="caption">
-            Each investigator-institution pair counted once, at its first vintage. Nearly flat
-            after 2020: the registry was loaded in the bulk wave.
+            Each investigator-institution pair counted once, at its first vintage. Nearly flat after
+            2020: the registry was loaded in the bulk wave.
           </p>
         </div>
         <div className="panel">
@@ -482,7 +507,36 @@ export default function ChinaTab({
       </section>
 
       <section className="panel">
-        <h2>Top institutions{prov === 'all' ? '' : `: ${zh ? prov : provs.find((p) => p.zh === prov)?.en ?? prov}`}</h2>
+        <div className="panel-head">
+          <h2>
+            Top institutions
+            {prov === 'all' ? '' : `: ${zh ? prov : provs.find((p) => p.zh === prov)?.en ?? prov}`}
+          </h2>
+          {!!sites.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'china-top-sites.csv',
+                  ['name_zh', 'name_en', 'curated_en', 'province', 'pairs', 'rows', 'specialties', 'filing_year', 'top_group'],
+                  sites.map((r) => [
+                    r.zh,
+                    r.en,
+                    r.curated ? 'yes' : 'no',
+                    r.prov,
+                    r.pairs,
+                    r.rows,
+                    r.specs,
+                    r.year,
+                    r.topg,
+                  ]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </div>
         <div className="filters">
           <div className="seg" role="group" aria-label="Site sort">
             <button
@@ -501,22 +555,9 @@ export default function ChinaTab({
             </button>
           </div>
           <span className="muted">
-            Pairs = investigator-institution pairs. Click a row for detail. * = curated EN; else pattern translation.
+            Pairs = investigator-institution pairs. Click a row for detail. * = curated EN; else
+            pattern translation.
           </span>
-          {!!sites.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  'china-top-sites.csv',
-                  ['name_zh', 'name_en', 'curated_en', 'province', 'pairs', 'rows', 'specialties', 'filing_year', 'top_group'],
-                  sites.map((r) => [r.zh, r.en, r.curated ? 'yes' : 'no', r.prov, r.pairs, r.rows, r.specs, r.year, r.topg]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
         </div>
         <div className="table-scroll">
           <table>
@@ -524,10 +565,10 @@ export default function ChinaTab({
               <tr>
                 <th>Institution</th>
                 <th>Province</th>
-                <th>Pairs</th>
-                <th>Rows</th>
-                <th>Specs</th>
-                <th>Filed</th>
+                <th className="num">Pairs</th>
+                <th className="num">Rows</th>
+                <th className="num">Specs</th>
+                <th className="num">Filed</th>
                 <th>Top group</th>
               </tr>
             </thead>
@@ -540,15 +581,15 @@ export default function ChinaTab({
                 >
                   <td>
                     {zh ? r.zh : r.en}
-                    {!zh && !r.curated && ' *'}
+                    {!zh && r.curated && ' *'}
                     <br />
                     <span className="muted">{zh ? (r.curated ? r.en : '') : r.zh}</span>
                   </td>
                   <td>{zh ? r.prov : r.prove}</td>
-                  <td>{fmtInt.format(r.pairs)}</td>
-                  <td>{fmtInt.format(r.rows)}</td>
-                  <td>{r.specs}</td>
-                  <td>{r.year}</td>
+                  <td className="num">{fmtInt.format(r.pairs)}</td>
+                  <td className="num">{fmtInt.format(r.rows)}</td>
+                  <td className="num">{r.specs}</td>
+                  <td className="num">{r.year}</td>
                   <td>{r.topg}</td>
                 </tr>
               ))}
@@ -559,7 +600,12 @@ export default function ChinaTab({
 
       {siteSel && (
         <section className="panel">
-          <h2>{siteSel.name}</h2>
+          <div className="panel-head">
+            <h2>{siteSel.name}</h2>
+            <button type="button" className="btn btn-ghost" onClick={() => setSiteSel(null)}>
+              Close
+            </button>
+          </div>
           <h3>Specialty mix (investigator-institution pairs)</h3>
           <CategoryBars data={siteMix} />
           <h3>
@@ -571,14 +617,22 @@ export default function ChinaTab({
                 <thead>
                   <tr>
                     <th>Investigator</th>
-                    <th>Affiliations</th>
+                    <th className="num">Affiliations</th>
                   </tr>
                 </thead>
                 <tbody>
                   {siteInvs.map((r, i) => (
-                    <tr key={`${r.name}-${i}`}>
+                    <tr
+                      key={`${r.name}-${i}`}
+                      className="pickable"
+                      title="Search this name below"
+                      onClick={() => {
+                        void runSearch(undefined, r.name);
+                        document.getElementById('cn-search')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                    >
                       <td>{r.name}</td>
-                      <td>{r.n}</td>
+                      <td className="num">{r.n}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -590,29 +644,30 @@ export default function ChinaTab({
         </section>
       )}
 
-      <section className="panel">
-        <h2>Institutions by pair count</h2>
-        <CategoryBars data={sizeBins} />
-        <p className="caption">
-          Institutions grouped by investigator-institution pairs (same province and filing-vintage
-          filters as the leaderboard). A long tail of small filers sits beside a few
-          mega-sites with 100+ pairs.
-        </p>
+      <section className="panels">
+        <div className="panel">
+          <h2>Institutions by pair count</h2>
+          <CategoryBars data={sizeBins} />
+          <p className="caption">
+            Institutions grouped by investigator-institution pairs (same province and filing-vintage
+            filters as the leaderboard). A long tail of small filers sits beside a few mega-sites
+            with 100+ pairs.
+          </p>
+        </div>
+        <div className="panel">
+          <h2>Names by institution count</h2>
+          <CategoryBars data={affil} />
+          <p className="caption">
+            How many institutions each distinct name spans (same filters as the leaderboard). The
+            long tail is dominated by common-name collision, not mobility — e.g. the top name spans
+            27 institutions. Pairs, not names, are the person unit.
+          </p>
+        </div>
       </section>
 
       <section className="panel">
-        <h2>Names by institution count</h2>
-        <CategoryBars data={affil} />
-        <p className="caption">
-          How many institutions each distinct name spans (same filters as the leaderboard). The
-          long tail is dominated by common-name collision, not mobility — e.g. the top name spans
-          27 institutions. Pairs, not names, are the person unit.
-        </p>
-      </section>
-
-      <section className="panel">
-        <h2>
-          Top investigators by affiliations{' '}
+        <div className="panel-head">
+          <h2>Top investigators by affiliations</h2>
           {!!leaders.length && (
             <button
               className="btn"
@@ -627,45 +682,58 @@ export default function ChinaTab({
               CSV
             </button>
           )}
-        </h2>
+        </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Investigator</th>
-                <th>Sites</th>
-                <th>Affiliations</th>
-                <th>Specialties</th>
-                <th>Provinces</th>
-                <th>First filed</th>
+                <th className="num">Sites</th>
+                <th className="num">Affiliations</th>
+                <th className="num">Specialties</th>
+                <th className="num">Provinces</th>
+                <th className="num">First filed</th>
               </tr>
             </thead>
             <tbody>
               {leaders.map((r, i) => (
-                <tr key={`${r.name}-${i}`}>
+                <tr
+                  key={`${r.name}-${i}`}
+                  className="pickable"
+                  title="Search this investigator's affiliations"
+                  onClick={() => {
+                    void runSearch(undefined, r.name);
+                    document.getElementById('cn-search')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
                   <td>{r.name}</td>
-                  <td>{r.inst}</td>
-                  <td>{r.rows}</td>
-                  <td>{r.specs}</td>
-                  <td>{r.provs}</td>
-                  <td>{r.year}</td>
+                  <td className="num">{r.inst}</td>
+                  <td className="num">{r.rows}</td>
+                  <td className="num">{r.specs}</td>
+                  <td className="num">{r.provs}</td>
+                  <td className="num">{r.year}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="caption">
-          Name-level: common names across institutions may conflate distinct people. Click a name in
-          search results for affiliation rows.
+          Name-level: common names across institutions may conflate distinct people. Click any row
+          to search affiliation rows below.
         </p>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="cn-search">
         <h2>Search investigators</h2>
-        <form className="filters" onSubmit={runSearch}>
+        <form className="filters" onSubmit={(e) => void runSearch(e)}>
           <label>
             Name (Chinese)
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. 张彬" size={24} />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="e.g. 张彬"
+            />
           </label>
           <button type="submit" className="btn">
             Search
@@ -695,8 +763,8 @@ export default function ChinaTab({
                   <th>Investigator</th>
                   <th>Institution</th>
                   <th>Province</th>
-                  <th>Affiliations</th>
-                  <th>Filed</th>
+                  <th className="num">Affiliations</th>
+                  <th className="num">Filed</th>
                 </tr>
               </thead>
               <tbody>
@@ -709,8 +777,8 @@ export default function ChinaTab({
                     <td>{r.name}</td>
                     <td>{zh ? r.inst : r.inste}</td>
                     <td>{zh ? r.prov : r.prove}</td>
-                    <td>{r.rows}</td>
-                    <td>{r.year}</td>
+                    <td className="num">{r.rows}</td>
+                    <td className="num">{r.year}</td>
                   </tr>
                 ))}
               </tbody>
@@ -719,8 +787,10 @@ export default function ChinaTab({
         )}
         {sel && (
           <>
-            <h3>
-              {sel.name} <span className="muted">· affiliation rows</span>{' '}
+            <div className="panel-head subhead">
+              <h3>
+                {sel.name} <span className="muted">· affiliation rows</span>
+              </h3>
               {!!affs.length && (
                 <button
                   type="button"
@@ -729,20 +799,32 @@ export default function ChinaTab({
                     downloadCsv(
                       'china-affiliations.csv',
                       ['filed', 'institution_zh', 'institution_en', 'specialty_zh', 'specialty_en', 'group_zh', 'group_en', 'role_zh', 'role_en', 'province_zh', 'province_en'],
-                      affs.map((r) => [r.year, r.inst ?? '', r.inste ?? '', r.spec ?? '', r.spece ?? '', r.groupz ?? '', r.group ?? '', r.role ?? '', r.rolee ?? '', r.prov ?? '', r.prove ?? '']),
+                      affs.map((r) => [
+                        r.year,
+                        r.inst ?? '',
+                        r.inste ?? '',
+                        r.spec ?? '',
+                        r.spece ?? '',
+                        r.groupz ?? '',
+                        r.group ?? '',
+                        r.role ?? '',
+                        r.rolee ?? '',
+                        r.prov ?? '',
+                        r.prove ?? '',
+                      ]),
                     )
                   }
                 >
                   CSV
                 </button>
               )}
-            </h3>
+            </div>
             {affs.length ? (
               <div className="table-scroll short">
                 <table>
                   <thead>
                     <tr>
-                      <th>Filed</th>
+                      <th className="num">Filed</th>
                       <th>Institution</th>
                       <th>Specialty</th>
                       <th>Group</th>
@@ -753,7 +835,7 @@ export default function ChinaTab({
                   <tbody>
                     {affs.map((r, i) => (
                       <tr key={i}>
-                        <td>{r.year}</td>
+                        <td className="num">{r.year}</td>
                         <td>{zh ? r.inst : r.inste}</td>
                         <td>
                           {r.spec}

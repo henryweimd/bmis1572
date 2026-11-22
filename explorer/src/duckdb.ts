@@ -1,4 +1,7 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { escapeLike, escapeLiteral, readerFor } from './lib/sql';
+
+export { escapeLike, escapeLiteral, readerFor };
 
 export interface ManifestDataset {
   id: string;
@@ -21,36 +24,78 @@ export interface Manifest {
 }
 
 let dbPromise: Promise<duckdb.AsyncDuckDB> | null = null;
+let connPromise: Promise<duckdb.AsyncDuckDBConnection> | null = null;
+let queryQueue: Promise<unknown> = Promise.resolve();
 
-/** Singleton DuckDB-WASM instance. Uses the single-threaded build unless the
- * page is cross-origin isolated, so no special server headers are needed. */
+const MAX_CACHE_ENTRIES = 250;
+const queryCache = new Map<string, Promise<unknown[]>>();
+
+function resolveAppBase(): string {
+  const origin = window.location.origin;
+  const base = (import.meta.env.BASE_URL ?? '/').replace(/\/+$/, '');
+  return `${origin}${base}`;
+}
+
+/** Singleton DuckDB-WASM instance. Retries cleanly if initial load failed. */
 export function getDb(): Promise<duckdb.AsyncDuckDB> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const bundles = duckdb.getJsDelivrBundles();
-      const bundle = await duckdb.selectBundle(bundles);
-      if (!bundle.mainWorker) throw new Error('DuckDB bundle has no worker script');
-      // Same-origin Blob wrapper: lets the worker load its cross-origin CDN script.
-      const workerUrl = URL.createObjectURL(
-        new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }),
-      );
-      const worker = new Worker(workerUrl);
-      const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
-      if (bundle.pthreadWorker) {
-        await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-      } else {
-        await db.instantiate(bundle.mainModule);
+      try {
+        const bundles = duckdb.getJsDelivrBundles();
+        const bundle = await duckdb.selectBundle(bundles);
+        if (!bundle.mainWorker) throw new Error('DuckDB bundle has no worker script');
+        // Same-origin Blob wrapper: lets the worker load its cross-origin CDN script.
+        const workerUrl = URL.createObjectURL(
+          new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }),
+        );
+        const worker = new Worker(workerUrl);
+        const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
+        if (bundle.pthreadWorker) {
+          await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        } else {
+          await db.instantiate(bundle.mainModule);
+        }
+        URL.revokeObjectURL(workerUrl);
+        return db;
+      } catch (err) {
+        dbPromise = null;
+        throw err;
       }
-      URL.revokeObjectURL(workerUrl);
-      return db;
     })();
   }
   return dbPromise;
 }
 
+function getConn(): Promise<duckdb.AsyncDuckDBConnection> {
+  if (!connPromise) {
+    connPromise = getDb()
+      .then((db) => db.connect())
+      .catch((err) => {
+        connPromise = null;
+        throw err;
+      });
+  }
+  return connPromise;
+}
+
+/** Serialize statements on the shared connection so single-threaded WASM never
+ * races across concurrent Promise.all() calls. */
+function runExclusive<T>(fn: (conn: duckdb.AsyncDuckDBConnection) => Promise<T>): Promise<T> {
+  const next = queryQueue.then(async () => {
+    const conn = await getConn();
+    return fn(conn);
+  });
+  queryQueue = next.catch(() => undefined);
+  return next;
+}
+
+export function clearQueryCache(): void {
+  queryCache.clear();
+}
+
 /** Pipeline manifest when the full lake snapshot is present, else null (demo mode). */
 export async function loadManifest(): Promise<{ manifest: Manifest | null; baseUrl: string }> {
-  const baseUrl = window.location.origin;
+  const baseUrl = resolveAppBase();
   try {
     const res = await fetch(`${baseUrl}/data/manifest.json`, { cache: 'no-store' });
     if (!res.ok) return { manifest: null, baseUrl };
@@ -60,52 +105,65 @@ export async function loadManifest(): Promise<{ manifest: Manifest | null; baseU
   }
 }
 
-export function readerFor(format: 'parquet' | 'csv'): string {
-  return format === 'parquet' ? 'read_parquet' : 'read_csv_auto';
-}
-
-/** Create one SQL view per manifest dataset; in demo mode a single strict-only
- * view over the committed demo CSV. */
+/** Create one SQL view per manifest dataset in a single batched round-trip;
+ * in demo mode creates a single strict-only view over the committed demo CSV. */
 export async function createViews(
   baseUrl: string,
   manifest: Manifest | null,
 ): Promise<string[]> {
-  const db = await getDb();
-  const conn = await db.connect();
+  clearQueryCache();
   const views: string[] = [];
-  try {
-    if (manifest) {
-      for (const ds of manifest.datasets) {
-        const view = ds.id.replace(/-/g, '_');
-        await conn.query(
-          `CREATE OR REPLACE VIEW ${view} AS SELECT * FROM ${readerFor(ds.format)}('${baseUrl}/${ds.files[0]}')`,
-        );
-        views.push(view);
-      }
-    } else {
-      await conn.query(
-        `CREATE OR REPLACE VIEW investigators_year_geo AS SELECT *, 'strict' AS version` +
-          ` FROM read_csv_auto('${baseUrl}/data/demo-investigators.csv')`,
+  const statements: string[] = [];
+
+  if (manifest) {
+    for (const ds of manifest.datasets) {
+      const view = ds.id.replace(/-/g, '_');
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(view)) continue;
+      const rel = ds.files[0].replace(/^\/+/, '');
+      statements.push(
+        `CREATE OR REPLACE VIEW ${view} AS SELECT * FROM ${readerFor(ds.format)}('${escapeLiteral(baseUrl)}/${escapeLiteral(rel)}')`,
       );
-      views.push('investigators_year_geo');
+      views.push(view);
     }
-  } finally {
-    await conn.close();
+  } else {
+    statements.push(
+      `CREATE OR REPLACE VIEW investigators_year_geo AS SELECT *, 'strict' AS version` +
+        ` FROM read_csv_auto('${escapeLiteral(baseUrl)}/data/demo-investigators.csv')`,
+    );
+    views.push('investigators_year_geo');
+  }
+
+  if (statements.length) {
+    await runExclusive(async (conn) => {
+      await conn.query(statements.join(';\n'));
+    });
   }
   return views;
 }
 
-export async function query<T>(sql: string): Promise<T[]> {
-  const db = await getDb();
-  const conn = await db.connect();
-  try {
+/** Execute a read-only SQL query with in-flight deduplication and LRU caching
+ * (safe because the served Parquet snapshot is immutable per session). */
+export function query<T>(sql: string): Promise<T[]> {
+  const cached = queryCache.get(sql);
+  if (cached) {
+    // Refresh recency for LRU eviction.
+    queryCache.delete(sql);
+    queryCache.set(sql, cached);
+    return cached as Promise<T[]>;
+  }
+
+  const p = runExclusive(async (conn) => {
     const result = await conn.query(sql);
     return (result.toArray() as Array<{ toJSON(): T }>).map((row) => row.toJSON());
-  } finally {
-    await conn.close();
-  }
-}
+  }).catch((err) => {
+    queryCache.delete(sql);
+    throw err;
+  });
 
-export function escapeLiteral(value: string): string {
-  return value.replace(/'/g, "''");
+  if (queryCache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = queryCache.keys().next().value;
+    if (oldest !== undefined) queryCache.delete(oldest);
+  }
+  queryCache.set(sql, p as Promise<unknown[]>);
+  return p;
 }

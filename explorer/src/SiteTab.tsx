@@ -1,17 +1,14 @@
-import { useEffect, useState } from 'react';
-import { escapeLiteral, query } from './duckdb';
+import { useEffect, useRef, useState } from 'react';
+import { escapeLike, escapeLiteral, query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart, VintageHeatmap } from './charts';
-import type { VintageRow } from './charts';
-
-const SITE_KMAX = 10;
-import type { LineSeries } from './charts';
+import type { LineSeries, VintageRow } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, trendCsv } from './csv';
+import { BAND_COLORS, SERIES_COLORS, VINTAGE_KMAX } from './lib/constants';
+import { clampYearPair, fmtInt, growthPct, num0, pivotVintage, yearRange } from './lib/format';
+import type { RawVintageRow } from './lib/format';
 
-const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num0 = (v: unknown): number =>
-  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
+const SIZE_BIN_ORDER = ['1', '2-5', '6-20', '21+'] as const;
 
 interface SiteTopRow {
   site_id: string;
@@ -72,16 +69,12 @@ export default function SiteTab({
 }) {
   const [hashInit] = useState(readHash);
   const [band, setBand] = useState(() => pick(hashInit['site.b'], ['all', ...bands], 'all'));
-  const [y0, setY0] = useState(() =>
-    Math.min(
+  const [[y0, y1], setYears] = useState<[number, number]>(() =>
+    clampYearPair(
       intIn(hashInit['site.y0'], yearMin, yearMax, yearMin),
       intIn(hashInit['site.y1'], yearMin, yearMax, yearMax),
-    ),
-  );
-  const [y1, setY1] = useState(() =>
-    Math.max(
-      intIn(hashInit['site.y0'], yearMin, yearMax, yearMin),
-      intIn(hashInit['site.y1'], yearMin, yearMax, yearMax),
+      yearMin,
+      yearMax,
     ),
   );
   const [ver, setVer] = useState<'strict' | 'merged'>(() => {
@@ -117,10 +110,11 @@ export default function SiteTab({
   const [phasemix, setPhasemix] = useState<{ category: string; v: number }[]>([]);
   const [sampTrials, setSampTrials] = useState<{ nct: string; sponsor: string; phase: string; ta: string }[]>([]);
   const [note, setNote] = useState('');
+  const searchSeq = useRef(0);
 
-  const yearOpts: number[] = [];
-  for (let y = yearMin; y <= yearMax; y++) yearOpts.push(y);
+  const yearOpts = yearRange(yearMin, yearMax);
 
+  // Main site trends & KPIs.
   useEffect(() => {
     if (!ready || demo) return;
     let cancelled = false;
@@ -131,7 +125,7 @@ export default function SiteTab({
           band === 'all'
             ? ''
             : ` AND s.band = '${escapeLiteral(band)}' AND i.band = '${escapeLiteral(band)}'`;
-        const [k, bb, st, ss, ch, rt, r5, t, mi] = await Promise.all([
+        const [k, bb, st, ss, ch, rt, r5, mi] = await Promise.all([
           query<{ active: number; r25: number; r09: number; ever: number }>(
             `SELECT CAST(SUM(CASE WHEN year = ${latestFull} THEN n_sites ELSE 0 END) AS DOUBLE) AS active,` +
               ` CAST(SUM(CASE WHEN year = ${latestFull} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
@@ -151,33 +145,23 @@ export default function SiteTab({
           ),
           query<{ b: string; n: number }>(
             `SELECT CAST(bin AS VARCHAR) AS b, CAST(SUM(n_sites) AS DOUBLE) AS n FROM site_size_year` +
-              ` WHERE version = '${ver}' AND year = ${y1} GROUP BY 1 ORDER BY 1`,
+              ` WHERE version = '${ver}' AND year = ${y1} GROUP BY 1`,
           ),
           query<{ y: number; nl: number; nj: number; ne: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(n_links AS DOUBLE) AS nl,` +
               ` CAST(n_new AS DOUBLE) AS nj, CAST(n_ended AS DOUBLE) AS ne FROM site_churn` +
               ` WHERE version = '${ver}' AND year BETWEEN ${y0} AND ${y1} ORDER BY 1`,
           ),
-          query<{ cohort: number; k: number; v: number; n: number; na: number }>(
+          query<RawVintageRow>(
             `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
               ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
               ` CAST(n_active AS INTEGER) AS na FROM site_retention` +
-              ` WHERE version = '${ver}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${SITE_KMAX} ORDER BY 1, 2`,
+              ` WHERE version = '${ver}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX} ORDER BY 1, 2`,
           ).catch(() => []),
           query<{ c: number; v: number }>(
             `SELECT CAST(cohort AS INTEGER) AS c, CAST(100 * retention AS DOUBLE) AS v` +
               ` FROM site_retention WHERE version = '${ver}' AND k = 5 AND cohort BETWEEN 2009 AND 2020 ORDER BY 1`,
           ).catch(() => []),
-          query<SiteTopRow>(
-            `SELECT CAST(site_id AS VARCHAR) AS site_id, CAST(site_n AS INTEGER) AS site_n,` +
-              ` CAST(display_name AS VARCHAR) AS name, CAST(city AS VARCHAR) AS city,` +
-              ` CAST(country AS VARCHAR) AS country, CAST(n_inv_ever AS INTEGER) AS n_inv,` +
-              ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
-              ` CAST(last_year AS INTEGER) AS last_year, CAST(n_variants AS INTEGER) AS n_variants,` +
-              ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM site_index` +
-              ` WHERE version = '${ver}'${bc}` +
-              ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : sort === 'invs' ? 'n_inv_ever DESC' : 'n_receipts DESC'} LIMIT 25`,
-          ),
           query<{ y: number; m: number }>(
             `SELECT CAST(s.year AS INTEGER) AS y,` +
               ` CAST(SUM(i.n_active) AS DOUBLE) / NULLIF(SUM(s.n_sites), 0) AS m` +
@@ -188,47 +172,39 @@ export default function SiteTab({
           ),
         ]);
         if (cancelled) return;
-        setKpi({ active: num0(k[0]?.active), receipts: num0(k[0]?.r25), receipts09: num0(k[0]?.r09), ever: num0(k[0]?.ever) });
-        const bandNames = [...new Set(bb.map((r) => r.b))];
+        setKpi({
+          active: num0(k[0]?.active),
+          receipts: num0(k[0]?.r25),
+          receipts09: num0(k[0]?.r09),
+          ever: num0(k[0]?.ever),
+        });
+        const orderedBands = bands.filter((b) => bb.some((r) => r.b === b));
         setByBand(
-          bandNames.map((b, i) => ({
+          orderedBands.map((b) => ({
             label: b,
-            color: SERIES_COLORS[i % SERIES_COLORS.length],
+            color: BAND_COLORS[b] ?? '#7f7f7f',
             points: bb.filter((r) => r.b === b).map((r) => ({ x: r.y, y: num0(r.n) })),
           })),
         );
-        const binOrder = ['1', '2-5', '6-20', '21+'];
         setSizeTrend(
-          binOrder
-            .filter((b) => st.some((r) => r.b === b))
-            .map((b, i) => ({
-              label: `${b} investigators`,
-              color: SERIES_COLORS[i % SERIES_COLORS.length],
-              points: st.filter((r) => r.b === b).map((r) => ({ x: r.y, y: num0(r.n) })),
-            })),
+          SIZE_BIN_ORDER.filter((b) => st.some((r) => r.b === b)).map((b, i) => ({
+            label: `${b} investigators`,
+            color: SERIES_COLORS[i % SERIES_COLORS.length],
+            points: st.filter((r) => r.b === b).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
         );
-        setSizeSnap(ss.map((r) => ({ category: `${r.b} investigators`, v: num0(r.n) })));
+        const snapMap = new Map(ss.map((r) => [r.b, num0(r.n)]));
+        setSizeSnap(
+          SIZE_BIN_ORDER.filter((b) => snapMap.has(b)).map((b) => ({
+            category: `${b} investigators`,
+            v: snapMap.get(b) ?? 0,
+          })),
+        );
         setChurn([
           { label: 'Joined', color: '#2ca02c', points: ch.map((r) => ({ x: r.y, y: num0(r.nj) })) },
           { label: 'Last seen', color: '#d62728', points: ch.map((r) => ({ x: r.y, y: num0(r.ne) })) },
         ]);
-        const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
-        for (const r of rt) {
-          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>(), c: new Map<number, number>() };
-          e.n = r.n;
-          e.m.set(r.k, num0(r.v) * 100);
-          e.c.set(r.k, num0(r.na));
-          byVintage.set(r.cohort, e);
-        }
-        setSret(
-          [...byVintage.entries()].map(([cohort, e]) => ({
-            cohort,
-            n: e.n,
-            cells: Array.from({ length: SITE_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
-            counts: Array.from({ length: SITE_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
-          })),
-        );
-        setTop(t);
+        setSret(pivotVintage(rt, VINTAGE_KMAX));
         setMeanInv(mi.map((r) => ({ d: String(r.y), v: num0(r.m) })));
         setSret5(r5.map((r) => ({ d: String(r.c), v: num0(r.v) })));
         setNote('');
@@ -240,7 +216,36 @@ export default function SiteTab({
     return () => {
       cancelled = true;
     };
-  }, [ready, demo, band, y0, y1, ver, sort, latestFull]);
+  }, [ready, demo, band, bands, y0, y1, ver, latestFull]);
+
+  // Top sites leaderboard (decoupled from chart queries).
+  useEffect(() => {
+    if (!ready || demo) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const bc = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
+        const t = await query<SiteTopRow>(
+          `SELECT CAST(site_id AS VARCHAR) AS site_id, CAST(site_n AS INTEGER) AS site_n,` +
+            ` CAST(display_name AS VARCHAR) AS name, CAST(city AS VARCHAR) AS city,` +
+            ` CAST(country AS VARCHAR) AS country, CAST(n_inv_ever AS INTEGER) AS n_inv,` +
+            ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
+            ` CAST(last_year AS INTEGER) AS last_year, CAST(n_variants AS INTEGER) AS n_variants,` +
+            ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM site_index` +
+            ` WHERE version = '${ver}'${bc}` +
+            ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : sort === 'invs' ? 'n_inv_ever DESC' : 'n_receipts DESC'} LIMIT 25`,
+        );
+        if (cancelled) return;
+        setTop(t);
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`Top sites query failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, band, ver, sort]);
 
   useEffect(() => {
     if (!ready || demo || !sel) {
@@ -300,8 +305,26 @@ export default function SiteTab({
           joins.set(r.f, (joins.get(r.f) ?? 0) + 1);
           ends.set(r.l, (ends.get(r.l) ?? 0) + 1);
         }
-        setDetail(yy.map((r) => ({ y: r.y, invs: num0(r.invs), joins: joins.get(r.y) ?? 0, ends: ends.get(r.y) ?? 0 })));
-        setXc(xq[0] ? { n: num0(xq[0].n), ns: num0(xq[0].ns), j: num0(xq[0].j), samp: xq[0].samp, fac: xq[0].fac, sib: num0(xq[0].sib) } : null);
+        setDetail(
+          yy.map((r) => ({
+            y: r.y,
+            invs: num0(r.invs),
+            joins: joins.get(r.y) ?? 0,
+            ends: ends.get(r.y) ?? 0,
+          })),
+        );
+        setXc(
+          xq[0]
+            ? {
+                n: num0(xq[0].n),
+                ns: num0(xq[0].ns),
+                j: num0(xq[0].j),
+                samp: xq[0].samp,
+                fac: xq[0].fac,
+                sib: num0(xq[0].sib),
+              }
+            : null,
+        );
         setTamix(tq.map((r) => ({ category: r.category, v: num0(r.v) })));
         setPhasemix(pq.map((r) => ({ category: r.category, v: num0(r.v) })));
         const sampNcts = (xq[0]?.samp ?? '')
@@ -351,7 +374,7 @@ export default function SiteTab({
         );
         if (cancelled) return;
         setRoster(r);
-      } catch (e) {
+      } catch {
         if (cancelled) return;
       }
     })();
@@ -375,7 +398,8 @@ export default function SiteTab({
   async function runSearch(e?: React.FormEvent) {
     e?.preventDefault();
     if (!ready || demo || q.trim().length < 2) return;
-    const needle = `%${escapeLiteral(q.trim().toUpperCase())}%`;
+    const seq = ++searchSeq.current;
+    const needle = `%${escapeLike(q.trim().toUpperCase())}%`;
     try {
       const r = await query<SiteHit>(
         `SELECT CAST(site_id AS VARCHAR) AS site_id, CAST(site_n AS INTEGER) AS site_n,` +
@@ -385,19 +409,21 @@ export default function SiteTab({
           ` CAST(first_year AS INTEGER) AS first_year, CAST(last_year AS INTEGER) AS last_year,` +
           ` CAST(n_variants AS INTEGER) AS n_variants,` +
           ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM site_index` +
-          ` WHERE version = '${ver}' AND (UPPER(display_name) LIKE '${needle}' OR UPPER(city) LIKE '${needle}')` +
+          ` WHERE version = '${ver}' AND (UPPER(display_name) LIKE '${needle}' ESCAPE '\\' OR UPPER(city) LIKE '${needle}' ESCAPE '\\')` +
           ` ORDER BY n_receipts DESC LIMIT 50`,
       );
+      if (seq !== searchSeq.current) return;
       setHits(r);
       setSearched(true);
     } catch (e2) {
+      if (seq !== searchSeq.current) return;
       setNote(`Site search failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
     }
   }
 
   if (demo) return <p className="muted">Run the pipeline for site data.</p>;
 
-  const growth = kpi && kpi.receipts09 > 0 ? (((kpi.receipts - kpi.receipts09) / kpi.receipts09) * 100).toFixed(1) : null;
+  const growth = growthPct(kpi?.receipts, kpi?.receipts09);
   const detailYears = detail.map((d) => d.y);
 
   return (
@@ -434,8 +460,7 @@ export default function SiteTab({
               value={y0}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY0(v);
-                if (v > y1) setY1(v);
+                setYears([v, Math.max(v, y1)]);
               }}
             >
               {yearOpts.map((y) => (
@@ -451,8 +476,7 @@ export default function SiteTab({
               value={y1}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY1(v);
-                if (v < y0) setY0(v);
+                setYears([Math.min(y0, v), v]);
               }}
             >
               {yearOpts.map((y) => (
@@ -496,7 +520,7 @@ export default function SiteTab({
         <div className="kpi">
           <span className="kpi-label">Site receipts, {latestFull}</span>
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.receipts) : '—'}</span>
-          <span className="kpi-label">{growth !== null ? `${growth}% vs 2009` : ' '}</span>
+          <span className="kpi-sub">{growth !== null ? `${growth}% vs 2009` : '\u00A0'}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Sites ever (in file)</span>
@@ -506,10 +530,10 @@ export default function SiteTab({
 
       <section className="panel">
         <h2>Active sites per year{band === 'all' ? ' by band' : `: ${band}`}</h2>
-        <StackedMultiBars series={byBand} allTicks />
+        <StackedMultiBars series={byBand} marks={{ 2021: '*' }} allTicks />
         <p className="caption">
-          Distinct site addresses with ≥1 investigator receipt that year · 2008 (ramp-up) and 2026 (thru Aug)
-          are partial. Toggle 100% for yearly share.
+          Distinct site addresses with ≥1 investigator receipt that year · 2008 (ramp-up) and 2026
+          (thru Aug) are partial. Toggle 100% for yearly share.
         </p>
       </section>
 
@@ -519,17 +543,14 @@ export default function SiteTab({
         <h3>Mix in {y1}</h3>
         <CategoryBars data={sizeSnap} />
         <p className="caption">
-          Global (all bands): sites grouped by distinct investigators active that year. Solo sites dominate;
-          21+ sites are mega-centers. Toggle 100% for yearly share.
+          Global (all bands): sites grouped by distinct investigators active that year. Solo sites
+          dominate; 21+ sites are mega-centers. Toggle 100% for yearly share.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Mean investigators per active site</h2>
-        <TrendChart data={meanInv} />
-        <p className="caption">
-          Active investigators ÷ active sites per year (follows version and band filters). Teams
-          per site have nearly doubled since the 1980s.{' '}
+        <div className="panel-head">
+          <h2>Mean investigators per active site</h2>
           {!!meanInv.length && (
             <button
               className="btn"
@@ -538,6 +559,12 @@ export default function SiteTab({
               CSV
             </button>
           )}
+        </div>
+        <TrendChart data={meanInv} label="Mean investigators per active site" />
+        <p className="caption">
+          Active investigators ÷ active sites per year (follows version and band filters). Teams per
+          site have risen steadily since 2009 (1.38 → 1.85 in 2025) as multi-investigator centers
+          expand.
         </p>
       </section>
 
@@ -545,33 +572,15 @@ export default function SiteTab({
         <h2>Roster churn: investigators joining vs last seen</h2>
         <StackedMultiBars series={churn} allTicks />
         <p className="caption">
-          Global (all bands): per investigator-site link, joined = first receipt year at the site, last seen =
-          last receipt year. Right edge is censored (2026 links look ended); gap years read as continuous.
-          Toggle 100% for the join/end split.
+          Global (all bands): per investigator-site link, joined = first receipt year at the site,
+          last seen = last receipt year. Right edge is censored (2026 links look ended); gap years
+          read as continuous. Toggle 100% for the join/end split.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Site vintage attrition</h2>
-        <VintageHeatmap rows={sret} kMax={SITE_KMAX} unit="sites" />
-        <h3>Five-year retention by vintage</h3>
-        <TrendChart data={sret5} />
-        <p className="caption">
-          Share of each site vintage still active 5 years later (percent). Cohorts 2009–2020
-          only. Site retention has roughly halved since 2009.{' '}
-          {!!sret5.length && (
-            <button
-              className="btn"
-              onClick={() => trendCsv(`site-five-year-retention-${ver}.csv`, sret5)}
-            >
-              CSV
-            </button>
-          )}
-        </p>
-        <p className="caption">
-          Of the sites first seen in a given year (their vintage), the share active again k years
-          later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;
-          see Definitions: site_retention.{' '}
+        <div className="panel-head">
+          <h2>Site vintage attrition</h2>
           {!!sret.length && (
             <button
               className="btn"
@@ -586,11 +595,59 @@ export default function SiteTab({
               CSV
             </button>
           )}
+        </div>
+        <VintageHeatmap rows={sret} kMax={VINTAGE_KMAX} unit="sites" />
+        <div className="panel-head subhead">
+          <h3>Five-year retention by vintage</h3>
+          {!!sret5.length && (
+            <button
+              className="btn"
+              onClick={() => trendCsv(`site-five-year-retention-${ver}.csv`, sret5)}
+            >
+              CSV
+            </button>
+          )}
+        </div>
+        <TrendChart data={sret5} label="Site five-year retention by vintage" suffix="%" />
+        <p className="caption">
+          Share of each site vintage still active 5 years later (percent). Cohorts 2009–2020 only.
+          Site retention has roughly halved since 2009.
+        </p>
+        <p className="caption">
+          Of the sites first seen in a given year (their vintage), the share active again k years
+          later. Right-censored; 2008 excluded (file ramp-up). Follows the {ver} address version;
+          see Definitions: site_retention.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Top sites{band === 'all' ? '' : `: ${band}`}</h2>
+        <div className="panel-head">
+          <h2>Top sites{band === 'all' ? '' : `: ${band}`}</h2>
+          {!!top.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  'top-sites.csv',
+                  ['site', 'city', 'country', 'investigators', 'receipts', 'per_year', 'first_year', 'last_year', 'variants'],
+                  top.map((r) => [
+                    r.name,
+                    r.city,
+                    r.country,
+                    r.n_inv,
+                    r.n_receipts,
+                    r.tpy.toFixed(2),
+                    r.first_year,
+                    r.last_year,
+                    r.n_variants,
+                  ]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </div>
         <div className="filters">
           <div className="seg" role="group" aria-label="Site sort">
             <button
@@ -616,20 +673,6 @@ export default function SiteTab({
             </button>
           </div>
           <span className="muted">Click a row for the site detail.</span>
-          {!!top.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  'top-sites.csv',
-                  ['site', 'city', 'country', 'investigators', 'receipts', 'per_year', 'first_year', 'last_year', 'variants'],
-                  top.map((r) => [r.name, r.city, r.country, r.n_inv, r.n_receipts, r.tpy.toFixed(2), r.first_year, r.last_year, r.n_variants]),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
         </div>
         <div className="table-scroll">
           <table>
@@ -638,11 +681,11 @@ export default function SiteTab({
                 <th>Site</th>
                 <th>City</th>
                 <th>Country</th>
-                <th>Invs</th>
-                <th>Receipts</th>
-                <th>/yr</th>
+                <th className="num">Invs</th>
+                <th className="num">Receipts</th>
+                <th className="num">/yr</th>
                 <th>Span</th>
-                <th>Variants</th>
+                <th className="num">Variants</th>
               </tr>
             </thead>
             <tbody>
@@ -655,21 +698,21 @@ export default function SiteTab({
                   <td>{r.name}</td>
                   <td>{r.city}</td>
                   <td>{r.country}</td>
-                  <td>{fmtInt.format(r.n_inv)}</td>
-                  <td>{fmtInt.format(r.n_receipts)}</td>
-                  <td>{r.tpy.toFixed(2)}</td>
+                  <td className="num">{fmtInt.format(r.n_inv)}</td>
+                  <td className="num">{fmtInt.format(r.n_receipts)}</td>
+                  <td className="num">{r.tpy.toFixed(2)}</td>
                   <td>
                     {r.first_year}–{r.last_year}
                   </td>
-                  <td>{r.n_variants}</td>
+                  <td className="num">{r.n_variants}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="caption">
-          Variants = distinct raw address strings consolidated into the site (merged absorbs spelling variants).
-          Names as filed.
+          Variants = distinct raw address strings consolidated into the site (merged absorbs
+          spelling variants). Names as filed.
         </p>
       </section>
 
@@ -678,9 +721,16 @@ export default function SiteTab({
         <form className="filters" onSubmit={runSearch}>
           <label>
             Name or city
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. ANDERSON or HOUSTON" size={30} />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="e.g. ANDERSON or HOUSTON"
+            />
           </label>
-          <button type="submit" className="btn">Search</button>
+          <button type="submit" className="btn">
+            Search
+          </button>
           {searched && <span className="muted">{hits.length} matches (top 50 by receipts)</span>}
           {!!hits.length && (
             <button
@@ -690,7 +740,16 @@ export default function SiteTab({
                 downloadCsv(
                   'site-search.csv',
                   ['site', 'address', 'city', 'country', 'investigators', 'receipts', 'first_year', 'last_year'],
-                  hits.map((r) => [r.name, r.addr, r.city, r.country, r.n_inv, r.n_receipts, r.first_year, r.last_year]),
+                  hits.map((r) => [
+                    r.name,
+                    r.addr,
+                    r.city,
+                    r.country,
+                    r.n_inv,
+                    r.n_receipts,
+                    r.first_year,
+                    r.last_year,
+                  ]),
                 )
               }
             >
@@ -707,8 +766,8 @@ export default function SiteTab({
                   <th>Address</th>
                   <th>City</th>
                   <th>Country</th>
-                  <th>Invs</th>
-                  <th>Receipts</th>
+                  <th className="num">Invs</th>
+                  <th className="num">Receipts</th>
                   <th>Span</th>
                 </tr>
               </thead>
@@ -723,8 +782,8 @@ export default function SiteTab({
                     <td>{r.addr}</td>
                     <td>{r.city}</td>
                     <td>{r.country}</td>
-                    <td>{fmtInt.format(r.n_inv)}</td>
-                    <td>{fmtInt.format(r.n_receipts)}</td>
+                    <td className="num">{fmtInt.format(r.n_inv)}</td>
+                    <td className="num">{fmtInt.format(r.n_receipts)}</td>
                     <td>
                       {r.first_year}–{r.last_year}
                     </td>
@@ -738,11 +797,17 @@ export default function SiteTab({
 
       {sel && info && (
         <section className="panel">
-          <h2>{info.name}</h2>
+          <div className="panel-head">
+            <h2>{info.name}</h2>
+            <button type="button" className="btn btn-ghost" onClick={() => setSel(null)}>
+              Close
+            </button>
+          </div>
           <p className="muted">
             {info.addr} · {info.city}, {info.state} {info.country} · {info.band} ·{' '}
-            {fmtInt.format(info.n_inv)} investigators ever · {fmtInt.format(info.n_receipts)} receipts ·{' '}
-            {info.first_year}–{info.last_year} ({info.n_years} active years) · {info.n_variants} address variants
+            {fmtInt.format(info.n_inv)} investigators ever · {fmtInt.format(info.n_receipts)}{' '}
+            receipts · {info.first_year}–{info.last_year} ({info.n_years} active years) ·{' '}
+            {info.n_variants} address variants
           </p>
           <h3>Investigators active per year</h3>
           <StackedMultiBars
@@ -765,10 +830,10 @@ export default function SiteTab({
           />
           <h3>CT.gov cross-check (experimental, US only)</h3>
           {xc ? (
-            <p>
-              {fmtInt.format(xc.n)} plausible industry trials ({fmtInt.format(xc.ns)} strong), shared across{' '}
-              {xc.sib} {xc.sib === 1 ? 'address' : 'addresses'} of this institution — e.g. matched facility “
-              {xc.fac}”. Sample:{' '}
+            <p className="prose">
+              {fmtInt.format(xc.n)} plausible industry trials ({fmtInt.format(xc.ns)} strong),
+              shared across {xc.sib} {xc.sib === 1 ? 'address' : 'addresses'} of this institution —
+              e.g. matched facility “{xc.fac}”. Sample:{' '}
               {(sampTrials.length
                 ? sampTrials
                 : xc.samp
@@ -803,7 +868,8 @@ export default function SiteTab({
               <CategoryBars data={tamix} />
               <p className="caption">
                 Matched trials bucketed by CT.gov conditions text (~15 keyword areas; multi-area
-                studies count once per area). Inherits all cross-check caveats; see Definitions: site_ta.
+                studies count once per area). Inherits all cross-check caveats; see Definitions:
+                site_ta.
               </p>
             </>
           ) : (
@@ -821,16 +887,18 @@ export default function SiteTab({
           ) : (
             <p className="muted">No phase data (no CT.gov match for this site).</p>
           )}
-          <h3>
-            Roster,{' '}
-            <select value={ry} onChange={(e) => setRy(Number(e.target.value))}>
-              {(detailYears.length ? detailYears : yearOpts).map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>{' '}
-            <span className="muted">· top 200 by receipts</span>{' '}
+          <div className="panel-head subhead">
+            <h3>
+              Roster,{' '}
+              <select value={ry} onChange={(e) => setRy(Number(e.target.value))}>
+                {(detailYears.length ? detailYears : yearOpts).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>{' '}
+              <span className="muted">· top 200 by receipts</span>
+            </h3>
             {!!roster.length && (
               <button
                 className="btn"
@@ -845,7 +913,7 @@ export default function SiteTab({
                 CSV
               </button>
             )}
-          </h3>
+          </div>
           {roster.length ? (
             <div className="table-scroll short">
               <table>
@@ -853,7 +921,7 @@ export default function SiteTab({
                   <tr>
                     <th>Investigator</th>
                     <th>Country</th>
-                    <th>Receipts</th>
+                    <th className="num">Receipts</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -866,7 +934,7 @@ export default function SiteTab({
                     >
                       <td>{r.name}</td>
                       <td>{r.country}</td>
-                      <td>{r.n}</td>
+                      <td className="num">{r.n}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -876,8 +944,9 @@ export default function SiteTab({
             <p className="muted">No roster rows for {ry} (site inactive that year).</p>
           )}
           <p className="caption">
-            No trial IDs in BMIS: roster shows who filed from this address, not which trials. Last-seen years
-            include right-censored recent links. Click a row to search that name in FDA Investigators.
+            No trial IDs in BMIS: roster shows who filed from this address, not which trials.
+            Last-seen years include right-censored recent links. Click a row to search that name in
+            FDA Investigators.
           </p>
         </section>
       )}

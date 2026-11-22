@@ -1,6 +1,4 @@
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num = (v: unknown): number | null =>
-  typeof v === 'number' && !Number.isNaN(v) ? v : null;
+import { fmtInt, num } from './lib/format';
 
 export default function About({ stats }: { stats?: Record<string, unknown> }) {
   const lk = ((stats ?? {}).linkage ?? {}) as Record<string, unknown>;
@@ -9,7 +7,7 @@ export default function About({ stats }: { stats?: Record<string, unknown> }) {
   return (
     <section className="panel">
       <h2>About this explorer</h2>
-      <p>
+      <p className="prose">
         How has the supply of clinical trial investigators trended over time, and how does it compare
         against industry trial demand? This app visualizes the FDA&apos;s investigator registry against
         trial counts from clinicaltrials.gov.

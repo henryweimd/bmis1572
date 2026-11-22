@@ -1,10 +1,20 @@
-export function downloadCsv(filename: string, cols: string[], rows: (string | number)[][]) {
-  const esc = (v: unknown): string => {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const text = [cols, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-  const blob = new Blob([text], { type: 'text/csv' });
+export function formatCsvCell(value: unknown): string {
+  const s = String(value ?? '');
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function buildCsv(cols: string[], rows: (string | number | null | undefined)[][]): string {
+  return [cols, ...rows].map((r) => r.map(formatCsvCell).join(',')).join('\r\n');
+}
+
+export function downloadCsv(
+  filename: string,
+  cols: string[],
+  rows: (string | number | null | undefined)[][],
+): void {
+  // Prepend UTF-8 BOM so Excel displays Chinese/Unicode labels without mojibake.
+  const text = `\uFEFF${buildCsv(cols, rows)}`;
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -31,14 +41,13 @@ export interface StackSeries {
 }
 
 export function stackedCsv(filename: string, series: StackSeries[]): void {
-  if (!series.length || !series[0].points.length) return;
-  const n = series[0].points.length;
+  if (!series.length) return;
+  const xs = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
+  if (!xs.length) return;
+  const maps = series.map((s) => new Map(s.points.map((p) => [p.x, p.y])));
   downloadCsv(
     filename,
     ['year', ...series.map((s) => s.label)],
-    Array.from({ length: n }, (_, i) => [
-      series[0].points[i].x,
-      ...series.map((s) => s.points[i]?.y ?? ''),
-    ]),
+    xs.map((x) => [x, ...maps.map((m) => m.get(x) ?? '')]),
   );
 }

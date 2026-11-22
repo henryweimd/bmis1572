@@ -4,12 +4,9 @@ import { CategoryBars, StackedMultiBars, VintageHeatmap } from './charts';
 import type { LineSeries, VintageRow } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv } from './csv';
-
-const ORG_KMAX = 10;
-const SERIES_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f'];
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num0 = (v: unknown): number =>
-  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
+import { SERIES_COLORS, VINTAGE_KMAX } from './lib/constants';
+import { clampYearPair, fmtInt, growthPct, num0, pivotVintage, yearRange } from './lib/format';
+import type { RawVintageRow } from './lib/format';
 
 interface OrgTopRow {
   org: string;
@@ -78,16 +75,12 @@ export default function OrgTab({
   const cfg = CONFIG[kind];
   const [hashInit] = useState(readHash);
   const [band, setBand] = useState(() => pick(hashInit[`${kind}.b`], ['all', ...bands], 'all'));
-  const [y0, setY0] = useState(() =>
-    Math.min(
+  const [[y0, y1], setYears] = useState<[number, number]>(() =>
+    clampYearPair(
       intIn(hashInit[`${kind}.y0`], yearMin, yearMax, yearMin),
       intIn(hashInit[`${kind}.y1`], yearMin, yearMax, yearMax),
-    ),
-  );
-  const [y1, setY1] = useState(() =>
-    Math.max(
-      intIn(hashInit[`${kind}.y0`], yearMin, yearMax, yearMin),
-      intIn(hashInit[`${kind}.y1`], yearMin, yearMax, yearMax),
+      yearMin,
+      yearMax,
     ),
   );
   const [sel, setSel] = useState(() => {
@@ -97,19 +90,77 @@ export default function OrgTab({
   const [sort, setSort] = useState<'total' | 'rate'>(() =>
     pick(hashInit[`${kind}.o`], ['total', 'rate'] as const, 'total'),
   );
+
   const [opts, setOpts] = useState<{ org: string; n: number }[]>([]);
   const [kpi, setKpi] = useState<{ active: number; receipts: number; receipts09: number; orgs: number } | null>(null);
   const [series, setSeries] = useState<LineSeries[]>([]);
   const [footprint, setFootprint] = useState<{ category: string; v: number }[]>([]);
-  const orgCol = cfg.table === 'CROs' ? 'cro' : 'irb';
   const [ent, setEnt] = useState<LineSeries[]>([]);
   const [top, setTop] = useState<OrgTopRow[]>([]);
   const [oret, setOret] = useState<VintageRow[]>([]);
   const [note, setNote] = useState('');
 
-  const yearOpts: number[] = [];
-  for (let y = yearMin; y <= yearMax; y++) yearOpts.push(y);
+  const yearOpts = yearRange(yearMin, yearMax);
 
+  // Static org metadata + dropdown options + vintage retention (only runs once per kind).
+  useEffect(() => {
+    if (!ready || demo) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [o, rt] = await Promise.all([
+          query<{ org: string; n: number }>(
+            `SELECT CAST(${cfg.keyCol} AS VARCHAR) AS org, CAST(n_receipts AS DOUBLE) AS n` +
+              ` FROM ${cfg.indexTable} ORDER BY n DESC LIMIT 200`,
+          ),
+          query<RawVintageRow>(
+            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
+              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
+              ` CAST(n_active AS INTEGER) AS na FROM org_retention` +
+              ` WHERE org_type = '${kind}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${VINTAGE_KMAX} ORDER BY 1, 2`,
+          ).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setOpts(o.map((r) => ({ org: r.org, n: num0(r.n) })));
+        setOret(pivotVintage(rt, VINTAGE_KMAX));
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`${cfg.singular} metadata failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, kind, cfg.keyCol, cfg.indexTable, cfg.singular]);
+
+  // Top table (decoupled so sorting doesn't re-query charts).
+  useEffect(() => {
+    if (!ready || demo) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const t = await query<OrgTopRow>(
+          `SELECT CAST(${cfg.keyCol} AS VARCHAR) AS org, CAST(n_entities AS INTEGER) AS n_entities,` +
+            ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
+            ` CAST(last_year AS INTEGER) AS last_year, CAST(n_countries AS INTEGER) AS n_countries,` +
+            ` CAST(top_country AS VARCHAR) AS top_country, CAST(n_variants AS INTEGER) AS n_variants,` +
+            ` CAST(example_site AS VARCHAR) AS example_site,` +
+            ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM ${cfg.indexTable}` +
+            ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : 'n_receipts DESC'} LIMIT 25`,
+        );
+        if (cancelled) return;
+        setTop(t);
+      } catch (e) {
+        if (cancelled) return;
+        setNote(`${cfg.singular} leaderboard failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, demo, sort, cfg.keyCol, cfg.indexTable, cfg.singular]);
+
+  // Filtered KPIs, receipts series, entities, and geographic footprint.
   useEffect(() => {
     if (!ready || demo) return;
     let cancelled = false;
@@ -117,11 +168,7 @@ export default function OrgTab({
       try {
         const bc = band === 'all' ? '' : ` AND band = '${escapeLiteral(band)}'`;
         const cc = sel === 'all' ? '' : ` AND ${cfg.keyCol} = '${escapeLiteral(sel)}'`;
-        const [o, k, nco, t, entRows, rt] = await Promise.all([
-          query<{ org: string; n: number }>(
-            `SELECT CAST(${cfg.keyCol} AS VARCHAR) AS org, CAST(n_receipts AS DOUBLE) AS n` +
-              ` FROM ${cfg.indexTable} ORDER BY n DESC LIMIT 200`,
-          ),
+        const [k, nco, entRows] = await Promise.all([
           query<{ active: number; r25: number; r09: number }>(
             `SELECT COUNT(DISTINCT CASE WHEN year = ${latestFull} THEN ${cfg.keyCol} END) AS active,` +
               ` CAST(SUM(CASE WHEN year = ${latestFull} THEN n_receipts ELSE 0 END) AS DOUBLE) AS r25,` +
@@ -129,46 +176,18 @@ export default function OrgTab({
               ` FROM ${cfg.yearTable} WHERE 1 = 1${bc}${cc}`,
           ),
           query<{ n: number }>(`SELECT COUNT(*) AS n FROM ${cfg.indexTable}`),
-          query<OrgTopRow>(
-            `SELECT CAST(${cfg.keyCol} AS VARCHAR) AS org, CAST(n_entities AS INTEGER) AS n_entities,` +
-              ` CAST(n_receipts AS DOUBLE) AS n_receipts, CAST(first_year AS INTEGER) AS first_year,` +
-              ` CAST(last_year AS INTEGER) AS last_year, CAST(n_countries AS INTEGER) AS n_countries,` +
-              ` CAST(top_country AS VARCHAR) AS top_country, CAST(n_variants AS INTEGER) AS n_variants,` +
-              ` CAST(example_site AS VARCHAR) AS example_site,` +
-              ` CAST(n_receipts AS DOUBLE) / (last_year - first_year + 1) AS tpy FROM ${cfg.indexTable}` +
-              ` ORDER BY ${sort === 'rate' ? 'tpy DESC' : 'n_receipts DESC'} LIMIT 25`,
-          ),
           query<{ y: number; n: number }>(
             `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_entities) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
               ` WHERE year BETWEEN ${y0} AND ${y1}${bc}${cc} GROUP BY 1 ORDER BY 1`,
           ),
-          query<{ cohort: number; k: number; v: number; n: number; na: number }>(
-            `SELECT CAST(cohort AS INTEGER) AS cohort, CAST(k AS INTEGER) AS k,` +
-              ` CAST(retention AS DOUBLE) AS v, CAST(n_cohort AS INTEGER) AS n,` +
-              ` CAST(n_active AS INTEGER) AS na FROM org_retention` +
-              ` WHERE org_type = '${kind}' AND cohort BETWEEN 2009 AND 2025 AND k <= ${ORG_KMAX} ORDER BY 1, 2`,
-          ).catch(() => []),
         ]);
         if (cancelled) return;
-        const byVintage = new Map<number, { n: number; m: Map<number, number>; c: Map<number, number> }>();
-        for (const r of rt) {
-          const e = byVintage.get(r.cohort) ?? { n: 0, m: new Map<number, number>(), c: new Map<number, number>() };
-          e.n = r.n;
-          e.m.set(r.k, num0(r.v) * 100);
-          e.c.set(r.k, num0(r.na));
-          byVintage.set(r.cohort, e);
-        }
-        setOret(
-          [...byVintage.entries()].map(([cohort, e]) => ({
-            cohort,
-            n: e.n,
-            cells: Array.from({ length: ORG_KMAX + 1 }, (_, k) => e.m.get(k) ?? null),
-            counts: Array.from({ length: ORG_KMAX + 1 }, (_, k) => e.c.get(k) ?? null),
-          })),
-        );
-        setOpts(o.map((r) => ({ org: r.org, n: num0(r.n) })));
-        setKpi({ active: num0(k[0]?.active), receipts: num0(k[0]?.r25), receipts09: num0(k[0]?.r09), orgs: num0(nco[0]?.n) });
-        setTop(t);
+        setKpi({
+          active: num0(k[0]?.active),
+          receipts: num0(k[0]?.r25),
+          receipts09: num0(k[0]?.r09),
+          orgs: num0(nco[0]?.n),
+        });
         setEnt([
           {
             label: sel === 'all' ? 'Active entities' : sel,
@@ -176,6 +195,7 @@ export default function OrgTab({
             points: entRows.map((r) => ({ x: r.y, y: num0(r.n) })),
           },
         ]);
+
         const names =
           sel === 'all'
             ? (
@@ -187,49 +207,49 @@ export default function OrgTab({
               ).map((r) => r.org)
             : [sel];
         if (cancelled) return;
-        const sr =
+
+        const [sr, tot, fp] = await Promise.all([
           names.length === 0
-            ? []
-            : await query<{ y: number; org: string; n: number }>(
+            ? Promise.resolve([])
+            : query<{ y: number; org: string; n: number }>(
                 `SELECT CAST(year AS INTEGER) AS y, CAST(${cfg.keyCol} AS VARCHAR) AS org,` +
                   ` CAST(SUM(n_receipts) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
                   ` WHERE year BETWEEN ${y0} AND ${y1}${bc}` +
                   ` AND ${cfg.keyCol} IN (${names.map((n) => `'${escapeLiteral(n)}'`).join(',')})` +
                   ` GROUP BY 1, 2 ORDER BY 1, 2`,
-              );
+              ),
+          sel === 'all'
+            ? query<{ y: number; n: number }>(
+                `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_receipts) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
+                  ` WHERE year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 1`,
+              )
+            : Promise.resolve([]),
+          sel === 'all'
+            ? Promise.resolve([])
+            : query<{ category: string; v: number }>(
+                `SELECT CAST(band AS VARCHAR) AS category, CAST(SUM(n_receipts) AS DOUBLE) AS v` +
+                  ` FROM ${cfg.yearTable} WHERE ${cfg.keyCol} = '${escapeLiteral(sel)}'` +
+                  ` AND year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 2 DESC`,
+              ),
+        ]);
         if (cancelled) return;
-        const top8 = names.map((n, i) => ({
+
+        const top8: LineSeries[] = names.map((n, i) => ({
           label: n,
           color: SERIES_COLORS[i % SERIES_COLORS.length],
           points: sr.filter((r) => r.org === n).map((r) => ({ x: r.y, y: num0(r.n) })),
         }));
         if (sel === 'all') {
-          // Complete the stack so absolute and 100% views cover all receipts.
-          const tot = await query<{ y: number; n: number }>(
-            `SELECT CAST(year AS INTEGER) AS y, CAST(SUM(n_receipts) AS DOUBLE) AS n FROM ${cfg.yearTable}` +
-              ` WHERE year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 1`,
-          );
-          if (cancelled) return;
           const part = new Map<number, number>();
           for (const r of sr) part.set(r.y, (part.get(r.y) ?? 0) + num0(r.n));
           top8.push({
             label: 'All other',
-            color: '#bdbdbd',
+            color: '#94a3b8',
             points: tot.map((r) => ({ x: r.y, y: Math.max(0, num0(r.n) - (part.get(r.y) ?? 0)) })),
           });
         }
         setSeries(top8);
-        if (sel === 'all') {
-          setFootprint([]);
-        } else {
-          const fp = await query<{ category: string; v: number }>(
-            `SELECT CAST(band AS VARCHAR) AS category, CAST(SUM(n_receipts) AS DOUBLE) AS v` +
-              ` FROM ${cfg.yearTable} WHERE ${orgCol} = '${escapeLiteral(sel)}'` +
-              ` AND year BETWEEN ${y0} AND ${y1}${bc} GROUP BY 1 ORDER BY 2 DESC`,
-          ).catch(() => []);
-          if (cancelled) return;
-          setFootprint(fp.map((r) => ({ category: r.category, v: num0(r.v) })));
-        }
+        setFootprint(fp.map((r) => ({ category: r.category, v: num0(r.v) })));
         setNote('');
       } catch (e) {
         if (cancelled) return;
@@ -239,9 +259,7 @@ export default function OrgTab({
     return () => {
       cancelled = true;
     };
-    // cfg.* are kind-derived constants; kind Prop change remounts via tab switch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, demo, band, y0, y1, sel, sort]);
+  }, [ready, demo, band, y0, y1, sel, latestFull, cfg.keyCol, cfg.yearTable, cfg.indexTable, cfg.singular]);
 
   useEffect(() => {
     writeHash({
@@ -255,7 +273,7 @@ export default function OrgTab({
 
   if (demo) return <p className="muted">Run the pipeline for {cfg.plural} data.</p>;
 
-  const growth = kpi && kpi.receipts09 > 0 ? (((kpi.receipts - kpi.receipts09) / kpi.receipts09) * 100).toFixed(1) : null;
+  const growth = growthPct(kpi?.receipts, kpi?.receipts09);
 
   return (
     <>
@@ -279,8 +297,7 @@ export default function OrgTab({
               value={y0}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY0(v);
-                if (v > y1) setY1(v);
+                setYears([v, Math.max(v, y1)]);
               }}
             >
               {yearOpts.map((y) => (
@@ -296,8 +313,7 @@ export default function OrgTab({
               value={y1}
               onChange={(e) => {
                 const v = Number(e.target.value);
-                setY1(v);
-                if (v < y0) setY0(v);
+                setYears([Math.min(y0, v), v]);
               }}
             >
               {yearOpts.map((y) => (
@@ -318,7 +334,14 @@ export default function OrgTab({
               ))}
             </select>
           </label>
-          <span className="muted">{kpi ? `${fmtInt.format(kpi.orgs)} ${cfg.table}; dropdown shows top 200` : ''}</span>
+          {sel !== 'all' && (
+            <button type="button" className="btn btn-ghost" onClick={() => setSel('all')}>
+              Clear {cfg.selector.toLowerCase()}
+            </button>
+          )}
+          <span className="muted">
+            {kpi ? `${fmtInt.format(kpi.orgs)} ${cfg.table}; dropdown shows top 200` : ''}
+          </span>
         </div>
       </section>
 
@@ -334,24 +357,19 @@ export default function OrgTab({
             {cfg.singular} receipts, {latestFull}
           </span>
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.receipts) : '—'}</span>
-          <span className="kpi-label">{growth !== null ? `${growth}% vs 2009` : ' '}</span>
+          <span className="kpi-sub">{growth !== null ? `${growth}% vs 2009` : '\u00A0'}</span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">
-            {cfg.ever} ever (in file)
-          </span>
+          <span className="kpi-label">{cfg.ever} ever (in file)</span>
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.orgs) : '—'}</span>
         </div>
       </section>
 
       <section className="panel">
-        <h2>
-          {cfg.singular} receipts per year{sel === 'all' ? ' (top 8 + all other)' : `: ${sel}`}
-        </h2>
-        <StackedMultiBars series={series} allTicks />
-        <p className="caption">
-          Top 8 {cfg.table} by receipts in the selected range, plus all others (normalized site
-          strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.{' '}
+        <div className="panel-head">
+          <h2>
+            {cfg.singular} receipts per year{sel === 'all' ? ' (top 8 + all other)' : `: ${sel}`}
+          </h2>
           {!!series.length && (
             <button
               className="btn"
@@ -360,18 +378,20 @@ export default function OrgTab({
               CSV
             </button>
           )}
+        </div>
+        <StackedMultiBars series={series} allTicks />
+        <p className="caption">
+          Top 8 {cfg.table} by receipts in the selected range, plus all others (normalized site
+          strings) · 2008 (ramp-up) and 2026 (thru Aug) are partial. Toggle 100% for yearly share.
         </p>
       </section>
 
       {sel !== 'all' && !!footprint.length && (
         <section className="panel">
-          <h2>
-            {sel}: receipts by geography, {y0}–{y1}
-          </h2>
-          <CategoryBars data={footprint} />
-          <p className="caption">
-            Where this {cfg.singular.toLowerCase()}&apos;s receipts were filed (investigator
-            geography bands, selected range).{' '}
+          <div className="panel-head">
+            <h2>
+              {sel}: receipts by geography, {y0}–{y1}
+            </h2>
             <button
               className="btn"
               onClick={() =>
@@ -384,17 +404,20 @@ export default function OrgTab({
             >
               CSV
             </button>
+          </div>
+          <CategoryBars data={footprint} />
+          <p className="caption">
+            Where this {cfg.singular.toLowerCase()}&apos;s receipts were filed (investigator
+            geography bands, selected range).
           </p>
         </section>
       )}
 
       <section className="panel">
-        <h2>
-          Active {cfg.singular} entities per year{sel === 'all' ? '' : `: ${sel}`}
-        </h2>
-        <StackedMultiBars series={ent} allTicks />
-        <p className="caption">
-          Distinct {cfg.singular} site entities with ≥1 receipt that year.{' '}
+        <div className="panel-head">
+          <h2>
+            Active {cfg.singular} entities per year{sel === 'all' ? '' : `: ${sel}`}
+          </h2>
           {!!ent.length && (
             <button
               className="btn"
@@ -403,12 +426,16 @@ export default function OrgTab({
               CSV
             </button>
           )}
+        </div>
+        <StackedMultiBars series={ent} allTicks />
+        <p className="caption">
+          Distinct {cfg.singular} site entities with ≥1 receipt that year.
         </p>
       </section>
 
       <section className="panel">
-        <h2>
-          {cfg.singular} vintage attrition{' '}
+        <div className="panel-head">
+          <h2>{cfg.singular} vintage attrition</h2>
           {!!oret.length && (
             <button
               className="btn"
@@ -423,21 +450,48 @@ export default function OrgTab({
               CSV
             </button>
           )}
-        </h2>
-        <VintageHeatmap rows={oret} kMax={ORG_KMAX} unit={kind} />
+        </div>
+        <VintageHeatmap rows={oret} kMax={VINTAGE_KMAX} unit={kind} />
         <p className="caption">
-          Of the {cfg.table} first seen in a given year (their vintage), the share active
-          again k years later. Right-censored; 2008 excluded (file ramp-up). Company/board
-          keys carry residual spelling splits — see Definitions: org_retention.
+          Of the {cfg.table} first seen in a given year (their vintage), the share active again k
+          years later. Right-censored; 2008 excluded (file ramp-up). Company/board keys carry
+          residual spelling splits — see Definitions: org_retention.
         </p>
       </section>
 
       <section className="panel">
-        <h2>
-          {sort === 'rate'
-            ? `Top ${cfg.table} by trials/year rate (global)`
-            : `Top ${cfg.table} by lifetime receipts (global)`}
-        </h2>
+        <div className="panel-head">
+          <h2>
+            {sort === 'rate'
+              ? `Top ${cfg.table} by trials/year rate (global)`
+              : `Top ${cfg.table} by lifetime receipts (global)`}
+          </h2>
+          {!!top.length && (
+            <button
+              className="btn"
+              onClick={() =>
+                downloadCsv(
+                  `${kind}-top.csv`,
+                  [cfg.selector.toLowerCase(), 'receipts', 'per_year', 'entities', 'countries', 'top_country', 'first_year', 'last_year', 'variants', 'top_filing_name'],
+                  top.map((r) => [
+                    r.org,
+                    r.n_receipts,
+                    r.tpy.toFixed(2),
+                    r.n_entities,
+                    r.n_countries,
+                    r.top_country,
+                    r.first_year,
+                    r.last_year,
+                    r.n_variants,
+                    r.example_site ?? '',
+                  ]),
+                )
+              }
+            >
+              CSV
+            </button>
+          )}
+        </div>
         <div className="filters">
           <div className="seg" role="group" aria-label={`${cfg.singular} sort`}>
             <button
@@ -455,35 +509,41 @@ export default function OrgTab({
               Trials/year
             </button>
           </div>
+          <span className="muted">Click any row to filter charts and inspect geographic footprint.</span>
         </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>{cfg.selector}</th>
-                <th>Receipts</th>
-                <th>/yr</th>
-                <th>Entities</th>
-                <th>Countries</th>
+                <th className="num">Receipts</th>
+                <th className="num">/yr</th>
+                <th className="num">Entities</th>
+                <th className="num">Countries</th>
                 <th>Top country</th>
                 <th>Span</th>
-                <th>Variants</th>
+                <th className="num">Variants</th>
                 <th>Top filing name</th>
               </tr>
             </thead>
             <tbody>
               {top.map((r) => (
-                <tr key={r.org}>
+                <tr
+                  key={r.org}
+                  className={sel === r.org ? 'picked' : 'pickable'}
+                  onClick={() => setSel(sel === r.org ? 'all' : r.org)}
+                  title={sel === r.org ? 'Click to show all' : `Filter to ${r.org}`}
+                >
                   <td>{r.org}</td>
-                  <td>{fmtInt.format(r.n_receipts)}</td>
-                  <td>{r.tpy.toFixed(2)}</td>
-                  <td>{fmtInt.format(r.n_entities)}</td>
-                  <td>{r.n_countries}</td>
+                  <td className="num">{fmtInt.format(r.n_receipts)}</td>
+                  <td className="num">{r.tpy.toFixed(2)}</td>
+                  <td className="num">{fmtInt.format(r.n_entities)}</td>
+                  <td className="num">{r.n_countries}</td>
                   <td>{r.top_country}</td>
                   <td>
                     {r.first_year}–{r.last_year}
                   </td>
-                  <td>{r.n_variants}</td>
+                  <td className="num">{r.n_variants}</td>
                   <td>{r.example_site ?? ''}</td>
                 </tr>
               ))}
@@ -491,22 +551,8 @@ export default function OrgTab({
           </table>
         </div>
         <p className="caption">
-          Variants = distinct raw site strings merged into the key; top filing name is the most frequent
-          raw string. Residual splits remain (see Definitions).{' '}
-          {!!top.length && (
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(
-                  `${kind}-top.csv`,
-                  [cfg.selector.toLowerCase(), 'receipts', 'per_year', 'entities', 'countries', 'top_country', 'first_year', 'last_year', 'variants', 'top_filing_name'],
-                  top.map((r) => [r.org, r.n_receipts, r.tpy.toFixed(2), r.n_entities, r.n_countries, r.top_country, r.first_year, r.last_year, r.n_variants, r.example_site ?? '']),
-                )
-              }
-            >
-              CSV
-            </button>
-          )}
+          Variants = distinct raw site strings merged into the key; top filing name is the most
+          frequent raw string. Residual splits remain (see Definitions).
         </p>
       </section>
     </>

@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { escapeLiteral, query } from './duckdb';
 import { CategoryBars, StackedMultiBars, TrendChart } from './charts';
 import type { LineSeries } from './charts';
+import { intIn, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
-
-const fmtInt = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const num0 = (v: unknown): number =>
-  v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v)) ? 0 : Number(v);
+import { clampYearPair, fmtInt, num0, yearRange } from './lib/format';
 
 interface KolRow {
   name: string;
@@ -21,6 +19,9 @@ interface CoverRow {
   lk: number;
 }
 
+const PHASE_ORDER = ['EARLY_P1', 'P1', 'P1+P2', 'P2', 'P2+P3', 'P3', 'P4', 'NA'] as const;
+const PHASE_COLORS = ['#9467bd', '#1f77b4', '#17becf', '#2ca02c', '#bcbd22', '#ff7f0e', '#d62728', '#7f7f7f'];
+
 export default function TrialsTab({
   demo,
   ready,
@@ -30,6 +31,7 @@ export default function TrialsTab({
   ready: boolean;
   onJump: (name: string) => void;
 }) {
+  const [hashInit] = useState(readHash);
   const [bounds, setBounds] = useState<{ lo: number; hi: number } | null>(null);
   const [y0, setY0] = useState<number | null>(null);
   const [y1, setY1] = useState<number | null>(null);
@@ -58,10 +60,13 @@ export default function TrialsTab({
     { name: string; site: string; country: string; tier: string }[]
   >([]);
   const [searched, setSearched] = useState(false);
+  const lookupSeq = useRef(0);
 
-  const lookupTrial = async () => {
+  const lookupTrial = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const nct = nctIn.trim().toUpperCase();
     if (!nct) return;
+    const seq = ++lookupSeq.current;
     const id = escapeLiteral(nct);
     try {
       const [tr, of, lk] = await Promise.all([
@@ -81,12 +86,14 @@ export default function TrialsTab({
             ` WHERE l.nct = '${id}' ORDER BY 1`,
         ).catch(() => []),
       ]);
+      if (seq !== lookupSeq.current) return;
       setTrial(tr[0] ?? null);
       setTrialOffs(of);
       setTrialLinked(lk);
       setSearched(true);
-    } catch (e) {
-      setNote(`Trial lookup failed: ${e instanceof Error ? e.message : String(e)}`);
+    } catch (e2) {
+      if (seq !== lookupSeq.current) return;
+      setNote(`Trial lookup failed: ${e2 instanceof Error ? e2.message : String(e2)}`);
     }
   };
 
@@ -100,9 +107,17 @@ export default function TrialsTab({
             `SELECT CAST(MIN(start_y) AS INTEGER) AS lo, CAST(MAX(start_y) AS INTEGER) AS hi FROM ctgov_trials`,
           );
           if (cancelled || !b.length) return;
-          setBounds({ lo: b[0].lo, hi: b[0].hi });
-          setY0(b[0].lo);
-          setY1(b[0].hi);
+          const lo = b[0].lo;
+          const hi = b[0].hi;
+          setBounds({ lo, hi });
+          const [init0, init1] = clampYearPair(
+            intIn(hashInit['tr.y0'], lo, hi, lo),
+            intIn(hashInit['tr.y1'], lo, hi, hi),
+            lo,
+            hi,
+          );
+          setY0(init0);
+          setY1(init1);
           return;
         }
         const yr = `start_y BETWEEN ${y0} AND ${y1}`;
@@ -177,16 +192,12 @@ export default function TrialsTab({
         setCover(cv);
         setAudit(au);
         setTriYoy(yy.map((r) => ({ d: String(r.y), v: num0(r.n) })));
-        const phaseOrder = ['EARLY_P1', 'P1', 'P1+P2', 'P2', 'P2+P3', 'P3', 'P4', 'NA'];
-        const phaseColors = ['#9467bd', '#1f77b4', '#17becf', '#2ca02c', '#bcbd22', '#ff7f0e', '#d62728', '#7f7f7f'];
         setPhaseTrend(
-          phaseOrder
-            .filter((p) => pt.some((r) => r.p === p))
-            .map((p, i) => ({
-              label: p,
-              color: phaseColors[i % phaseColors.length],
-              points: pt.filter((r) => r.p === p).map((r) => ({ x: r.y, y: num0(r.n) })),
-            })),
+          PHASE_ORDER.filter((p) => pt.some((r) => r.p === p)).map((p, i) => ({
+            label: p,
+            color: PHASE_COLORS[i % PHASE_COLORS.length],
+            points: pt.filter((r) => r.p === p).map((r) => ({ x: r.y, y: num0(r.n) })),
+          })),
         );
         setNote('');
       } catch (e) {
@@ -197,29 +208,40 @@ export default function TrialsTab({
     return () => {
       cancelled = true;
     };
-  }, [ready, demo, y0, y1]);
+  }, [ready, demo, y0, y1, hashInit]);
+
+  useEffect(() => {
+    if (y0 !== null && y1 !== null) {
+      writeHash({ 'tr.y0': String(y0), 'tr.y1': String(y1) });
+    }
+  }, [y0, y1]);
 
   if (demo) return <p className="muted">Run the pipeline for trials data.</p>;
 
-  const yearOpts: number[] = [];
-  if (bounds) for (let y = bounds.lo; y <= bounds.hi; y++) yearOpts.push(y);
+  const yearOpts = bounds ? yearRange(bounds.lo, bounds.hi) : [];
 
   return (
     <>
       {note && <p className="banner">{note}</p>}
       <section className="panel">
-        <p>
+        <p className="prose">
           <strong>About this data:</strong> US industry-led interventional trials from the
           clinicaltrials.gov API, with overall officials (usually study-level directors/chairs —
-          median 1 per trial, though some trials list site PIs), lead sponsors, phases, and
-          keyword therapeutic areas.
-          Person links match officials to BMIS investigators by name + affiliation; see
-          Definitions. Trials with unknown start year are excluded when filtering.
+          median 1 per trial, though some trials list site PIs), lead sponsors, phases, and keyword
+          therapeutic areas. Person links match officials to BMIS investigators by name +
+          affiliation; see Definitions. Trials with unknown start year are excluded when filtering.
         </p>
         <div className="filters">
           <label>
             From
-            <select value={y0 ?? ''} onChange={(e) => setY0(Number(e.target.value))}>
+            <select
+              value={y0 ?? ''}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY0(v);
+                if (y1 !== null && v > y1) setY1(v);
+              }}
+            >
               {yearOpts.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -229,7 +251,14 @@ export default function TrialsTab({
           </label>
           <label>
             To
-            <select value={y1 ?? ''} onChange={(e) => setY1(Number(e.target.value))}>
+            <select
+              value={y1 ?? ''}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setY1(v);
+                if (y0 !== null && v < y0) setY0(v);
+              }}
+            >
               {yearOpts.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -264,11 +293,8 @@ export default function TrialsTab({
       </section>
 
       <section className="panel">
-        <h2>Trials by start year</h2>
-        <TrendChart data={triYoy} />
-        <p className="caption">
-          Industry trial starts per year in range (CT.gov Start Date; unknown-start trials
-          excluded).{' '}
+        <div className="panel-head">
+          <h2>Trials by start year</h2>
           {!!triYoy.length && (
             <button
               className="btn"
@@ -277,6 +303,11 @@ export default function TrialsTab({
               CSV
             </button>
           )}
+        </div>
+        <TrendChart data={triYoy} label="US industry trial starts per year" />
+        <p className="caption">
+          Industry trial starts per year in range (CT.gov Start Date; unknown-start trials
+          excluded).
         </p>
       </section>
 
@@ -294,11 +325,8 @@ export default function TrialsTab({
       </section>
 
       <section className="panel">
-        <h2>Phase mix over time</h2>
-        <StackedMultiBars series={phaseTrend} allTicks />
-        <p className="caption">
-          Trial starts per year by phase in range. Toggle 100% for yearly share. NA growth
-          reflects missing phase data, not a real mix shift.{' '}
+        <div className="panel-head">
+          <h2>Phase mix over time</h2>
           {!!phaseTrend.length && (
             <button
               className="btn"
@@ -307,6 +335,11 @@ export default function TrialsTab({
               CSV
             </button>
           )}
+        </div>
+        <StackedMultiBars series={phaseTrend} allTicks />
+        <p className="caption">
+          Trial starts per year by phase in range. Toggle 100% for yearly share. NA growth reflects
+          missing phase data, not a real mix shift.
         </p>
       </section>
 
@@ -314,30 +347,27 @@ export default function TrialsTab({
         <h2>Trials by therapeutic area</h2>
         <CategoryBars data={tas} />
         <p className="caption">
-          Keyword classification of CT.gov conditions text; multi-area trials count once per
-          area; trials with no conditions excluded.
+          Keyword classification of CT.gov conditions text; multi-area trials count once per area;
+          trials with no conditions excluded.
         </p>
       </section>
 
       <section className="panel">
         <h2>Trial lookup by NCT number</h2>
-        <div className="filters">
+        <form className="filters" onSubmit={(e) => void lookupTrial(e)}>
           <label>
             NCT
             <input
+              type="search"
               value={nctIn}
               onChange={(e) => setNctIn(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') lookupTrial();
-              }}
               placeholder="e.g. NCT01188928"
-              style={{ width: '12em' }}
             />
           </label>
-          <button className="btn" onClick={lookupTrial}>
+          <button type="submit" className="btn">
             Look up
           </button>
-        </div>
+        </form>
         {searched &&
           (trial ? (
             <>
@@ -417,14 +447,14 @@ export default function TrialsTab({
             </p>
           ))}
         <p className="caption">
-          Exact NCT match against the 53,543-trial subset. Officials are study-level;
-          investigator links carry the usual tier caveats.
+          Exact NCT match against the 53,543-trial subset. Officials are study-level; investigator
+          links carry the usual tier caveats.
         </p>
       </section>
 
       <section className="panel">
-        <h2>
-          Most-linked investigators (study officials){' '}
+        <div className="panel-head">
+          <h2>Most-linked investigators (study officials)</h2>
           {!!kols.length && (
             <button
               className="btn"
@@ -439,15 +469,15 @@ export default function TrialsTab({
               CSV
             </button>
           )}
-        </h2>
+        </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Investigator</th>
                 <th>Country</th>
-                <th>CT.gov trials</th>
-                <th>Sponsors</th>
+                <th className="num">CT.gov trials</th>
+                <th className="num">Sponsors</th>
               </tr>
             </thead>
             <tbody>
@@ -460,8 +490,8 @@ export default function TrialsTab({
                 >
                   <td>{r.name}</td>
                   <td>{r.country}</td>
-                  <td>{fmtInt.format(r.n)}</td>
-                  <td>{r.sponsors}</td>
+                  <td className="num">{fmtInt.format(r.n)}</td>
+                  <td className="num">{r.sponsors}</td>
                 </tr>
               ))}
             </tbody>
@@ -469,14 +499,14 @@ export default function TrialsTab({
         </div>
         <p className="caption">
           BMIS persons by linked CT.gov trials in range (strong + weak tiers). Skews toward study
-          chairs and KOLs — most trials name only study-level officials, so most investigators
-          cannot appear here. Click a row to search that name in FDA Investigators.
+          chairs and KOLs — most trials name only study-level officials, so most investigators cannot
+          appear here. Click a row to search that name in FDA Investigators.
         </p>
       </section>
 
       <section className="panel">
-        <h2>
-          Linkage coverage by geography{' '}
+        <div className="panel-head">
+          <h2>Linkage coverage by geography</h2>
           {!!cover.length && (
             <button
               className="btn"
@@ -491,24 +521,24 @@ export default function TrialsTab({
               CSV
             </button>
           )}
-        </h2>
+        </div>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th>Band</th>
-                <th>BMIS persons</th>
-                <th>Linked</th>
-                <th>Share</th>
+                <th className="num">BMIS persons</th>
+                <th className="num">Linked</th>
+                <th className="num">Share</th>
               </tr>
             </thead>
             <tbody>
               {cover.map((r) => (
                 <tr key={r.band}>
                   <td>{r.band}</td>
-                  <td>{fmtInt.format(r.n)}</td>
-                  <td>{r.lk}</td>
-                  <td>{r.n > 0 ? `${((r.lk / r.n) * 100).toFixed(1)}%` : '—'}</td>
+                  <td className="num">{fmtInt.format(r.n)}</td>
+                  <td className="num">{fmtInt.format(r.lk)}</td>
+                  <td className="num">{r.n > 0 ? `${((r.lk / r.n) * 100).toFixed(1)}%` : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -528,20 +558,20 @@ export default function TrialsTab({
               <thead>
                 <tr>
                   <th>Tier</th>
-                  <th>Links</th>
-                  <th>Persons</th>
-                  <th>Single-candidate</th>
-                  <th>Mean overlap</th>
+                  <th className="num">Links</th>
+                  <th className="num">Persons</th>
+                  <th className="num">Single-candidate</th>
+                  <th className="num">Mean overlap</th>
                 </tr>
               </thead>
               <tbody>
                 {audit.map((r) => (
                   <tr key={r.tier}>
                     <td>{r.tier}</td>
-                    <td>{fmtInt.format(r.nl)}</td>
-                    <td>{fmtInt.format(r.np)}</td>
-                    <td>{`${(r.sc * 100).toFixed(1)}%`}</td>
-                    <td>{r.mo.toFixed(1)}</td>
+                    <td className="num">{fmtInt.format(r.nl)}</td>
+                    <td className="num">{fmtInt.format(r.np)}</td>
+                    <td className="num">{`${(r.sc * 100).toFixed(1)}%`}</td>
+                    <td className="num">{r.mo.toFixed(1)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -549,9 +579,9 @@ export default function TrialsTab({
           </div>
           <p className="caption">
             {fmtInt.format(audit[0].ol)} of {fmtInt.format(audit[0].ot)} officials (
-            {((audit[0].ol / audit[0].ot) * 100).toFixed(1)}%) link to ≥1 BMIS person.
-            Eyeball audit of 21 sampled links: strong ≈80% plausible-correct, weak ≈60%
-            (see docs/linkage_audit.md). Weak links may be name collisions.
+            {((audit[0].ol / audit[0].ot) * 100).toFixed(1)}%) link to ≥1 BMIS person. Eyeball audit
+            of 21 sampled links: strong ≈80% plausible-correct, weak ≈60% (see
+            docs/linkage_audit.md). Weak links may be name collisions.
           </p>
         </section>
       )}
