@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { escapeLike, query } from '../duckdb';
 import { DEF_TITLES, TABS, TAB_LABEL, TAB_SUBTITLE } from '../lib/constants';
 import type { TabId } from '../lib/constants';
@@ -34,6 +34,14 @@ interface OrgHit {
   n: number;
 }
 
+interface PaletteItem {
+  id: string;
+  group: string;
+  title: string;
+  meta: string;
+  onSelect: () => void;
+}
+
 export default function CommandPalette({
   open,
   ready,
@@ -64,18 +72,24 @@ export default function CommandPalette({
   const [trials, setTrials] = useState<TrialHit[]>([]);
   const [cros, setCros] = useState<OrgHit[]>([]);
   const [irbs, setIrbs] = useState<OrgHit[]>([]);
+  const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const seqRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
-    setTimeout(() => inputRef.current?.focus(), 20);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = setTimeout(() => inputRef.current?.focus(), 20);
+    return () => {
+      clearTimeout(focusTimer);
+      document.body.style.overflow = prevOverflow;
+      returnFocusRef.current?.focus();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !ready || demo) return;
@@ -160,7 +174,178 @@ export default function CommandPalette({
     ).slice(0, 5);
   }, [term]);
 
+  const groups = useMemo(() => {
+    const out: { label: string; items: PaletteItem[] }[] = [];
+    if (sites.length) {
+      out.push({
+        label: 'Research Sites (BMIS)',
+        items: sites.map((s) => ({
+          id: `cmd-site-${s.site_n}`,
+          group: 'sites',
+          title: s.name,
+          meta: `${s.city}, ${s.country} · ${fmtInt.format(s.n_inv)} invs · ${fmtInt.format(s.n_receipts)} refs`,
+          onSelect: () => {
+            onJumpSite(s.site_n);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (pis.length) {
+      out.push({
+        label: 'Investigators (Strict Persons)',
+        items: pis.map((p) => ({
+          id: `cmd-pi-${p.person_id}`,
+          group: 'pis',
+          title: p.display_name,
+          meta: `${p.site ?? '—'} · ${p.country} · ${fmtInt.format(p.n_trials)} refs`,
+          onSelect: () => {
+            onJumpInvestigator(p.display_name);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (trials.length) {
+      out.push({
+        label: 'US Industry Trials (CT.gov)',
+        items: trials.map((t) => ({
+          id: `cmd-trial-${t.nct}`,
+          group: 'trials',
+          title: `${t.nct} · ${t.sponsor}`,
+          meta: `${t.phase}${t.start_y ? ` · started ${t.start_y}` : ''}`,
+          onSelect: () => {
+            onJumpTrial(t.nct);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (cros.length) {
+      out.push({
+        label: 'CRO Companies',
+        items: cros.map((c) => ({
+          id: `cmd-cro-${c.org}`,
+          group: 'cros',
+          title: c.org,
+          meta: `${fmtInt.format(c.n)} receipts`,
+          onSelect: () => {
+            onJumpOrg('cro', c.org);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (irbs.length) {
+      out.push({
+        label: 'IRB Boards',
+        items: irbs.map((c) => ({
+          id: `cmd-irb-${c.org}`,
+          group: 'irbs',
+          title: c.org,
+          meta: `${fmtInt.format(c.n)} receipts`,
+          onSelect: () => {
+            onJumpOrg('irb', c.org);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (matchingDefs.length) {
+      out.push({
+        label: 'Methodology & Glossary',
+        items: matchingDefs.map(([k, title]) => ({
+          id: `cmd-def-${k}`,
+          group: 'defs',
+          title,
+          meta: 'Open in glossary',
+          onSelect: () => {
+            onJumpDefinition(title);
+            onClose();
+          },
+        })),
+      });
+    }
+    if (matchingTabs.length) {
+      out.push({
+        label: 'Navigate Views',
+        items: matchingTabs.map((t) => ({
+          id: `cmd-tab-${t}`,
+          group: 'tabs',
+          title: TAB_LABEL[t],
+          meta: TAB_SUBTITLE[t],
+          onSelect: () => {
+            onNavigateTab(t);
+            onClose();
+          },
+        })),
+      });
+    }
+    return out;
+  }, [
+    sites,
+    pis,
+    trials,
+    cros,
+    irbs,
+    matchingDefs,
+    matchingTabs,
+    onJumpSite,
+    onJumpInvestigator,
+    onJumpTrial,
+    onJumpOrg,
+    onJumpDefinition,
+    onNavigateTab,
+    onClose,
+  ]);
+
+  const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+
+  useEffect(() => {
+    setActiveIdx(0);
+  }, [term, sites, pis, trials, cros, irbs]);
+
+  const moveSelection = useCallback(
+    (next: number) => {
+      if (!flatItems.length) return;
+      const wrapped = ((next % flatItems.length) + flatItems.length) % flatItems.length;
+      setActiveIdx(wrapped);
+      itemRefs.current[wrapped]?.scrollIntoView({ block: 'nearest' });
+    },
+    [flatItems.length],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveSelection(activeIdx + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveSelection(activeIdx - 1);
+      } else if (e.key === 'Home' && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        moveSelection(0);
+      } else if (e.key === 'End' && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        moveSelection(flatItems.length - 1);
+      } else if (e.key === 'Enter' && flatItems[activeIdx]) {
+        e.preventDefault();
+        flatItems[activeIdx].onSelect();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose, moveSelection, activeIdx, flatItems]);
+
   if (!open) return null;
+
+  const activeItem = flatItems[activeIdx];
+  let runningIdx = 0;
 
   return (
     <div
@@ -182,180 +367,73 @@ export default function CommandPalette({
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Search sites, investigators, NCT numbers, sponsors, CROs, IRBs, views, or glossary…"
             aria-label="Search across all datasets"
+            aria-controls="cmd-results-list"
+            aria-activedescendant={activeItem?.id}
+            role="combobox"
+            aria-expanded="true"
+            aria-autocomplete="list"
           />
+          {term && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setTerm('');
+                inputRef.current?.focus();
+              }}
+            >
+              Clear
+            </button>
+          )}
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close search">
             <IconClose />
           </button>
         </div>
 
-        <div className="cmd-results">
-          {busy && <p className="muted cmd-status">Searching DuckDB lake…</p>}
-
-          {!!sites.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">Research Sites (BMIS)</div>
-              {sites.map((s) => (
-                <button
-                  key={s.site_n}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpSite(s.site_n);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{s.name}</span>
-                  <span className="cmd-meta">
-                    {s.city}, {s.country} · {fmtInt.format(s.n_inv)} invs · {fmtInt.format(s.n_receipts)} refs
-                  </span>
-                </button>
-              ))}
-            </div>
+        <div className="cmd-results" id="cmd-results-list" role="listbox" aria-label="Search results">
+          {busy && (
+            <p className="muted cmd-status" role="status" aria-live="polite">
+              Searching DuckDB lake…
+            </p>
           )}
 
-          {!!pis.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">Investigators (Strict Persons)</div>
-              {pis.map((p) => (
-                <button
-                  key={p.person_id}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpInvestigator(p.display_name);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{p.display_name}</span>
-                  <span className="cmd-meta">
-                    {p.site ?? '—'} · {p.country} · {fmtInt.format(p.n_trials)} refs
-                  </span>
-                </button>
-              ))}
+          {groups.map((group) => (
+            <div key={group.label} className="cmd-group" role="group" aria-label={group.label}>
+              <div className="cmd-group-label">{group.label}</div>
+              {group.items.map((item) => {
+                const idx = runningIdx++;
+                const isActive = idx === activeIdx;
+                return (
+                  <button
+                    key={item.id}
+                    id={item.id}
+                    ref={(el) => {
+                      itemRefs.current[idx] = el;
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    className={`cmd-item${isActive ? ' active' : ''}`}
+                    onMouseEnter={() => setActiveIdx(idx)}
+                    onClick={item.onSelect}
+                  >
+                    <span className="cmd-title">{item.title}</span>
+                    <span className="cmd-meta">{item.meta}</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
+          ))}
 
-          {!!trials.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">US Industry Trials (CT.gov)</div>
-              {trials.map((t) => (
-                <button
-                  key={t.nct}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpTrial(t.nct);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">
-                    {t.nct} · {t.sponsor}
-                  </span>
-                  <span className="cmd-meta">
-                    {t.phase} {t.start_y ? `· started ${t.start_y}` : ''}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {!busy && term.trim().length >= 2 && flatItems.length === 0 && (
+            <p className="muted cmd-status">
+              No matches for “{term}”. Try a hospital name (e.g. MD Anderson), city (Houston), NCT
+              number (NCT01188928), or investigator surname.
+            </p>
           )}
-
-          {!!cros.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">CRO Companies</div>
-              {cros.map((c) => (
-                <button
-                  key={c.org}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpOrg('cro', c.org);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{c.org}</span>
-                  <span className="cmd-meta">{fmtInt.format(c.n)} receipts</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!!irbs.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">IRB Boards</div>
-              {irbs.map((c) => (
-                <button
-                  key={c.org}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpOrg('irb', c.org);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{c.org}</span>
-                  <span className="cmd-meta">{fmtInt.format(c.n)} receipts</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!!matchingDefs.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">Methodology &amp; Glossary</div>
-              {matchingDefs.map(([k, title]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onJumpDefinition(title);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{title}</span>
-                  <span className="cmd-meta">Open in glossary</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!!matchingTabs.length && (
-            <div className="cmd-group">
-              <div className="cmd-group-label">Navigate Views</div>
-              {matchingTabs.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  className="cmd-item"
-                  onClick={() => {
-                    onNavigateTab(t);
-                    onClose();
-                  }}
-                >
-                  <span className="cmd-title">{TAB_LABEL[t]}</span>
-                  <span className="cmd-meta">{TAB_SUBTITLE[t]}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {!busy &&
-            term.trim().length >= 2 &&
-            !sites.length &&
-            !pis.length &&
-            !trials.length &&
-            !cros.length &&
-            !irbs.length &&
-            !matchingDefs.length &&
-            !matchingTabs.length && (
-              <p className="muted cmd-status">
-                No matches for “{term}”. Try a hospital name (e.g. MD Anderson), city (Houston), NCT
-                number (NCT01188928), or investigator surname.
-              </p>
-            )}
         </div>
         <div className="cmd-footer muted">
-          <span>Esc to close</span>
+          <span>↑↓ navigate · ↵ open · Esc close</span>
           <span>Live in-browser DuckDB-WASM search</span>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { downloadCsv } from '../csv';
 
@@ -44,6 +44,10 @@ export function DataTable<T>({
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(defaultSort ?? null);
   const [queryText, setQueryText] = useState('');
   const [shown, setShown] = useState(pageSize);
+
+  useEffect(() => {
+    setShown(pageSize);
+  }, [rows, pageSize]);
 
   const filtered = useMemo(() => {
     const q = queryText.trim().toLowerCase();
@@ -119,7 +123,21 @@ export function DataTable<T>({
         </div>
       )}
       {visible.length === 0 ? (
-        <p className="muted">{emptyMessage}</p>
+        <div className="datatable-bar">
+          <p className="muted">{emptyMessage}</p>
+          {queryText && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setQueryText('');
+                setShown(pageSize);
+              }}
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
       ) : (
         <div className={compact ? 'table-scroll short' : 'table-scroll'}>
           <table>
@@ -128,8 +146,20 @@ export function DataTable<T>({
                 {columns.map((c) => {
                   const active = sort?.key === c.key;
                   const arrow = active ? (sort.dir === 1 ? ' ▲' : ' ▼') : '';
+                  const ariaSort = c.sortValue
+                    ? active
+                      ? sort.dir === 1
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                    : undefined;
                   return (
-                    <th key={c.key} className={c.align === 'right' ? 'num' : undefined} title={c.title}>
+                    <th
+                      key={c.key}
+                      className={c.align === 'right' ? 'num' : undefined}
+                      title={c.title}
+                      aria-sort={ariaSort}
+                    >
                       {c.sortValue ? (
                         <button
                           type="button"
@@ -156,7 +186,19 @@ export function DataTable<T>({
                     key={rowKey(row, idx)}
                     className={picked ? 'picked' : clickable ? 'pickable' : undefined}
                     title={rowTitle?.(row)}
+                    aria-selected={clickable ? picked : undefined}
+                    tabIndex={clickable ? 0 : undefined}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onKeyDown={
+                      onRowClick
+                        ? (e) => {
+                            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                              e.preventDefault();
+                              onRowClick(row);
+                            }
+                          }
+                        : undefined
+                    }
                   >
                     {columns.map((c) => (
                       <td key={c.key} className={c.align === 'right' ? 'num' : undefined}>

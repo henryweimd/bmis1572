@@ -15,3 +15,7 @@ dist/
 # demo-investigators.csv is intentionally tracked as a committed fallback.
 explorer/public/data/*.parquet
 explorer/public/data/manifest.json
+
+# Local developer-only Impeccable settings (never blanket-ignore .impeccable/)
+.impeccable/config.local.json
+.gemini/

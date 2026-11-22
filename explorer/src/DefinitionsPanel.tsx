@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEF_TITLES } from './lib/constants';
 
 export default function DefinitionsPanel({
@@ -10,6 +10,7 @@ export default function DefinitionsPanel({
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!focusTerm) return;
@@ -17,6 +18,7 @@ export default function DefinitionsPanel({
     setFilter(focusTerm.term);
     const t = setTimeout(() => {
       document.getElementById('definitions-glossary')?.scrollIntoView({ behavior: 'smooth' });
+      inputRef.current?.focus({ preventScroll: true });
     }, 40);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,17 +47,19 @@ export default function DefinitionsPanel({
           type="button"
           className="btn btn-ghost"
           aria-expanded={open}
+          aria-controls="definitions-body"
           onClick={() => setOpen((v) => !v)}
         >
           {open ? 'Hide glossary' : `Show all ${DEF_TITLES.length}`}
         </button>
       </div>
       {open && (
-        <div className="defs-body">
+        <div className="defs-body" id="definitions-body">
           <div className="filters">
             <label>
               Filter definitions
               <input
+                ref={inputRef}
                 type="search"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}

@@ -1,0 +1,428 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-22T10:53:00-05:00",
+  "title": "Design System: BMIS 1572 Explorer",
+  "extensions": {
+    "colorMeta": {
+      "clinical-teal": {
+        "role": "primary",
+        "displayName": "Clinical Teal",
+        "canonical": "oklch(51.1% 0.096 186.4)",
+        "tonalRamp": [
+          "oklch(18% 0.042 186.4)",
+          "oklch(28% 0.064 186.4)",
+          "oklch(39% 0.082 186.4)",
+          "oklch(51.1% 0.096 186.4)",
+          "oklch(63% 0.084 186.4)",
+          "oklch(75% 0.062 186.4)",
+          "oklch(87% 0.036 186.4)",
+          "oklch(95% 0.015 186.4)"
+        ]
+      },
+      "clinical-teal-deep": {
+        "role": "primary",
+        "displayName": "Clinical Teal Deep",
+        "canonical": "oklch(42.8% 0.082 186.8)",
+        "tonalRamp": [
+          "oklch(16% 0.036 186.8)",
+          "oklch(25% 0.056 186.8)",
+          "oklch(34% 0.072 186.8)",
+          "oklch(42.8% 0.082 186.8)",
+          "oklch(56% 0.074 186.8)",
+          "oklch(70% 0.054 186.8)",
+          "oklch(84% 0.030 186.8)",
+          "oklch(94% 0.012 186.8)"
+        ]
+      },
+      "mint-wash": {
+        "role": "primary",
+        "displayName": "Mint Wash",
+        "canonical": "oklch(94.6% 0.021 182.6)",
+        "tonalRamp": [
+          "oklch(20% 0.028 182.6)",
+          "oklch(32% 0.036 182.6)",
+          "oklch(45% 0.042 182.6)",
+          "oklch(58% 0.042 182.6)",
+          "oklch(71% 0.038 182.6)",
+          "oklch(83% 0.030 182.6)",
+          "oklch(94.6% 0.021 182.6)",
+          "oklch(98% 0.008 182.6)"
+        ]
+      },
+      "ochre-wash": {
+        "role": "secondary",
+        "displayName": "Ochre Wash",
+        "canonical": "oklch(96.9% 0.029 91.5)",
+        "tonalRamp": [
+          "oklch(22% 0.038 91.5)",
+          "oklch(35% 0.055 91.5)",
+          "oklch(48% 0.068 91.5)",
+          "oklch(62% 0.072 91.5)",
+          "oklch(75% 0.064 91.5)",
+          "oklch(87% 0.048 91.5)",
+          "oklch(96.9% 0.029 91.5)",
+          "oklch(99% 0.010 91.5)"
+        ]
+      },
+      "ochre-caution": {
+        "role": "secondary",
+        "displayName": "Ochre Caution",
+        "canonical": "oklch(79.8% 0.145 92.8)",
+        "tonalRamp": [
+          "oklch(22% 0.052 92.8)",
+          "oklch(35% 0.082 92.8)",
+          "oklch(48% 0.108 92.8)",
+          "oklch(62% 0.130 92.8)",
+          "oklch(79.8% 0.145 92.8)",
+          "oklch(88% 0.095 92.8)",
+          "oklch(94% 0.048 92.8)",
+          "oklch(98% 0.018 92.8)"
+        ]
+      },
+      "ochre-ink": {
+        "role": "secondary",
+        "displayName": "Ochre Ink",
+        "canonical": "oklch(46.2% 0.098 88.2)",
+        "tonalRamp": [
+          "oklch(18% 0.044 88.2)",
+          "oklch(28% 0.066 88.2)",
+          "oklch(38% 0.084 88.2)",
+          "oklch(46.2% 0.098 88.2)",
+          "oklch(60% 0.092 88.2)",
+          "oklch(74% 0.072 88.2)",
+          "oklch(87% 0.042 88.2)",
+          "oklch(96% 0.016 88.2)"
+        ]
+      },
+      "crimson-alert": {
+        "role": "secondary",
+        "displayName": "Crimson Alert",
+        "canonical": "oklch(48.3% 0.175 26.8)",
+        "tonalRamp": [
+          "oklch(19% 0.075 26.8)",
+          "oklch(30% 0.118 26.8)",
+          "oklch(40% 0.152 26.8)",
+          "oklch(48.3% 0.175 26.8)",
+          "oklch(60% 0.150 26.8)",
+          "oklch(73% 0.105 26.8)",
+          "oklch(86% 0.054 26.8)",
+          "oklch(95% 0.020 26.8)"
+        ]
+      },
+      "mineral-paper": {
+        "role": "neutral",
+        "displayName": "Mineral Paper",
+        "canonical": "oklch(95.3% 0.007 162.5)",
+        "tonalRamp": [
+          "oklch(18% 0.012 162.5)",
+          "oklch(30% 0.014 162.5)",
+          "oklch(44% 0.014 162.5)",
+          "oklch(58% 0.013 162.5)",
+          "oklch(72% 0.012 162.5)",
+          "oklch(84% 0.010 162.5)",
+          "oklch(95.3% 0.007 162.5)",
+          "oklch(98.5% 0.003 162.5)"
+        ]
+      },
+      "sheet-white": {
+        "role": "neutral",
+        "displayName": "Sheet White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(18% 0 0)",
+          "oklch(30% 0 0)",
+          "oklch(44% 0 0)",
+          "oklch(58% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(85% 0 0)",
+          "oklch(94% 0 0)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "mist-surface": {
+        "role": "neutral",
+        "displayName": "Mist Surface",
+        "canonical": "oklch(97.7% 0.005 160.2)",
+        "tonalRamp": [
+          "oklch(19% 0.010 160.2)",
+          "oklch(32% 0.012 160.2)",
+          "oklch(46% 0.012 160.2)",
+          "oklch(60% 0.011 160.2)",
+          "oklch(74% 0.010 160.2)",
+          "oklch(86% 0.008 160.2)",
+          "oklch(94% 0.006 160.2)",
+          "oklch(97.7% 0.005 160.2)"
+        ]
+      },
+      "pine-ink": {
+        "role": "neutral",
+        "displayName": "Pine Ink",
+        "canonical": "oklch(24.0% 0.018 164.5)",
+        "tonalRamp": [
+          "oklch(16% 0.014 164.5)",
+          "oklch(24.0% 0.018 164.5)",
+          "oklch(36% 0.018 164.5)",
+          "oklch(48% 0.016 164.5)",
+          "oklch(62% 0.014 164.5)",
+          "oklch(76% 0.011 164.5)",
+          "oklch(88% 0.008 164.5)",
+          "oklch(96% 0.004 164.5)"
+        ]
+      },
+      "slate-sage": {
+        "role": "neutral",
+        "displayName": "Slate Sage",
+        "canonical": "oklch(47.4% 0.018 164.0)",
+        "tonalRamp": [
+          "oklch(18% 0.014 164.0)",
+          "oklch(29% 0.017 164.0)",
+          "oklch(39% 0.018 164.0)",
+          "oklch(47.4% 0.018 164.0)",
+          "oklch(61% 0.016 164.0)",
+          "oklch(75% 0.012 164.0)",
+          "oklch(87% 0.008 164.0)",
+          "oklch(96% 0.004 164.0)"
+        ]
+      },
+      "mineral-hairline": {
+        "role": "neutral",
+        "displayName": "Mineral Hairline",
+        "canonical": "oklch(89.6% 0.012 162.8)",
+        "tonalRamp": [
+          "oklch(20% 0.012 162.8)",
+          "oklch(32% 0.015 162.8)",
+          "oklch(46% 0.016 162.8)",
+          "oklch(60% 0.015 162.8)",
+          "oklch(74% 0.014 162.8)",
+          "oklch(83% 0.013 162.8)",
+          "oklch(89.6% 0.012 162.8)",
+          "oklch(96% 0.006 162.8)"
+        ]
+      },
+      "mineral-border": {
+        "role": "neutral",
+        "displayName": "Mineral Border",
+        "canonical": "oklch(81.5% 0.016 162.8)",
+        "tonalRamp": [
+          "oklch(19% 0.013 162.8)",
+          "oklch(31% 0.016 162.8)",
+          "oklch(44% 0.018 162.8)",
+          "oklch(58% 0.018 162.8)",
+          "oklch(71% 0.017 162.8)",
+          "oklch(81.5% 0.016 162.8)",
+          "oklch(90% 0.011 162.8)",
+          "oklch(96% 0.005 162.8)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Active view title (h1); drops to 20px below 900px."
+      },
+      "kpi": {
+        "displayName": "KPI Value",
+        "purpose": "Hero tabular numeric readouts inside KPI summary tiles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Primary panel and chart headers (h2)."
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "Subsection headers (h3/h4) and nested card titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Narrative prose constrained to 72ch max-width."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Tables, bar rows, controls, nav items, and command results."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase nav group dividers, command group headers, and category tags."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Inline SQL/CLI snippets and ⌘K keyboard shortcut badges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "shadow-sm",
+        "value": "0 1px 2px rgb(22 34 30 / 0.05)",
+        "purpose": "Resting Hairline Lift for panels, KPI tiles, and sticky sidebar rail."
+      },
+      {
+        "name": "shadow-md",
+        "value": "0 6px 18px rgb(22 34 30 / 0.12)",
+        "purpose": "Overlay & Focus Lift for tooltips, command palette modal, shortlist drawer, and active entity dossiers."
+      }
+    ],
+    "motion": [
+      {
+        "name": "transition-control",
+        "value": "140ms ease",
+        "purpose": "Buttons, nav items, chips, segmented toggles, search trigger, and 1px pathway card hover lift."
+      },
+      {
+        "name": "transition-input",
+        "value": "150ms ease",
+        "purpose": "Border-color state transition on inputs and selects."
+      },
+      {
+        "name": "transition-bar",
+        "value": "180ms ease-out",
+        "purpose": "Horizontal category bar fill width transitions."
+      },
+      {
+        "name": "overlay-enter",
+        "value": "160ms–200ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Command palette scale-fade and shortlist drawer slide-in; disabled under prefers-reduced-motion: reduce."
+      },
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.4s ease-in-out infinite",
+        "purpose": "Loading skeleton gradient sweep; disabled under prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile-target",
+        "value": "390px"
+      },
+      {
+        "name": "mobile",
+        "value": "900px"
+      },
+      {
+        "name": "desktop-target",
+        "value": "1280px"
+      },
+      {
+        "name": "container-max",
+        "value": "1380px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-priority action trigger such as launching a feasibility preset, exporting a brief, or retrying a query.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3.5 8h9M9 4.5L12.5 8 9 11.5\"/></svg><span>Screen Feasibility Sites</span></button>",
+      "css": ".ds-btn-primary { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #ffffff; background: var(--accent, #0f766e); border: 1px solid var(--accent, #0f766e); border-radius: 7px; padding: 6px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background-color 140ms ease, border-color 140ms ease; } .ds-btn-primary:hover { background: var(--accent-hover, #0b5c56); border-color: var(--accent-hover, #0b5c56); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Action Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary toolbar action for Shortlist drawer, Share URL, CSV download, and panel utility controls.",
+      "html": "<button type=\"button\" class=\"ds-btn-ghost\"><svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\" fill=\"currentColor\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 2.5h8a.5.5 0 0 1 .5.5v10.5L8 10.8l-4.5 2.7V3a.5.5 0 0 1 .5-.5z\"/></svg><span>Shortlist</span><span class=\"ds-count-pill\">4</span></button>",
+      "css": ".ds-btn-ghost { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: var(--ink, #16221e); background: var(--surface, #ffffff); border: 1px solid var(--line-strong, #bac7c0); border-radius: 7px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; } .ds-btn-ghost:hover { background: var(--surface-subtle, #f6f9f7); color: var(--accent, #0f766e); border-color: var(--accent, #0f766e); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 2px; } .ds-count-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 1.35em; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--accent, #0f766e); color: #ffffff; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Quick preset pill for therapeutic areas, feasibility filters, and sub-view navigation.",
+      "html": "<div class=\"ds-chip-row\"><button type=\"button\" class=\"ds-chip ds-chip-active\">Oncology · Phase 2/3</button><button type=\"button\" class=\"ds-chip\">Cardiology</button><button type=\"button\" class=\"ds-chip\">Active 2024–2025</button></div>",
+      "css": ".ds-chip-row { display: flex; flex-wrap: wrap; gap: 8px; } .ds-chip { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; font-weight: 550; color: var(--muted, #52605a); background: var(--surface, #ffffff); border: 1px solid var(--line-strong, #bac7c0); border-radius: 999px; padding: 5px 12px; cursor: pointer; white-space: nowrap; transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; } .ds-chip:hover { border-color: var(--accent, #0f766e); color: var(--accent, #0f766e); } .ds-chip-active { background: var(--accent-soft, #e2f2ef); border-color: var(--accent, #0f766e); color: var(--accent, #0f766e); font-weight: 650; } .ds-chip:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-item",
+      "description": "Inline mode toggle on charts and views (Chart vs. Table, Absolute vs. 100%, Strict vs. Merged).",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Display format\"><button type=\"button\" class=\"ds-seg-btn ds-seg-active\">Chart</button><button type=\"button\" class=\"ds-seg-btn\">Table</button></div>",
+      "css": ".ds-seg { display: inline-flex; border: 1px solid var(--line-strong, #bac7c0); border-radius: 6px; overflow: hidden; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-seg-btn { font: inherit; font-size: 12.5px; color: var(--muted, #52605a); background: var(--surface, #ffffff); border: none; padding: 6px 11px; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; } .ds-seg-btn + .ds-seg-btn { border-left: 1px solid var(--line, #d6dfda); } .ds-seg-btn:hover { color: var(--ink, #16221e); background: var(--surface-subtle, #f6f9f7); } .ds-seg-active { color: var(--accent, #0f766e); background: var(--accent-soft, #e2f2ef); font-weight: 650; } .ds-seg-btn:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: -2px; }"
+    },
+    {
+      "name": "Search & Filter Input",
+      "kind": "input",
+      "refersTo": "input-control",
+      "description": "Labeled inline filter control and global ⌘K command-palette search trigger.",
+      "html": "<div class=\"ds-input-stack\"><button type=\"button\" class=\"ds-search-trigger\"><svg viewBox=\"0 0 16 16\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"M10.5 10.5L14 14\"/></svg><span class=\"ds-search-text\">Search sites, PIs, NCTs, CROs…</span><kbd class=\"ds-kbd\">⌘K</kbd></button><label class=\"ds-field\"><span>Site or Investigator</span><input type=\"search\" class=\"ds-input\" placeholder=\"e.g. MD Anderson or Boston\" /></label></div>",
+      "css": ".ds-input-stack { display: flex; flex-direction: column; gap: 10px; max-width: 320px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-search-trigger { display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px; font: inherit; font-size: 13.5px; color: var(--muted, #52605a); background: var(--surface-subtle, #f6f9f7); border: 1px solid var(--line-strong, #bac7c0); border-radius: 8px; cursor: pointer; transition: border-color 140ms ease, background-color 140ms ease; } .ds-search-trigger:hover { border-color: var(--accent, #0f766e); background: var(--surface, #ffffff); color: var(--ink, #16221e); } .ds-search-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-kbd { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong, #bac7c0); background: var(--surface, #ffffff); color: var(--muted, #52605a); } .ds-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 550; color: var(--muted, #52605a); } .ds-input { font: inherit; font-size: 13.5px; font-weight: 400; color: var(--ink, #16221e); background: var(--surface, #ffffff); border: 1px solid var(--line-strong, #bac7c0); border-radius: 6px; padding: 6px 10px; caret-color: var(--accent, #0f766e); transition: border-color 150ms ease; } .ds-input:hover { border-color: var(--accent, #0f766e); } .ds-input:focus-visible, .ds-search-trigger:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 2px; }"
+    },
+    {
+      "name": "KPI Metric Card",
+      "kind": "card",
+      "refersTo": "kpi-card",
+      "description": "Compact summary tile displaying a tabular headline figure, label, and comparison sub-note.",
+      "html": "<div class=\"ds-kpi\"><span class=\"ds-kpi-label\">Active US Investigators (2025)</span><span class=\"ds-kpi-value\">48,214</span><span class=\"ds-kpi-sub\">Strict–Raw range: 46.9k – 51.3k</span></div>",
+      "css": ".ds-kpi { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--surface, #ffffff); border: 1px solid var(--line, #d6dfda); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow-sm, 0 1px 2px rgb(22 34 30 / 0.05)); display: flex; flex-direction: column; gap: 3px; max-width: 260px; } .ds-kpi-label { font-size: 12.5px; color: var(--muted, #52605a); } .ds-kpi-value { font-size: 23px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; color: var(--ink, #16221e); } .ds-kpi-sub { font-size: 12px; color: var(--muted, #52605a); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Sidebar Navigation Rail",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Grouped left workspace navigation rail with uppercase section dividers and Mint Wash active indicator.",
+      "html": "<nav class=\"ds-sidebar\" aria-label=\"Workspace navigation\"><div class=\"ds-nav-group\"><div class=\"ds-nav-label\">Explore</div><button type=\"button\" class=\"ds-nav-item ds-nav-active\" aria-current=\"page\"><span>Executive Overview</span></button><button type=\"button\" class=\"ds-nav-item\"><span>Feasibility Workbench</span><span class=\"ds-nav-pill\">4</span></button></div><div class=\"ds-nav-group\"><div class=\"ds-nav-label\">FDA Supply &amp; Demand</div><button type=\"button\" class=\"ds-nav-item\"><span>FDA Investigators</span></button><button type=\"button\" class=\"ds-nav-item\"><span>FDA Sites</span></button></div></nav>",
+      "css": ".ds-sidebar { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; width: 224px; display: flex; flex-direction: column; gap: 14px; background: var(--surface, #ffffff); border: 1px solid var(--line, #d6dfda); border-radius: 12px; padding: 14px 12px; box-shadow: var(--shadow-sm, 0 1px 2px rgb(22 34 30 / 0.05)); } .ds-nav-group { display: flex; flex-direction: column; gap: 3px; } .ds-nav-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted, #52605a); padding: 2px 10px 4px; } .ds-nav-item { font: inherit; font-size: 13.5px; font-weight: 550; color: var(--ink, #16221e); background: transparent; border: 1px solid transparent; border-radius: 7px; padding: 7px 10px; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 6px; transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; } .ds-nav-item:hover { background: var(--surface-subtle, #f6f9f7); color: var(--accent, #0f766e); } .ds-nav-active { background: var(--accent-soft, #e2f2ef); color: var(--accent, #0f766e); border-color: rgb(15 118 110 / 0.25); font-weight: 650; } .ds-nav-item:focus-visible { outline: 2px solid var(--accent, #0f766e); outline-offset: 2px; } .ds-nav-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 1.35em; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--accent, #0f766e); color: #ffffff; }"
+    },
+    {
+      "name": "Interactive Data Panel & Status Badge",
+      "kind": "card",
+      "refersTo": "panel-card",
+      "description": "Primary Sheet White analytical container with hairline border, status badges, and horizontal data bar row.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-head\"><h2 class=\"ds-panel-title\">Top US Clinical Regions</h2><div class=\"ds-badges\"><span class=\"ds-badge\">full lake</span><span class=\"ds-badge ds-badge-demo\">caveat: 2021*</span></div></div><ul class=\"ds-bars\"><li class=\"ds-bar-row\"><span class=\"ds-bar-label\">California</span><span class=\"ds-bar-track\"><span class=\"ds-bar-fill\" style=\"width: 88%\"></span></span><span class=\"ds-bar-val\">6,842</span></li><li class=\"ds-bar-row ds-bar-active\"><span class=\"ds-bar-label\">Texas</span><span class=\"ds-bar-track\"><span class=\"ds-bar-fill\" style=\"width: 72%\"></span></span><span class=\"ds-bar-val\">5,610</span></li></ul></section>",
+      "css": ".ds-panel { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: var(--surface, #ffffff); border: 1px solid var(--line, #d6dfda); border-radius: 10px; padding: 18px 20px; box-shadow: var(--shadow-sm, 0 1px 2px rgb(22 34 30 / 0.05)); max-width: 440px; } .ds-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; } .ds-panel-title { font-size: 16px; line-height: 1.3; letter-spacing: -0.01em; margin: 0; color: var(--ink, #16221e); } .ds-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; } .ds-badge { font-size: 12px; font-weight: 650; color: var(--accent, #0f766e); background: var(--accent-soft, #e2f2ef); border: 1px solid rgb(15 118 110 / 0.35); border-radius: 999px; padding: 4px 11px; white-space: nowrap; } .ds-badge-demo { color: var(--warn-ink, #6d5200); background: var(--warn-bg, #fdf6e4); border-color: var(--warn-line, #d9b93c); } .ds-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; } .ds-bar-row { display: grid; grid-template-columns: minmax(84px, 110px) 1fr 52px; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink, #16221e); padding: 3px 5px; border-radius: 5px; transition: background-color 140ms ease; } .ds-bar-row:hover { background: var(--surface-subtle, #f6f9f7); } .ds-bar-active { background: var(--accent-soft, #e2f2ef); font-weight: 650; } .ds-bar-track { background: var(--bg, #eef2f0); border-radius: 3px; height: 14px; display: block; overflow: hidden; } .ds-bar-fill { display: block; height: 100%; background: var(--accent, #0f766e); border-radius: 3px; transition: width 180ms ease-out; } .ds-bar-val { text-align: right; color: var(--muted, #52605a); font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Atlas",
+    "overview": "BMIS 1572 Explorer is a utilitarian, clinical-ops-first analytical instrument built for speed, scanability, and transparent evidence verification. Like a field atlas designed for cartographic clarity across global clinical trial geography, every pixel serves orientation, filtering, or direct drill-down into investigator cohorts, research sites, sponsors, and regulatory records.\n\nThe visual system rests on cool mineral-tinted neutrals paired with a single authoritative Clinical Teal accent, hairline-anchored containers, and native tabular typography. It explicitly rejects decorative marketing fluff, oversized hero chrome, dark-mode neon dashboards, and opaque \"black-box score\" UI tropes. Density is calibrated for working feasibility analysts and medical affairs teams who compare numbers side by side and inspect underlying tables rather than admire ornamental whitespace.",
+    "keyCharacteristics": [
+      "Cartographic clarity over ornament: Quiet mineral paper surfaces recede so charts, heatmaps, and tabular figures lead from the first viewport.",
+      "Clinical-ops speed: Compact filter bars, pill presets, segmented chart/table toggles, and a global ⌘K search bar keep screening workflows one click away.",
+      "Hairline discipline: 1px mineral borders carry structure across panels, tables, and controls; elevation is reserved for true overlays and active dossiers.",
+      "Honest visual signals: Experimental caveats, demo-data banners, and right-censoring notes appear in unmistakable Ochre Caution framing rather than buried footnotes."
+    ],
+    "rules": [
+      {
+        "name": "The One-Accent Ledger Rule",
+        "body": "Clinical Teal is the sole interactive UI accent across navigation, controls, links, and single-series data; multi-hue categorical colors are confined exclusively inside data visualizations and never leak into chrome or buttons.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mineral-Tinted Neutral Rule",
+        "body": "Every gray in the system carries a cool pine-sage undertone (anchored to Pine Ink #16221e) rather than sterile pure gray (#808080) or pure black (#000000), keeping white data sheets crisp and glare-free during long screening sessions.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every numeric readout — KPI values, KPI sub-labels, horizontal bar values, tooltip values, vintage heatmap scales, and all <table> cells — must apply font-variant-numeric: tabular-nums and right-align numeric table columns so digits stack vertically without horizontal jitter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Zero-Font-Latency Rule",
+        "body": "Keep UI typography on the native system font stack so the in-browser DuckDB-WASM workspace renders immediately with zero web-font flash or bundle overhead.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline-First Elevation Rule",
+        "body": "Never rely on drop shadows alone to separate sibling cards; every resting surface uses a 1px Mineral Hairline border (#d6dfda) first, and Overlay Lift (0 6px 18px rgb(22 34 30 / 0.12)) appears only when an element floats over the workspace or locks into an active dossier.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Clinical Teal (#0f766e) as the single UI action accent and use Mint Wash (#e2f2ef) for active/selected states across navigation, chips, segmented toggles, and picked table rows.",
+      "Do enforce font-variant-numeric: tabular-nums on every KPI, table, bar value, tooltip, and scale legend, and right-align numeric columns.",
+      "Do wrap every <table> inside .table-scroll (with sticky first columns on wide vintage heatmaps) and keep filter labels/selects constrained with min-width: 0; max-width: 100% so 390px viewports never scroll horizontally at the page level.",
+      "Do provide a Chart | Table segmented toggle on data visualizations and keep hover tooltips strictly enhancement-only so every chart reads cleanly on touch devices.",
+      "Do pair caveat banners, demo-data indicators, and methodological notices with Ochre Wash (#fdf6e4) and Ochre Caution (#d9b93c) framing.",
+      "Do respect prefers-reduced-motion: reduce by disabling skeleton shimmer animations and keeping interactive state transitions fast (140ms–180ms)."
+    ],
+    "donts": [
+      "Don't introduce marketing-page hero chrome, decorative illustrations, glassmorphic cards, dark-mode neon themes, or opaque composite \"score badges\" that hide underlying clinical metrics.",
+      "Don't leak multi-series categorical chart hues (#1f77b4, #ff7f0e, #9467bd, etc.) into buttons, navigation, or card borders.",
+      "Don't set fixed-pixel layout widths larger than 16px (icons exempt) or wrap the mobile tab bar into a multi-row grid.",
+      "Don't apply Overlay Lift (0 6px 18px rgb(22 34 30 / 0.12)) to resting cards or KPI tiles; reserve deeper shadows for tooltips, modals, drawers, and active dossiers.",
+      "Don't load external web fonts or heavy icon-font bundles that add startup latency ahead of DuckDB-WASM initialization; keep UI icons as 15px–16px inline currentColor SVGs."
+    ]
+  }
+}

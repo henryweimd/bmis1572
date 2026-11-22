@@ -241,6 +241,12 @@ function ExplorerShell() {
 
   return (
     <div className="app-frame">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <span className="sr-only" aria-live="polite">
+        {copied ? 'Shareable explorer URL copied to clipboard.' : ''}
+      </span>
       <header className="topbar">
         <div className="topbar-inner">
           <button
@@ -260,7 +266,8 @@ function ExplorerShell() {
             type="button"
             className="search-trigger"
             onClick={() => setCmdOpen(true)}
-            title="Search sites, investigators, NCT trials, CROs, IRBs, or glossary (⌘K)"
+            aria-keyshortcuts="Meta+K Control+K /"
+            title="Search sites, investigators, NCT trials, CROs, IRBs, or glossary (⌘K or /)"
           >
             <IconSearch className="icon" />
             <span className="search-trigger-text">Search sites, PIs, NCTs, CROs…</span>
@@ -376,7 +383,7 @@ function ExplorerShell() {
             </p>
           )}
 
-          <main>
+          <main id="main-content" tabIndex={-1}>
             <Suspense fallback={<TabSkeleton />}>
               {tab === 'overview' && (
                 <OverviewTab

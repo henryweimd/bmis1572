@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #eef2f0;
   --surface: #ffffff;
   --surface-subtle: #f6f9f7;
@@ -13,12 +14,37 @@
   --warn-line: #d9b93c;
   --warn-ink: #6d5200;
   --danger: #b3261e;
+  --danger-soft: #fceceb;
   --shadow-sm: 0 1px 2px rgb(22 34 30 / 0.05);
   --shadow-md: 0 6px 18px rgb(22 34 30 / 0.12);
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 body {

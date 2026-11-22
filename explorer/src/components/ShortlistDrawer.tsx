@@ -1,8 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { downloadCsv } from '../csv';
 import { fmtInt } from '../lib/format';
 import { serializeShortlistMarkdown, useShortlist } from '../lib/shortlist';
 import { IconClose } from './Icons';
+
+function downloadMarkdown(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function ShortlistDrawer({
   open,
@@ -19,25 +29,48 @@ export default function ShortlistDrawer({
 }) {
   const { sites, pis, totalCount, removeSite, removePi, clearAll } = useShortlist();
   const [copiedMd, setCopiedMd] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = setTimeout(() => closeBtnRef.current?.focus(), 20);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      setConfirmClear(false);
+      returnFocusRef.current?.focus();
+    };
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 4500);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
 
   if (!open) return null;
 
   const copyBrief = async () => {
+    const md = serializeShortlistMarkdown(sites, pis);
     try {
-      await navigator.clipboard.writeText(serializeShortlistMarkdown(sites, pis));
+      await navigator.clipboard.writeText(md);
       setCopiedMd(true);
       setTimeout(() => setCopiedMd(false), 1800);
     } catch {
-      /* clipboard unavailable */
+      downloadMarkdown('feasibility-shortlist.md', md);
     }
   };
 
@@ -57,12 +90,21 @@ export default function ShortlistDrawer({
             <h2>Feasibility Shortlist ({totalCount})</h2>
             <p className="muted">Saved locally in your browser for side-by-side comparison &amp; export.</p>
           </div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close shortlist">
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className="icon-btn"
+            onClick={onClose}
+            aria-label="Close shortlist"
+          >
             <IconClose />
           </button>
         </div>
 
         <div className="drawer-body">
+          <span className="sr-only" aria-live="polite">
+            {copiedMd ? 'Markdown feasibility brief copied to clipboard.' : ''}
+          </span>
           {totalCount === 0 ? (
             <div className="empty-state">
               <p>
@@ -88,6 +130,18 @@ export default function ShortlistDrawer({
               <div className="drawer-actions">
                 <button type="button" className="btn" onClick={() => void copyBrief()}>
                   {copiedMd ? 'Copied Markdown brief' : 'Copy Markdown brief'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    downloadMarkdown(
+                      'feasibility-shortlist.md',
+                      serializeShortlistMarkdown(sites, pis),
+                    )
+                  }
+                >
+                  Download .md
                 </button>
                 {!!sites.length && (
                   <button
@@ -140,9 +194,35 @@ export default function ShortlistDrawer({
                     Export PIs CSV
                   </button>
                 )}
-                <button type="button" className="btn btn-ghost" onClick={clearAll}>
-                  Clear all
-                </button>
+                {confirmClear ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-danger-ghost"
+                      onClick={() => {
+                        clearAll();
+                        setConfirmClear(false);
+                      }}
+                    >
+                      Confirm clear ({totalCount})
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setConfirmClear(false)}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => setConfirmClear(true)}
+                  >
+                    Clear all
+                  </button>
+                )}
               </div>
 
               {!!sites.length && (
