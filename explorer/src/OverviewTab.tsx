@@ -13,6 +13,7 @@ export interface FeasibilityPreset {
   ta?: string;
   phase?: string;
   band?: string;
+  state?: string;
   minYear?: number;
   minInv?: number;
   minRefs?: number;
@@ -25,7 +26,6 @@ export default function OverviewTab({
   manifest,
   onNavigateTab,
   onLaunchFeasibility,
-  onOpenSearch,
   onJumpDefinition,
 }: {
   ready: boolean;
@@ -33,7 +33,6 @@ export default function OverviewTab({
   manifest: Manifest | null;
   onNavigateTab: (tab: TabId, section?: string) => void;
   onLaunchFeasibility: (preset: FeasibilityPreset) => void;
-  onOpenSearch: () => void;
   onJumpDefinition: (term: string) => void;
 }) {
   const [geo, setGeo] = useState<LineSeries[]>([]);
@@ -85,12 +84,12 @@ export default function OverviewTab({
           tser.length
             ? [
                 {
-                  label: 'Active CIs / running US trial',
+                  label: 'Active investigators / running US trial',
                   color: '#d62728',
                   points: tser.map((r) => ({ x: r.y, y: num(r.pr) })),
                 },
                 {
-                  label: 'Active CIs / started US trial',
+                  label: 'Active investigators / started US trial',
                   color: '#1f77b4',
                   points: tser.map((r) => ({ x: r.y, y: num(r.ps) })),
                 },
@@ -147,9 +146,6 @@ export default function OverviewTab({
               >
                 Open Feasibility Workbench
               </button>
-              <button type="button" className="btn btn-ghost" onClick={onOpenSearch}>
-                Search Sites, PIs &amp; NCTs (⌘K)
-              </button>
               <a className="btn btn-ghost" href="data/exports/bmis-supply-deck.pdf" target="_blank" rel="noreferrer">
                 Executive Slide Deck (PDF)
               </a>
@@ -193,37 +189,37 @@ export default function OverviewTab({
 
       <section className="kpis five">
         <div className="kpi">
-          <span className="kpi-label">Global active CIs ({LATEST_FULL})</span>
+          <span className="kpi-label">Global investigators</span>
           <span className="kpi-value">{global25 ? fmtInt.format(global25) : '—'}</span>
           <span className="kpi-sub">
-            {globalGrowth ? `${globalGrowth}% vs 2009 (${fmtInt.format(global09 ?? 0)})` : 'Strict persons'}
+            {globalGrowth ? `${LATEST_FULL} · ${globalGrowth}% vs 2009` : 'Strict persons'}
           </span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">US active CIs ({LATEST_FULL})</span>
+          <span className="kpi-label">US investigators</span>
           <span className="kpi-value">{us25 ? fmtInt.format(us25) : '—'}</span>
           <span className="kpi-sub">
-            {usGrowth ? `${usGrowth}% vs 2009 · growth is US-led` : 'United States'}
+            {usGrowth ? `${LATEST_FULL} · ${usGrowth}% vs 2009` : 'United States'}
           </span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">Active research sites ({LATEST_FULL})</span>
+          <span className="kpi-label">Active sites</span>
           <span className="kpi-value">{sitesActive ? fmtInt.format(sitesActive) : '—'}</span>
-          <span className="kpi-sub">Strict street addresses</span>
+          <span className="kpi-sub">{LATEST_FULL} · strict addresses</span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">US industry trials (CT.gov)</span>
+          <span className="kpi-label">US industry trials</span>
           <span className="kpi-value">
             {stats.linkage?.trials ? fmtInt.format(stats.linkage.trials) : '—'}
           </span>
           <span className="kpi-sub">
-            {stats.linkage?.sponsors ? `${fmtInt.format(stats.linkage.sponsors)} lead sponsors` : 'Interventional'}
+            {stats.linkage?.sponsors ? `${fmtInt.format(stats.linkage.sponsors)} lead sponsors` : 'CT.gov interventional'}
           </span>
         </div>
         <div className="kpi">
-          <span className="kpi-label">Global trials (WHO ICTRP)</span>
+          <span className="kpi-label">Global trials (WHO)</span>
           <span className="kpi-value">{whoTotal ? fmtInt.format(whoTotal) : '—'}</span>
-          <span className="kpi-sub">Deduplicated across registries</span>
+          <span className="kpi-sub">ICTRP deduplicated</span>
         </div>
       </section>
 
@@ -269,7 +265,7 @@ export default function OverviewTab({
             }
           >
             <div className="pathway-head">
-              <strong>Find Experienced Active Investigators</strong>
+              <strong>Find Active Investigators</strong>
               <IconArrowRight />
             </div>
             <p className="muted">
@@ -366,7 +362,7 @@ export default function OverviewTab({
 
         <div className="panel">
           <div className="panel-head">
-            <h2>US supply tightness (CIs per industry trial)</h2>
+            <h2>US supply tightness (investigators per trial)</h2>
             <button
               type="button"
               className="btn btn-ghost btn-sm"

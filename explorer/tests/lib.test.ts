@@ -6,7 +6,11 @@ import { intIn, parseHashString, pick, serializeHash } from '../src/hash.ts';
 import {
   clampYearPair,
   contrastRatio,
+  fmtCount,
+  fmtPhase,
+  fmtState,
   fmtVal,
+  fmtVerdict,
   growthPct,
   normName,
   num,
@@ -34,6 +38,14 @@ test('format helpers handle edge values cleanly', () => {
   assert.equal(fmtVal(1234), '1,234');
   assert.equal(fmtVal(2.456), '2.46');
   assert.equal(fmtVal(Infinity), '—');
+  assert.equal(fmtPhase('EARLY_P1'), 'Early Phase 1');
+  assert.equal(fmtPhase('P2+P3'), 'Phase 2/3');
+  assert.equal(fmtPhase(null), '—');
+  assert.equal(fmtState('CA'), 'CA');
+  assert.equal(fmtState('NG'), '');
+  assert.equal(fmtVerdict('mover_likely'), 'mover likely');
+  assert.equal(fmtCount(1, 'investigator'), '1 investigator');
+  assert.equal(fmtCount(444, 'investigator'), '444 investigators');
 });
 
 test('normName mirrors pipeline ASCII-folded uppercase name_key', () => {

@@ -447,8 +447,8 @@ export default function OrgTab({
             {cfg.singular} receipts per year{sel === 'all' ? ' (top 8 + all other)' : `: ${sel}`}
           </h2>
           {!!series.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`${kind}-receipts-by-year.csv`, series)}
             >
               CSV
@@ -468,8 +468,8 @@ export default function OrgTab({
             <h2>
               {sel}: receipts by geography, {y0}–{y1}
             </h2>
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   `${kind}-footprint-${y0}-${y1}.csv`,
@@ -495,8 +495,8 @@ export default function OrgTab({
             Active {cfg.singular} entities per year{sel === 'all' ? '' : `: ${sel}`}
           </h2>
           {!!ent.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`${kind}-entities-by-year.csv`, ent)}
             >
               CSV
@@ -513,8 +513,8 @@ export default function OrgTab({
         <div className="panel-head">
           <h2>{cfg.singular} vintage attrition</h2>
           {!!oret.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   `${kind}-vintage-attrition.csv`,

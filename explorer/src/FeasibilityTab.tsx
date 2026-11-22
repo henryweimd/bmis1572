@@ -11,7 +11,7 @@ import {
   THERAPEUTIC_AREAS,
   TRIAL_PHASES,
 } from './lib/constants';
-import { fmtInt, normName, num0 } from './lib/format';
+import { fmtInt, fmtPhase, normName, num0 } from './lib/format';
 import { useShortlist } from './lib/shortlist';
 import type { FeasibilityPreset } from './OverviewTab';
 
@@ -81,7 +81,7 @@ export default function FeasibilityTab({
   ready: boolean;
   demo: boolean;
   preset: (FeasibilityPreset & { seq: number }) | null;
-  onJumpSite: (siteN: number) => void;
+  onJumpSite: (siteN: number, version?: 'strict' | 'merged') => void;
   onJumpInvestigator: (name: string) => void;
   onJumpDefinition: (term: string) => void;
   onOpenShortlist: () => void;
@@ -152,7 +152,7 @@ export default function FeasibilityTab({
     setTa(preset.ta ?? 'all');
     setPhase(preset.phase ?? 'all');
     setBand(preset.band ?? 'United States');
-    setStateFilter('all');
+    setStateFilter(preset.state ?? 'all');
     setCountryFilter('all');
     setMinYear(preset.minYear ?? 2023);
     setMinInv(preset.minInv ?? 1);
@@ -473,6 +473,10 @@ export default function FeasibilityTab({
         roster: ros,
       });
       setTimeout(() => document.getElementById('feas-dossier')?.scrollIntoView({ behavior: 'smooth' }), 40);
+    } catch (e) {
+      if (seq === dossierSeq.current) {
+        setNote(`Site dossier failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } finally {
       if (seq === dossierSeq.current) setDossierLoading(false);
     }
@@ -509,6 +513,10 @@ export default function FeasibilityTab({
       if (seq !== dossierSeq.current) return;
       setPiDossier({ pi, receipts: rc, linked: lk, colleagues: cg });
       setTimeout(() => document.getElementById('feas-dossier')?.scrollIntoView({ behavior: 'smooth' }), 40);
+    } catch (e) {
+      if (seq === dossierSeq.current) {
+        setNote(`Investigator dossier failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } finally {
       if (seq === dossierSeq.current) setDossierLoading(false);
     }
@@ -793,9 +801,11 @@ export default function FeasibilityTab({
             <button
               type="button"
               className={mode === 'sites' ? 'active' : ''}
+              aria-pressed={mode === 'sites'}
               onClick={() => {
                 setMode('sites');
                 setPiDossier(null);
+                setDossierLoading(false);
               }}
             >
               Site Feasibility Finder
@@ -803,9 +813,11 @@ export default function FeasibilityTab({
             <button
               type="button"
               className={mode === 'pis' ? 'active' : ''}
+              aria-pressed={mode === 'pis'}
               onClick={() => {
                 setMode('pis');
                 setSiteDossier(null);
+                setDossierLoading(false);
               }}
             >
               Investigator (PI) Finder
@@ -815,14 +827,16 @@ export default function FeasibilityTab({
             <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>
               Reset filters
             </button>
-            <button type="button" className="btn btn-sm" onClick={onOpenShortlist}>
-              Shortlist ({totalCount})
-            </button>
+            {totalCount > 0 && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenShortlist}>
+                View Shortlist ({totalCount})
+              </button>
+            )}
           </div>
         </div>
 
         <div className="preset-row">
-          <span className="muted">Quick feasibility presets:</span>
+          <span className="muted">Presets:</span>
           {mode === 'sites' ? (
             <>
               <button
@@ -837,7 +851,7 @@ export default function FeasibilityTab({
                   setMinInv(5);
                 }}
               >
-                US Oncology Phase 1
+                US Oncology P1
               </button>
               <button
                 type="button"
@@ -851,7 +865,7 @@ export default function FeasibilityTab({
                   setMinInv(5);
                 }}
               >
-                US Cardiology Phase 3
+                US Cardiology P3
               </button>
               <button
                 type="button"
@@ -865,7 +879,7 @@ export default function FeasibilityTab({
                   setMinInv(5);
                 }}
               >
-                US Neurology Phase 2
+                US Neurology P2
               </button>
               <button
                 type="button"
@@ -880,7 +894,7 @@ export default function FeasibilityTab({
                   setXcheckMode('strong');
                 }}
               >
-                US Mega-Centers (≥25 PIs)
+                US Mega-Centers (≥25)
               </button>
               <button
                 type="button"
@@ -895,7 +909,7 @@ export default function FeasibilityTab({
                   setXcheckMode('all');
                 }}
               >
-                Active EU Centers (≥2023)
+                EU Centers (≥2023)
               </button>
             </>
           ) : (
@@ -971,7 +985,7 @@ export default function FeasibilityTab({
               type="search"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder={mode === 'sites' ? 'e.g. MD Anderson, Houston' : 'e.g. Smith, Dana Farber'}
+              placeholder={mode === 'sites' ? 'Hospital, city, or street…' : 'Name, hospital, or city…'}
             />
           </label>
           <label>
@@ -1036,7 +1050,7 @@ export default function FeasibilityTab({
               <option value="all">Any phase</option>
               {TRIAL_PHASES.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {fmtPhase(p)}
                 </option>
               ))}
             </select>
@@ -1056,7 +1070,7 @@ export default function FeasibilityTab({
               <label>
                 Min team size
                 <select value={minInv} onChange={(e) => setMinInv(Number(e.target.value))}>
-                  <option value={1}>Any (≥1 inv)</option>
+                  <option value={1}>Any size (≥1)</option>
                   <option value={5}>≥5 investigators</option>
                   <option value={10}>≥10 investigators</option>
                   <option value={25}>≥25 investigators</option>
@@ -1074,21 +1088,34 @@ export default function FeasibilityTab({
                   <option value="strong">Strong match (≥10 trials)</option>
                 </select>
               </label>
-              <div className="seg" role="group" aria-label="Address clustering">
-                <button
-                  type="button"
-                  className={ver === 'strict' ? 'active' : ''}
-                  onClick={() => setVer('strict')}
-                >
-                  Strict addr
-                </button>
-                <button
-                  type="button"
-                  className={ver === 'merged' ? 'active' : ''}
-                  onClick={() => setVer('merged')}
-                >
-                  Merged addr
-                </button>
+              <div className="filter-group">
+                <span className="filter-label">Address clustering</span>
+                <div className="seg" role="group" aria-label="Address clustering">
+                  <button
+                    type="button"
+                    className={ver === 'strict' ? 'active' : ''}
+                    aria-pressed={ver === 'strict'}
+                    title="Exact normalized street + city + state + country match"
+                    onClick={() => {
+                      setVer('strict');
+                      setSiteDossier(null);
+                    }}
+                  >
+                    Strict
+                  </button>
+                  <button
+                    type="button"
+                    className={ver === 'merged' ? 'active' : ''}
+                    aria-pressed={ver === 'merged'}
+                    title="Strict plus fuzzy same-address merges"
+                    onClick={() => {
+                      setVer('merged');
+                      setSiteDossier(null);
+                    }}
+                  >
+                    Merged
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -1096,11 +1123,11 @@ export default function FeasibilityTab({
               <label>
                 Experience tier
                 <select value={minRefs} onChange={(e) => setMinRefs(Number(e.target.value))}>
-                  <option value={1}>All (≥1 ref)</option>
-                  <option value={2}>Repeat (≥2 refs)</option>
-                  <option value={5}>Experienced (≥5 refs)</option>
-                  <option value={15}>High-volume (≥15 refs)</option>
-                  <option value={50}>Super-PI (≥50 refs)</option>
+                  <option value={1}>All (≥1 filing)</option>
+                  <option value={2}>Repeat (≥2 filings)</option>
+                  <option value={5}>Experienced (≥5 filings)</option>
+                  <option value={15}>High-volume (≥15 filings)</option>
+                  <option value={50}>Super-PI (≥50 filings)</option>
                 </select>
               </label>
               <label>
@@ -1109,7 +1136,7 @@ export default function FeasibilityTab({
                   value={linkMode}
                   onChange={(e) => setLinkMode(e.target.value as 'all' | 'any' | 'strong')}
                 >
-                  <option value="all">All BMIS PIs</option>
+                  <option value="all">All BMIS investigators</option>
                   <option value="any">Linked to CT.gov (KOLs)</option>
                   <option value="strong">Strong match only (~80% prec.)</option>
                 </select>
@@ -1117,7 +1144,7 @@ export default function FeasibilityTab({
             </>
           )}
         </div>
-      <p className="caption">
+        <p className="caption">
           <IconInfo className="icon" />{' '}
           {mode === 'sites'
             ? 'Therapeutic area & phase filters use US CT.gov institution×city facility cross-checks (experimental) and narrow results to matched US sites. '
@@ -1144,63 +1171,114 @@ export default function FeasibilityTab({
           minYear > 0 ||
           (mode === 'sites' && (minInv > 1 || xcheckMode !== 'all')) ||
           (mode === 'pis' && (minRefs > 1 || linkMode !== 'all')) ||
-          debouncedKw.trim()) && (
+          debouncedKw.trim().length >= 2) && (
           <div className="active-filters" aria-label="Active filters">
             <span className="muted">Active filters:</span>
             {band !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setBand('all')}>
-                Band: {band} ×
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove region filter ${band}`}
+                onClick={() => setBand('all')}
+              >
+                Region: {band} ×
               </button>
             )}
             {stateFilter !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setStateFilter('all')}>
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove state filter ${stateFilter}`}
+                onClick={() => setStateFilter('all')}
+              >
                 State: {stateFilter} ×
               </button>
             )}
             {countryFilter !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setCountryFilter('all')}>
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove country filter ${countryFilter}`}
+                onClick={() => setCountryFilter('all')}
+              >
                 Country: {countryFilter} ×
               </button>
             )}
             {ta !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setTa('all')}>
-                TA: {ta} ×
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove therapeutic area filter ${ta}`}
+                onClick={() => setTa('all')}
+              >
+                Area: {ta} ×
               </button>
             )}
             {phase !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setPhase('all')}>
-                Phase: {phase} ×
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove trial phase filter ${fmtPhase(phase)}`}
+                onClick={() => setPhase('all')}
+              >
+                Phase: {fmtPhase(phase)} ×
               </button>
             )}
             {minYear > 0 && (
-              <button type="button" className="chip active" onClick={() => setMinYear(0)}>
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove active year filter ${minYear}`}
+                onClick={() => setMinYear(0)}
+              >
                 Active ≥ {minYear} ×
               </button>
             )}
             {mode === 'sites' && minInv > 1 && (
-              <button type="button" className="chip active" onClick={() => setMinInv(1)}>
-                ≥ {minInv} invs ×
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove minimum investigators filter ${minInv}`}
+                onClick={() => setMinInv(1)}
+              >
+                ≥ {minInv} investigators ×
               </button>
             )}
             {mode === 'sites' && xcheckMode !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setXcheckMode('all')}>
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove CT.gov filter ${xcheckMode}`}
+                onClick={() => setXcheckMode('all')}
+              >
                 CT.gov: {xcheckMode} ×
               </button>
             )}
             {mode === 'pis' && minRefs > 1 && (
-              <button type="button" className="chip active" onClick={() => setMinRefs(1)}>
-                ≥ {minRefs} refs ×
-              </button>
-            )}
-            {mode === 'pis' && linkMode !== 'all' && (
-              <button type="button" className="chip active" onClick={() => setLinkMode('all')}>
-                Link: {linkMode} ×
-              </button>
-            )}
-            {debouncedKw.trim() && (
               <button
                 type="button"
                 className="chip active"
+                aria-label={`Remove minimum filings filter ${minRefs}`}
+                onClick={() => setMinRefs(1)}
+              >
+                ≥ {minRefs} filings ×
+              </button>
+            )}
+            {mode === 'pis' && linkMode !== 'all' && (
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove CT.gov link filter ${linkMode}`}
+                onClick={() => setLinkMode('all')}
+              >
+                Link: {linkMode} ×
+              </button>
+            )}
+            {debouncedKw.trim().length >= 2 && (
+              <button
+                type="button"
+                className="chip active"
+                aria-label={`Remove search query ${debouncedKw.trim()}`}
                 onClick={() => {
                   setKeyword('');
                   setDebouncedKw('');
@@ -1443,7 +1521,7 @@ export default function FeasibilityTab({
               <button
                 type="button"
                 className="btn btn-ghost"
-                onClick={() => onJumpSite(siteDossier.site.site_n)}
+                onClick={() => onJumpSite(siteDossier.site.site_n, ver)}
               >
                 Full Site View →
               </button>
@@ -1469,7 +1547,7 @@ export default function FeasibilityTab({
             ]}
           />
 
-          <div className="panels" style={{ marginTop: '14px' }}>
+          <div className="panels panel-spacer">
             <div className="subpanel">
               <h3>Therapeutic-area mix (CT.gov cross-check)</h3>
               {siteDossier.tamix.length ? (

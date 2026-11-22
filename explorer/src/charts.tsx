@@ -29,6 +29,7 @@ function ChartToolbar({
           <button
             type="button"
             className={mode === 'abs' ? 'active' : ''}
+            aria-pressed={mode === 'abs'}
             onClick={() => setMode('abs')}
             title="Bar height shows absolute counts"
           >
@@ -37,6 +38,7 @@ function ChartToolbar({
           <button
             type="button"
             className={mode === 'pct' ? 'active' : ''}
+            aria-pressed={mode === 'pct'}
             onClick={() => setMode('pct')}
             title="Each bar scaled to 100%; segments show share of the year"
           >
@@ -48,6 +50,7 @@ function ChartToolbar({
         <button
           type="button"
           className={view === 'chart' ? 'active' : ''}
+          aria-pressed={view === 'chart'}
           onClick={() => setView('chart')}
           title="Visual chart view"
         >
@@ -56,6 +59,7 @@ function ChartToolbar({
         <button
           type="button"
           className={view === 'table' ? 'active' : ''}
+          aria-pressed={view === 'table'}
           onClick={() => setView('table')}
           title="Underlying numeric data table"
         >
@@ -91,14 +95,14 @@ export function TrendChart({
           <table>
             <thead>
               <tr>
-                <th>Period</th>
+                <th className="sticky-col">Period</th>
                 <th className="num">{label}</th>
               </tr>
             </thead>
             <tbody>
               {data.map((p) => (
                 <tr key={p.d}>
-                  <td>{p.d}</td>
+                  <td className="sticky-col">{p.d}</td>
                   <td className="num">
                     {fmtVal(p.v)}
                     {suffix}
@@ -134,6 +138,7 @@ export function TrendChart({
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
     const px = (e.clientX - rect.left) * (W / rect.width);
     const frac = (px - P.l) / (W - P.l - P.r);
     const idx = Math.round(frac * (data.length - 1));
@@ -195,8 +200,11 @@ export function TrendChart({
             width={W - P.l - P.r}
             height={H - P.t - P.b}
             fill="transparent"
+            onPointerDown={onMove}
             onPointerMove={onMove}
             onPointerLeave={() => setHoverIdx(null)}
+            onPointerCancel={() => setHoverIdx(null)}
+            onLostPointerCapture={() => setHoverIdx(null)}
           />
         </svg>
         {active && (
@@ -278,7 +286,7 @@ export function MultiLineChart({
           <table>
             <thead>
               <tr>
-                <th>Year</th>
+                <th className="sticky-col">Year</th>
                 {activeSeries.map((s) => (
                   <th key={s.label} className="num">
                     {s.label}
@@ -289,7 +297,7 @@ export function MultiLineChart({
             <tbody>
               {yearSet.map((yr) => (
                 <tr key={yr}>
-                  <td>{yr}</td>
+                  <td className="sticky-col">{yr}</td>
                   {maps.map((m, i) => {
                     const v = m.get(yr);
                     return (
@@ -355,6 +363,7 @@ export function MultiLineChart({
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
     const px = (e.clientX - rect.left) * (W / rect.width);
     const year = Math.round(x0 + ((px - P.l) / (W - P.l - P.r)) * (x1 - x0));
     const clamped = Math.min(x1, Math.max(x0, year));
@@ -367,7 +376,11 @@ export function MultiLineChart({
     <div>
       <ChartToolbar view={view} setView={setView} />
       <div className="chart-wrap">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${activeSeries.length} series over time`}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={`${activeSeries.map((s) => s.label).join(', ')} (${x0}–${x1})`}
+        >
           <title>{`${activeSeries.map((s) => s.label).join(', ')} (${x0}–${x1})`}</title>
           {ticks.map((t, i) => (
             <g key={i}>
@@ -384,7 +397,12 @@ export function MultiLineChart({
             rl.x >= x0 && rl.x <= x1 ? (
               <g key={`ref-${rl.x}`}>
                 <line x1={x(rl.x)} x2={x(rl.x)} y1={P.t} y2={H - P.b} className="ref-line" />
-                <text x={x(rl.x) + 4} y={P.t + 10} className="tick ref-label">
+                <text
+                  x={x(rl.x) > W - P.r - 48 ? x(rl.x) - 4 : x(rl.x) + 4}
+                  y={P.t + 10}
+                  textAnchor={x(rl.x) > W - P.r - 48 ? 'end' : 'start'}
+                  className="tick ref-label"
+                >
                   {rl.label}
                 </text>
               </g>
@@ -433,8 +451,11 @@ export function MultiLineChart({
             width={W - P.l - P.r}
             height={H - P.t - P.b}
             fill="transparent"
+            onPointerDown={onMove}
             onPointerMove={onMove}
             onPointerLeave={() => setHover(null)}
+            onPointerCancel={() => setHover(null)}
+            onLostPointerCapture={() => setHover(null)}
           />
         </svg>
         {hover !== null && (
@@ -469,6 +490,7 @@ export function MultiLineChart({
               key={s.label}
               type="button"
               className={`legend-item interactive${isHidden ? ' off' : ''}`}
+              aria-pressed={!isHidden}
               onClick={() => toggleSeries(s.label)}
               title={isHidden ? `Show ${s.label}` : `Hide ${s.label}`}
             >
@@ -489,32 +511,6 @@ export function MultiLineChart({
         )}
       </div>
     </div>
-  );
-}
-
-export interface StackDatum {
-  x: number;
-  bottom: number;
-  top: number;
-}
-
-export function StackedBars({
-  data,
-  labels,
-  colors,
-}: {
-  data: StackDatum[];
-  labels: [string, string];
-  colors?: [string, string];
-}) {
-  const [cBottom, cTop] = colors ?? ['#1f77b4', '#ff7f0e'];
-  return (
-    <StackedMultiBars
-      series={[
-        { label: labels[0], color: cBottom, points: data.map((d) => ({ x: d.x, y: d.bottom })) },
-        { label: labels[1], color: cTop, points: data.map((d) => ({ x: d.x, y: d.top })) },
-      ]}
-    />
   );
 }
 
@@ -616,7 +612,7 @@ export function StackedMultiBars({
   const y = (v: number) => P.t + (1 - v / max) * (H - P.t - P.b);
   const ticks = mode === 'abs' ? [0, 1, 2, 3].map((i) => (max * i) / 3) : [0, 25, 50, 75, 100];
   const tickFmt = (t: number) => (mode === 'abs' ? fmtCompact.format(t) : `${t}%`);
-  const step = allTicks ? 1 : years.length > 10 ? 2 : 1;
+  const step = slotW < 34 ? Math.ceil(34 / slotW) : allTicks ? 1 : years.length > 10 ? 2 : 1;
 
   const toggleSeries = (label: string) => {
     setHidden((prev) => {
@@ -636,6 +632,7 @@ export function StackedMultiBars({
     const svg = e.currentTarget.ownerSVGElement;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
     const px = (e.clientX - rect.left) * (W / rect.width);
     const idx = Math.floor((px - P.l) / slotW);
     setHoverIdx(Math.min(years.length - 1, Math.max(0, idx)));
@@ -733,8 +730,11 @@ export function StackedMultiBars({
             width={plotW}
             height={H - P.t - P.b}
             fill="transparent"
+            onPointerDown={onMove}
             onPointerMove={onMove}
             onPointerLeave={() => setHoverIdx(null)}
+            onPointerCancel={() => setHoverIdx(null)}
+            onLostPointerCapture={() => setHoverIdx(null)}
           />
         </svg>
         {hoverYear !== null && (
@@ -780,6 +780,7 @@ export function StackedMultiBars({
               key={s.label}
               type="button"
               className={`legend-item interactive${isHidden ? ' off' : ''}`}
+              aria-pressed={!isHidden}
               onClick={() => toggleSeries(s.label)}
               title={isHidden ? `Show ${s.label}` : `Hide ${s.label}`}
             >
@@ -836,7 +837,12 @@ export function CategoryBars({
             title={`${d.category}: ${fmtInt.format(d.v)} (${share}% of shown)${onSelect ? ' — click to filter' : ''}`}
           >
             {onSelect ? (
-              <button type="button" className="bar-row-btn" onClick={() => onSelect(d.category)}>
+              <button
+                type="button"
+                className="bar-row-btn"
+                aria-pressed={isActive}
+                onClick={() => onSelect(d.category)}
+              >
                 {inner}
               </button>
             ) : (
@@ -857,7 +863,7 @@ export interface VintageRow {
 }
 
 const VINTAGE_UNIT: Record<string, { head: string; who: string }> = {
-  investigators: { head: 'CI vintage (first filed)', who: 'investigators' },
+  investigators: { head: 'Investigator vintage (first filed)', who: 'investigators' },
   sites: { head: 'Site vintage (first filed)', who: 'sites' },
   cro: { head: 'CRO vintage (first filed)', who: 'companies' },
   irb: { head: 'IRB vintage (first filed)', who: 'boards' },
@@ -921,7 +927,7 @@ export function VintageHeatmap({
                       className="num vintage-cell"
                       style={
                         c === null
-                          ? { background: '#eef2f0', color: '#7a8680' }
+                          ? { background: 'var(--bg)', color: 'var(--muted)' }
                           : vintageCellStyle(c)
                       }
                       title={tip}

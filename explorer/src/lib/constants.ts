@@ -70,6 +70,29 @@ export const TRIAL_PHASES = [
   'P4',
 ] as const;
 
+export const PHASE_LABEL: Record<string, string> = {
+  EARLY_P1: 'Early Phase 1',
+  P1: 'Phase 1',
+  'P1+P2': 'Phase 1/2',
+  P2: 'Phase 2',
+  'P2+P3': 'Phase 2/3',
+  P3: 'Phase 3',
+  P4: 'Phase 4',
+  NA: 'Not applicable',
+};
+
+export const CHART_COLORS = {
+  primary: '#0f766e',
+  blue: '#1f77b4',
+  orange: '#ff7f0e',
+  green: '#2ca02c',
+  red: '#d62728',
+  purple: '#9467bd',
+  slate: '#334155',
+  other: '#94a3b8',
+  fallback: '#7f7f7f',
+} as const;
+
 export const YEAR_MIN = 2008;
 export const YEAR_MAX = 2026;
 export const LATEST_FULL = 2025;

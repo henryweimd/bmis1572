@@ -19,6 +19,8 @@ import type { Version } from './lib/constants';
 import {
   clampYearPair,
   fmtInt,
+  fmtState,
+  fmtVerdict,
   growthPct,
   normName,
   num,
@@ -35,12 +37,12 @@ import type { FeasibilityPreset } from './OverviewTab';
 type InvSection = 'all' | 'supply' | 'eu-break' | 'tightness' | 'retention' | 'search';
 
 const INV_SECTIONS: readonly { id: InvSection; label: string }[] = [
-  { id: 'all', label: 'All sections' },
+  { id: 'all', label: 'All' },
   { id: 'supply', label: 'Supply & Geography' },
   { id: 'eu-break', label: 'EU Break & Movers' },
-  { id: 'tightness', label: 'Tightness & Distribution' },
-  { id: 'retention', label: 'Retention & Concentration' },
-  { id: 'search', label: 'Search & Leaderboards' },
+  { id: 'tightness', label: 'Tightness' },
+  { id: 'retention', label: 'Retention' },
+  { id: 'search', label: 'Search & Leaders' },
 ];
 
 interface GeoRow {
@@ -720,6 +722,10 @@ export default function InvestigatorsTab({
   const selectPerson = async (id: string, name: string) => {
     const seq = ++selectSeq.current;
     setSel({ id, name });
+    setReceipts([]);
+    setRcTotal(0);
+    setLinked([]);
+    setColleagues([]);
     try {
       const pid = escapeLiteral(id);
       const [rows, cnt, lk, cg] = await Promise.all([
@@ -784,6 +790,7 @@ export default function InvestigatorsTab({
             key={s.id}
             type="button"
             className={`chip${section === s.id ? ' active' : ''}`}
+            aria-pressed={section === s.id}
             onClick={() => setSection(s.id)}
           >
             {s.label}
@@ -797,24 +804,29 @@ export default function InvestigatorsTab({
               onLaunchFeasibility({ mode: 'pis', band: band === 'all' ? 'United States' : band, minYear: 2023 })
             }
           >
-            Screen PIs in Feasibility →
+            Screen PIs →
           </button>
         )}
       </div>
 
       <section className="panel controls">
         <div className="filters">
-          <div className="seg" role="group" aria-label="Person version">
-            {VERSIONS.map((v) => (
-              <button
-                key={v}
-                className={version === v ? 'active' : ''}
-                onClick={() => setVersion(v)}
-                title={manifest?.versions?.[v] ?? v}
-              >
-                {VERSION_LABEL[v]}
-              </button>
-            ))}
+          <div className="filter-group">
+            <span className="filter-label">Clustering</span>
+            <div className="seg" role="group" aria-label="Person version">
+              {VERSIONS.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={version === v ? 'active' : ''}
+                  aria-pressed={version === v}
+                  onClick={() => setVersion(v)}
+                  title={manifest?.versions?.[v] ?? v}
+                >
+                  {VERSION_LABEL[v]}
+                </button>
+              ))}
+            </div>
           </div>
           <label>
             Geography
@@ -920,8 +932,8 @@ export default function InvestigatorsTab({
               </button>
             )}
             {!!geo.length && (
-              <button
-                className="btn"
+              <button type="button"
+                className="btn btn-ghost btn-sm"
                 onClick={() => stackedCsv(`active-investigators-${version}.csv`, geo)}
               >
                 CSV
@@ -965,8 +977,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>EU break study: observed vs pre-trend</h2>
           {!!euSum.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'eu-break-summary.csv',
@@ -1022,8 +1034,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>Cross-site movers (experimental)</h2>
           {!!mvTop.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'mover-clusters-top25.csv',
@@ -1069,7 +1081,7 @@ export default function InvestigatorsTab({
                     >
                       <td>{r.name}</td>
                       <td className="num">{r.np}</td>
-                      <td>{r.verdict}</td>
+                      <td>{fmtVerdict(r.verdict)}</td>
                       <td>{r.countries}</td>
                       <td>
                         {r.y0}–{r.y1}
@@ -1097,8 +1109,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>New investigators per year{band === 'all' ? ' by geography' : `: ${band}`}</h2>
           {!!geoNew.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`new-investigators-${version}.csv`, geoNew)}
             >
               CSV
@@ -1117,8 +1129,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>New vs. returning</h2>
           {!!newret.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`new-vs-returning-${version}.csv`, newret)}
             >
               CSV
@@ -1138,8 +1150,8 @@ export default function InvestigatorsTab({
           <div className="panel-head">
             <h2>Tightness: investigators per trial</h2>
             {!!tight.length && (
-              <button
-                className="btn"
+              <button type="button"
+                className="btn btn-ghost btn-sm"
                 onClick={() => stackedCsv(`tightness-${version}-${tightScope}.csv`, tight)}
               >
                 CSV
@@ -1215,8 +1227,8 @@ export default function InvestigatorsTab({
           <div className="panel-head">
             <h2>One-and-done share by geography</h2>
             {!!oadBand.length && (
-              <button
-                className="btn"
+              <button type="button"
+                className="btn btn-ghost btn-sm"
                 onClick={() =>
                   downloadCsv(
                     'one-and-done-by-band.csv',
@@ -1266,7 +1278,7 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>Mean receipts per active investigator</h2>
           {!!workload.length && (
-            <button className="btn" onClick={() => trendCsv('workload.csv', workload)}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => trendCsv('workload.csv', workload)}>
               CSV
             </button>
           )}
@@ -1338,8 +1350,8 @@ export default function InvestigatorsTab({
               </button>
               <span className="muted">Strict persons · top 50 by IND references · names as published</span>
               {!!hits.length && (
-                <button
-                  className="btn"
+                <button type="button"
+                  className="btn btn-ghost btn-sm"
                   onClick={() =>
                     downloadCsv(
                       'investigator-search.csv',
@@ -1432,8 +1444,8 @@ export default function InvestigatorsTab({
                   </h3>
                   <div className="header-actions">
                     {!!receipts.length && (
-                      <button
-                        className="btn"
+                      <button type="button"
+                        className="btn btn-ghost btn-sm"
                         onClick={() =>
                           downloadCsv(
                             'investigator-receipts.csv',
@@ -1478,7 +1490,7 @@ export default function InvestigatorsTab({
                             </button>
                           </td>
                           <td>{r.city ?? ''}</td>
-                          <td>{r.state ?? ''}</td>
+                          <td>{fmtState(r.state)}</td>
                           <td>{r.country}</td>
                           <td>{r.invn}</td>
                         </tr>
@@ -1509,8 +1521,8 @@ export default function InvestigatorsTab({
                         CT.gov-linked trials{' '}
                         <span className="muted">· {linked.length} via name match (experimental)</span>
                       </h3>
-                      <button
-                        className="btn"
+                      <button type="button"
+                        className="btn btn-ghost btn-sm"
                         onClick={() =>
                           downloadCsv(
                             'linked_trials.csv',
@@ -1580,8 +1592,8 @@ export default function InvestigatorsTab({
                         Others at this site{' '}
                         <span className="muted">· top {colleagues.length} by IND refs</span>
                       </h3>
-                      <button
-                        className="btn"
+                      <button type="button"
+                        className="btn btn-ghost btn-sm"
                         onClick={() =>
                           downloadCsv(
                             'site-colleagues.csv',
@@ -1647,8 +1659,8 @@ export default function InvestigatorsTab({
               : 'Leaderboard: most lifetime IND references'}
           </h2>
           {!!leaders.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'leaderboard.csv',
@@ -1775,12 +1787,18 @@ export default function InvestigatorsTab({
                 data={states}
                 onSelect={
                   onLaunchFeasibility
-                    ? () => onLaunchFeasibility({ mode: 'pis', band: 'United States', minYear: 2023 })
+                    ? (st) =>
+                        onLaunchFeasibility({
+                          mode: 'pis',
+                          band: 'United States',
+                          state: st,
+                          minYear: 2023,
+                        })
                     : undefined
                 }
               />
               {onLaunchFeasibility && (
-                <p className="caption">Click any state bar to open the US Feasibility PI Finder.</p>
+                <p className="caption">Click any state bar to screen active investigators in that state.</p>
               )}
             </>
           )}
@@ -1839,8 +1857,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>Investigator vintage attrition</h2>
           {!!retShow.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   `vintage-${retMode}-${version}${retBand === 'all' ? '' : `-${retBand}`}.csv`,
@@ -1895,8 +1913,8 @@ export default function InvestigatorsTab({
             <div className="panel-head subhead">
               <h3>Five-year retention by vintage</h3>
               {!!ret5.length && (
-                <button
-                  className="btn"
+                <button type="button"
+                  className="btn btn-ghost btn-sm"
                   onClick={() => trendCsv(`five-year-retention-${version}.csv`, ret5)}
                 >
                   CSV
@@ -1928,8 +1946,8 @@ export default function InvestigatorsTab({
         <div className="panel-head">
           <h2>Work concentration</h2>
           {!!conc.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`concentration-${version}.csv`, conc)}
             >
               CSV

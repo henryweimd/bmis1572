@@ -353,13 +353,28 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
       </p>
       <section className="panel controls">
         <div className="filters">
-          <div className="seg" role="group" aria-label="Language">
-            <button className={lang === 'zh' ? 'active' : ''} onClick={() => setLang('zh')} title="Show Chinese labels">
-              中文
-            </button>
-            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')} title="Show English labels">
-              EN
-            </button>
+          <div className="filter-group">
+            <span className="filter-label">Labels</span>
+            <div className="seg" role="group" aria-label="Language">
+              <button
+                type="button"
+                className={lang === 'zh' ? 'active' : ''}
+                aria-pressed={lang === 'zh'}
+                onClick={() => setLang('zh')}
+                title="Show Chinese labels"
+              >
+                中文
+              </button>
+              <button
+                type="button"
+                className={lang === 'en' ? 'active' : ''}
+                aria-pressed={lang === 'en'}
+                onClick={() => setLang('en')}
+                title="Show English labels"
+              >
+                EN
+              </button>
+            </div>
           </div>
           <label>
             Province
@@ -404,29 +419,34 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
               ))}
             </select>
           </label>
-          <span className="muted">Names stay in Chinese in both modes.</span>
         </div>
-      </section>
-
-      <section className="panel">
-        <p className="prose">
-          <strong>About this data:</strong> China&apos;s National Medical Products Administration
-          (NMPA, 国家药品监督管理局) oversees drug trials through its Center for Food and Drug
-          Inspection (CFDI, 食品药品审核查验中心), which operates the public filing system for
-          clinical trial institutions (药物和医疗器械临床试验机构备案系统). Institutions file
-          (备案) their trial units — specialties, sites, and principal investigators — and anyone
-          can query the registry by institution, province, specialty, or investigator name.{' '}
-          <a
-            href="https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open the CFDI public query portal
-          </a>
-          . This tab analyzes a partial extract of the drug-institution filings (retrieved
-          2026-11-06), not the live system: coverage is incomplete, filing year marks registration
-          vintage (bulk 2019–2020 wave), and person = (name, institution) pair.
-        </p>
+        <details className="info-disclosure">
+          <summary>About NMPA/CFDI filing data (names stay in Chinese in both modes)</summary>
+          <div className="info-disclosure-body">
+            <p className="prose">
+              China&apos;s National Medical Products Administration (NMPA, 国家药品监督管理局)
+              oversees drug trials through its Center for Food and Drug Inspection (CFDI,
+              食品药品审核查验中心), which operates the public filing system for clinical trial
+              institutions (药物和医疗器械临床试验机构备案系统).{' '}
+              <a
+                href="https://beian.cfdi.org.cn/CTMDS/apps/pub/drugPublic1.jsp"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open the CFDI public query portal
+              </a>
+              . This tab analyzes a partial extract (retrieved 2026-11-06): coverage is incomplete,
+              filing year marks registration vintage (bulk 2019–2020 wave), and person = (name,
+              institution) pair.
+            </p>
+            <p className="caption">
+              Pairs count affiliations, not humans: one person at two institutions = two pairs,
+              while two same-named people at one institution = one pair (common names such as 张伟
+              collide across institutions and are not mobility). The 2020 bulk filing captured the
+              registry stock at once, so totals read as roster size, not trial activity.
+            </p>
+          </div>
+        </details>
       </section>
 
       <section className="kpis">
@@ -445,19 +465,13 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
           <span className="kpi-value">{kpi ? fmtInt.format(kpi.specs) : '—'}</span>
         </div>
       </section>
-      <p className="caption" style={{ marginBottom: '12px' }}>
-        Pairs count affiliations, not humans: one person at two institutions = two pairs, while two
-        same-named people at one institution = one pair (common names such as 张伟 collide across
-        institutions and are not mobility). Rows are exact-deduped at ingest; the 2020 bulk filing
-        captured the registry stock at once, so totals read as roster size, not trial activity.
-      </p>
 
       <section className="panel">
         <div className="panel-head">
           <h2>Registry by filing vintage</h2>
           {!!vintStack.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv('china-vintage-by-province.csv', vintStack)}
             >
               CSV
@@ -513,8 +527,8 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
             {prov === 'all' ? '' : `: ${zh ? prov : provs.find((p) => p.zh === prov)?.en ?? prov}`}
           </h2>
           {!!sites.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'china-top-sites.csv',
@@ -669,8 +683,8 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
         <div className="panel-head">
           <h2>Top investigators by affiliations</h2>
           {!!leaders.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'china-top-investigators.csv',
@@ -742,7 +756,7 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
           {!!hits.length && (
             <button
               type="button"
-              className="btn"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'china-search.csv',
@@ -794,7 +808,7 @@ export default function ChinaTab({ demo, ready }: { demo: boolean; ready: boolea
               {!!affs.length && (
                 <button
                   type="button"
-                  className="btn"
+                  className="btn btn-ghost btn-sm"
                   onClick={() =>
                     downloadCsv(
                       'china-affiliations.csv',

@@ -4,6 +4,36 @@ export const fmtCompact = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 1,
 });
 
+const PHASE_LABELS: Record<string, string> = {
+  EARLY_P1: 'Early Phase 1',
+  P1: 'Phase 1',
+  'P1+P2': 'Phase 1/2',
+  P2: 'Phase 2',
+  'P2+P3': 'Phase 2/3',
+  P3: 'Phase 3',
+  P4: 'Phase 4',
+  NA: 'Not applicable',
+};
+
+export function fmtPhase(p: string | null | undefined): string {
+  if (!p) return '—';
+  return PHASE_LABELS[p] ?? p;
+}
+
+export function fmtState(st: string | null | undefined): string {
+  if (!st || st === 'NG') return '';
+  return st;
+}
+
+export function fmtVerdict(v: string | null | undefined): string {
+  if (!v) return '—';
+  return v.replace(/_/g, ' ');
+}
+
+export function fmtCount(n: number, singular: string, plural = `${singular}s`): string {
+  return `${fmtInt.format(n)} ${n === 1 ? singular : plural}`;
+}
+
 export function fmtVal(v: number): string {
   if (!Number.isFinite(v)) return '—';
   if (Number.isInteger(v)) return fmtInt.format(v);

@@ -23,13 +23,14 @@ export default function ShortlistDrawer({
 }: {
   open: boolean;
   onClose: () => void;
-  onJumpSite: (siteN: number) => void;
+  onJumpSite: (siteN: number, version?: 'strict' | 'merged') => void;
   onJumpInvestigator: (name: string) => void;
   onGoFeasibility: () => void;
 }) {
   const { sites, pis, totalCount, removeSite, removePi, clearAll } = useShortlist();
   const [copiedMd, setCopiedMd] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const drawerRef = useRef<HTMLElement | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -43,6 +44,23 @@ export default function ShortlistDrawer({
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
+      } else if (e.key === 'Tab' && drawerRef.current) {
+        const focusable = [
+          ...drawerRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        ];
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -84,7 +102,7 @@ export default function ShortlistDrawer({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <aside className="drawer">
+      <aside className="drawer" ref={drawerRef}>
         <div className="drawer-head">
           <div>
             <h2>Feasibility Shortlist ({totalCount})</h2>
@@ -234,11 +252,11 @@ export default function ShortlistDrawer({
                         <tr>
                           <th>Site</th>
                           <th>Location</th>
-                          <th className="num">Invs</th>
-                          <th className="num">Refs</th>
+                          <th className="num">Investigators</th>
+                          <th className="num">IND filings</th>
                           <th className="num">CT.gov</th>
                           <th>Span</th>
-                          <th />
+                          <th className="sr-only">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -249,7 +267,7 @@ export default function ShortlistDrawer({
                                 type="button"
                                 className="link-btn"
                                 onClick={() => {
-                                  onJumpSite(s.site_n);
+                                  onJumpSite(s.site_n, s.version);
                                   onClose();
                                 }}
                               >
@@ -272,6 +290,7 @@ export default function ShortlistDrawer({
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
+                                aria-label={`Remove ${s.name} from shortlist`}
                                 onClick={() => removeSite(s.site_id)}
                               >
                                 Remove
@@ -295,9 +314,9 @@ export default function ShortlistDrawer({
                           <th>Investigator</th>
                           <th>Site</th>
                           <th>Country</th>
-                          <th className="num">Refs</th>
+                          <th className="num">IND filings</th>
                           <th>Span</th>
-                          <th />
+                          <th className="sr-only">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -325,6 +344,7 @@ export default function ShortlistDrawer({
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm"
+                                aria-label={`Remove ${p.display_name} from shortlist`}
                                 onClick={() => removePi(p.person_id)}
                               >
                                 Remove

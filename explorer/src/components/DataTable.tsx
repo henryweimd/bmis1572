@@ -116,7 +116,7 @@ export function DataTable<T>({
               : `${sorted.length.toLocaleString('en-US')} of ${rows.length.toLocaleString('en-US')} rows`}
           </span>
           {csvFilename && sorted.length > 0 && (
-            <button type="button" className="btn btn-sm" onClick={exportCsv}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={exportCsv}>
               CSV
             </button>
           )}

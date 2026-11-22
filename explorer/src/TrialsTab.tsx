@@ -6,7 +6,7 @@ import { DataTable } from './components/DataTable';
 import type { ColumnDef } from './components/DataTable';
 import { intIn, readHash, writeHash } from './hash';
 import { downloadCsv, stackedCsv, trendCsv } from './csv';
-import { clampYearPair, fmtInt, num0, yearRange } from './lib/format';
+import { clampYearPair, fmtInt, fmtPhase, num0, yearRange } from './lib/format';
 import type { FeasibilityPreset } from './OverviewTab';
 
 interface KolRow {
@@ -55,6 +55,7 @@ export default function TrialsTab({
   const [phaseTrend, setPhaseTrend] = useState<LineSeries[]>([]);
   const [note, setNote] = useState('');
   const [nctIn, setNctIn] = useState('');
+  const [lastSearchedNct, setLastSearchedNct] = useState('');
   const [trial, setTrial] = useState<{
     nct: string;
     sponsor: string;
@@ -78,6 +79,7 @@ export default function TrialsTab({
     const nct = (overrideNct ?? nctIn).trim().toUpperCase();
     if (overrideNct !== undefined) setNctIn(nct);
     if (!nct) return;
+    setLastSearchedNct(nct);
     const seq = ++lookupSeq.current;
     const id = escapeLiteral(nct);
     try {
@@ -302,14 +304,17 @@ export default function TrialsTab({
   return (
     <>
       {note && <p className="banner">{note}</p>}
-      <section className="panel">
-        <p className="prose">
-          <strong>About this data:</strong> US industry-led interventional trials from the
-          clinicaltrials.gov API, with overall officials (usually study-level directors/chairs —
-          median 1 per trial, though some trials list site PIs), lead sponsors, phases, and keyword
-          therapeutic areas. Person links match officials to BMIS investigators by name +
-          affiliation; see Definitions. Trials with unknown start year are excluded when filtering.
-        </p>
+      <section className="panel controls">
+        <details className="info-disclosure">
+          <summary>US industry interventional trials (ClinicalTrials.gov API v2)</summary>
+          <p className="prose info-disclosure-body">
+            US industry-led interventional trials from the ClinicalTrials.gov API, with overall
+            officials (usually study-level directors/chairs — median 1 per trial, though some trials
+            list site PIs), lead sponsors, phases, and keyword therapeutic areas. Person links match
+            officials to BMIS investigators by name + affiliation (see Definitions glossary). Trials
+            with unknown start year are excluded when filtering.
+          </p>
+        </details>
         <div className="filters">
           <label>
             From
@@ -375,8 +380,8 @@ export default function TrialsTab({
         <div className="panel-head">
           <h2>Trials by start year</h2>
           {!!triYoy.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => trendCsv(`trials-by-start-year-${y0}-${y1}.csv`, triYoy)}
             >
               CSV
@@ -484,8 +489,8 @@ export default function TrialsTab({
         <div className="panel-head">
           <h2>Phase mix over time</h2>
           {!!phaseTrend.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv(`phase-mix-${y0}-${y1}.csv`, phaseTrend)}
             >
               CSV
@@ -533,7 +538,7 @@ export default function TrialsTab({
               placeholder="e.g. NCT01188928"
             />
           </label>
-          <button type="submit" className="btn">
+          <button type="submit" className="btn" disabled={!nctIn.trim()}>
             Look up
           </button>
         </form>
@@ -541,7 +546,7 @@ export default function TrialsTab({
           (trial ? (
             <>
               <p>
-                <strong>{trial.nct}</strong> · {trial.sponsor} · {trial.phase}
+                <strong>{trial.nct}</strong> · {trial.sponsor} · {fmtPhase(trial.phase)}
                 {trial.ta ? ` · ${trial.ta.replace(/;/g, ', ')}` : ''} · started{' '}
                 {trial.start_y ?? 'unknown'} ·{' '}
                 <a
@@ -597,7 +602,18 @@ export default function TrialsTab({
                           title="Search in FDA Investigators"
                           onClick={() => onJump(r.name)}
                         >
-                          <td>{r.name}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onJump(r.name);
+                              }}
+                            >
+                              {r.name}
+                            </button>
+                          </td>
                           <td>{r.site}</td>
                           <td>{r.country}</td>
                           <td>{r.tier}</td>
@@ -612,7 +628,7 @@ export default function TrialsTab({
             </>
           ) : (
             <p className="muted">
-              {nctIn.trim().toUpperCase()} is not a US industry trial in this file.
+              {lastSearchedNct} is not a US industry trial in this file.
             </p>
           ))}
         <p className="caption">
@@ -646,8 +662,8 @@ export default function TrialsTab({
         <div className="panel-head">
           <h2>Linkage coverage by geography</h2>
           {!!cover.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   `linkage-coverage-${y0}-${y1}.csv`,

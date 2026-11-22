@@ -218,7 +218,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
       },
       {
         key: 'ratio',
-        label: 'Rec / Trial',
+        label: 'Records / Trial',
         align: 'right',
         title: 'Multi-registry registration multiplier (records ÷ deduplicated trials)',
         sortValue: (r) => (r.trials > 0 ? r.records / r.trials : 0),
@@ -234,33 +234,37 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
   return (
     <>
       {note && <p className="banner">{note}</p>}
-      <section className="panel">
-        <p className="prose">
-          <strong>About this data:</strong> aggregate trial counts from the WHO{' '}
-          <a
-            href="https://trialsearch.who.int/AdvSearch.aspx"
-            target="_blank"
-            rel="noreferrer"
-          >
-            ICTRP Search Portal Advanced Search
-          </a>{' '}
-          (International Clinical Trials Registry Platform —{' '}
-          <a href="https://www.who.int/clinical-trials-registry-platform" target="_blank" rel="noreferrer">
-            who.int/clinical-trials-registry-platform
-          </a>
-          ), scraped 7 Nov 2026. Each figure is the portal&apos;s own &ldquo;N records for M trials
-          found&rdquo; for one country (or global), Recruitment Status = ALL, optionally windowed to
-          a Date-of-registration year. No trial-level or investigator-level data was fetched. Code:{' '}
-          <code>pipeline/who.py</code>.
-        </p>
-        <p className="caption">
-          Records are registry entries across ICTRP&apos;s primary registries (including
-          ClinicalTrials.gov); trials are deduplicated studies. Multi-country trials count in every
-          listed country, so country figures sum past the global total. Three countries return zero
-          via the portal&apos;s country list: verified 2026-11-07 against ClinicalTrials.gov (114
-          studies in Côte d&apos;Ivoire, 50 in Laos, 1 in North Korea), the first two are portal
-          indexing gaps, not true zeros.
-        </p>
+      <section className="panel controls">
+        <details className="info-disclosure">
+          <summary>WHO ICTRP aggregate counts (199 countries · scraped 7 Nov 2026)</summary>
+          <div className="info-disclosure-body">
+            <p className="prose">
+              Aggregate trial counts from the WHO{' '}
+              <a
+                href="https://trialsearch.who.int/AdvSearch.aspx"
+                target="_blank"
+                rel="noreferrer"
+              >
+                ICTRP Search Portal Advanced Search
+              </a>{' '}
+              (International Clinical Trials Registry Platform —{' '}
+              <a href="https://www.who.int/clinical-trials-registry-platform" target="_blank" rel="noreferrer">
+                who.int/clinical-trials-registry-platform
+              </a>
+              ). Each figure is the portal&apos;s own &ldquo;N records for M trials found&rdquo; for
+              one country (or global), Recruitment Status = ALL, optionally windowed to a
+              Date-of-registration year. No trial-level or investigator-level data was fetched.
+            </p>
+            <p className="caption">
+              Records are registry entries across ICTRP&apos;s primary registries (including
+              ClinicalTrials.gov); trials are deduplicated studies. Multi-country trials count in
+              every listed country, so country figures sum past the global total. Three countries
+              return zero via the portal&apos;s country list (verified 2026-11-07 against
+              ClinicalTrials.gov: 114 studies in Côte d&apos;Ivoire, 50 in Laos, 1 in North Korea —
+              the first two are portal indexing gaps).
+            </p>
+          </div>
+        </details>
       </section>
 
       <section className="kpis">
@@ -282,7 +286,7 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         <div className="panel-head">
           <h2>Global trials by registration year</h2>
           {!!yoy.length && (
-            <button className="btn" onClick={() => trendCsv('who-global-by-year.csv', yoy)}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => trendCsv('who-global-by-year.csv', yoy)}>
               CSV
             </button>
           )}
@@ -311,8 +315,8 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         <div className="panel-head">
           <h2>Top countries over time</h2>
           {!!stack.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => stackedCsv('who-top-countries-by-year.csv', stack)}
             >
               CSV
@@ -333,8 +337,8 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
         <div className="panel-head">
           <h2>Top-20 countries by year (stack data)</h2>
           {!!cyShown.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'who-top20-by-year.csv',
@@ -412,24 +416,63 @@ export default function WHOTab({ demo, ready }: { demo: boolean; ready: boolean 
           <table className="pivot-table">
             <thead>
               <tr>
-                <th className="sticky-col">
-                  <button type="button" className="sort-btn" onClick={() => cySortBy('country')}>
+                <th
+                  className="sticky-col"
+                  aria-sort={
+                    cySort.key === 'country'
+                      ? cySort.dir === 1
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    className={`sort-btn${cySort.key === 'country' ? ' active' : ''}`}
+                    onClick={() => cySortBy('country')}
+                  >
                     Country{cyArrow('country')}
                   </button>
                 </th>
-                <th className="num">
-                  <button type="button" className="sort-btn" onClick={() => cySortBy('total')}>
+                <th
+                  className="num"
+                  aria-sort={
+                    cySort.key === 'total'
+                      ? cySort.dir === 1
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button
+                    type="button"
+                    className={`sort-btn${cySort.key === 'total' ? ' active' : ''}`}
+                    onClick={() => cySortBy('total')}
+                  >
                     Total{cyArrow('total')}
                   </button>
                 </th>
-                {cyCols.map((y) => (
-                  <th key={y} className="num">
-                    <button type="button" className="sort-btn" onClick={() => cySortBy(String(y))}>
-                      {y}
-                      {cyArrow(String(y))}
-                    </button>
-                  </th>
-                ))}
+                {cyCols.map((y) => {
+                  const k = String(y);
+                  return (
+                    <th
+                      key={y}
+                      className="num"
+                      aria-sort={
+                        cySort.key === k ? (cySort.dir === 1 ? 'ascending' : 'descending') : 'none'
+                      }
+                    >
+                      <button
+                        type="button"
+                        className={`sort-btn${cySort.key === k ? ' active' : ''}`}
+                        onClick={() => cySortBy(k)}
+                      >
+                        {y}
+                        {cyArrow(k)}
+                      </button>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

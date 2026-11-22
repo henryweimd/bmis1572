@@ -5,7 +5,7 @@ import type { LineSeries, VintageRow } from './charts';
 import { intIn, pick, readHash, writeHash } from './hash';
 import { downloadCsv, trendCsv } from './csv';
 import { BAND_COLORS, SERIES_COLORS, VINTAGE_KMAX } from './lib/constants';
-import { clampYearPair, fmtInt, growthPct, num0, pivotVintage, yearRange } from './lib/format';
+import { clampYearPair, fmtInt, fmtState, growthPct, num0, pivotVintage, yearRange } from './lib/format';
 import type { RawVintageRow } from './lib/format';
 import { useShortlist } from './lib/shortlist';
 import { IconBookmark } from './components/Icons';
@@ -483,14 +483,14 @@ export default function SiteTab({
         >
           docs/linkage.md
         </a>{' '}
-        and Definitions: site_xcheck.
+        and the Definitions glossary (CT.gov cross-check).
       </p>
       <section className="panel controls">
         <div className="filters">
           <label>
-            Geography
+            Region
             <select value={band} onChange={(e) => setBand(e.target.value)}>
-              <option value="all">All bands</option>
+              <option value="all">All regions</option>
               {bands.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -530,30 +530,37 @@ export default function SiteTab({
               ))}
             </select>
           </label>
-          <div className="seg" role="group" aria-label="Site version">
-            <button
-              className={ver === 'strict' ? 'active' : ''}
-              onClick={() => {
-                setVer('strict');
-                setSel(null);
-              }}
-              title="Exact normalized street+city+state+country match"
-            >
-              Strict
-            </button>
-            <button
-              className={ver === 'merged' ? 'active' : ''}
-              onClick={() => {
-                setVer('merged');
-                setSel(null);
-              }}
-              title="Strict plus fuzzy same-address merges"
-            >
-              Merged
-            </button>
+          <div className="filter-group">
+            <span className="filter-label">Address clustering</span>
+            <div className="seg" role="group" aria-label="Site clustering version">
+              <button
+                type="button"
+                className={ver === 'strict' ? 'active' : ''}
+                aria-pressed={ver === 'strict'}
+                onClick={() => {
+                  setVer('strict');
+                  setSel(null);
+                }}
+                title="Exact normalized street + city + state + country match"
+              >
+                Strict
+              </button>
+              <button
+                type="button"
+                className={ver === 'merged' ? 'active' : ''}
+                aria-pressed={ver === 'merged'}
+                onClick={() => {
+                  setVer('merged');
+                  setSel(null);
+                }}
+                title="Strict plus fuzzy same-address merges"
+              >
+                Merged
+              </button>
+            </div>
           </div>
-          <span className="muted">Site = street address (strict persons). Selection resets on version switch.</span>
         </div>
+        <p className="caption">Each site represents a distinct street address ({ver === 'strict' ? 'Strict' : 'Merged'} clustering).</p>
       </section>
 
       <section className="kpis">
@@ -575,7 +582,7 @@ export default function SiteTab({
       {showSec('trends') && (
       <>
       <section className="panel">
-        <h2>Active sites per year{band === 'all' ? ' by band' : `: ${band}`}</h2>
+        <h2>Active sites per year{band === 'all' ? ' by region' : `: ${band}`}</h2>
         <StackedMultiBars series={byBand} marks={{ 2021: '*' }} allTicks />
         <p className="caption">
           Distinct site addresses with ≥1 investigator receipt that year · 2008 (ramp-up) and 2026
@@ -598,8 +605,8 @@ export default function SiteTab({
         <div className="panel-head">
           <h2>Mean investigators per active site</h2>
           {!!meanInv.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => trendCsv(`mean-investigators-per-site-${ver}.csv`, meanInv)}
             >
               CSV
@@ -632,8 +639,8 @@ export default function SiteTab({
         <div className="panel-head">
           <h2>Site vintage attrition</h2>
           {!!sret.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   `site-vintage-attrition-${ver}.csv`,
@@ -650,8 +657,8 @@ export default function SiteTab({
         <div className="panel-head subhead">
           <h3>Five-year retention by vintage</h3>
           {!!sret5.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() => trendCsv(`site-five-year-retention-${ver}.csv`, sret5)}
             >
               CSV
@@ -678,8 +685,8 @@ export default function SiteTab({
         <div className="panel-head">
           <h2>Top sites{band === 'all' ? '' : `: ${band}`}</h2>
           {!!top.length && (
-            <button
-              className="btn"
+            <button type="button"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'top-sites.csv',
@@ -817,7 +824,7 @@ export default function SiteTab({
           {!!hits.length && (
             <button
               type="button"
-              className="btn"
+              className="btn btn-ghost btn-sm"
               onClick={() =>
                 downloadCsv(
                   'site-search.csv',
@@ -915,9 +922,10 @@ export default function SiteTab({
             </div>
           </div>
           <p className="muted">
-            {info.addr} · {info.city}, {info.state} {info.country} · {info.band} ·{' '}
+            {info.addr} · {info.city}
+            {fmtState(info.state) ? `, ${fmtState(info.state)}` : ''} {info.country} · {info.band} ·{' '}
             {fmtInt.format(info.n_inv)} investigators ever · {fmtInt.format(info.n_receipts)}{' '}
-            receipts · {info.first_year}–{info.last_year} ({info.n_years} active years) ·{' '}
+            IND filings · {info.first_year}–{info.last_year} ({info.n_years} active years) ·{' '}
             {info.n_variants} address variants
           </p>
           <h3>Investigators active per year</h3>
@@ -1025,20 +1033,25 @@ export default function SiteTab({
             <p className="muted">No phase data (no CT.gov match for this site).</p>
           )}
           <div className="panel-head subhead">
-            <h3>
-              Roster,{' '}
-              <select value={ry} onChange={(e) => setRy(Number(e.target.value))}>
+            <div className="header-actions">
+              <h3>Site roster</h3>
+              <select
+                aria-label="Roster year"
+                value={ry}
+                onChange={(e) => setRy(Number(e.target.value))}
+              >
                 {(detailYears.length ? detailYears : yearOpts).map((y) => (
                   <option key={y} value={y}>
                     {y}
                   </option>
                 ))}
-              </select>{' '}
-              <span className="muted">· top 200 by receipts</span>
-            </h3>
+              </select>
+              <span className="muted">top 200 by filings</span>
+            </div>
             {!!roster.length && (
               <button
-                className="btn"
+                type="button"
+                className="btn btn-ghost btn-sm"
                 onClick={() =>
                   downloadCsv(
                     `site-roster-${ry}.csv`,
@@ -1058,7 +1071,7 @@ export default function SiteTab({
                   <tr>
                     <th>Investigator</th>
                     <th>Country</th>
-                    <th className="num">Receipts</th>
+                    <th className="num">IND filings</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1069,7 +1082,18 @@ export default function SiteTab({
                       title="Search in FDA Investigators"
                       onClick={() => onJump(r.name)}
                     >
-                      <td>{r.name}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onJump(r.name);
+                          }}
+                        >
+                          {r.name}
+                        </button>
+                      </td>
                       <td>{r.country}</td>
                       <td className="num">{r.n}</td>
                     </tr>

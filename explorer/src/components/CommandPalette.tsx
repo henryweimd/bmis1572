@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { escapeLike, query } from '../duckdb';
 import { DEF_TITLES, TABS, TAB_LABEL, TAB_SUBTITLE } from '../lib/constants';
 import type { TabId } from '../lib/constants';
-import { fmtInt, normName } from '../lib/format';
+import { fmtCount, fmtInt, fmtPhase, normName } from '../lib/format';
 import { IconClose, IconSearch } from './Icons';
 
 interface SiteHit {
@@ -60,7 +60,7 @@ export default function CommandPalette({
   onClose: () => void;
   onNavigateTab: (tab: TabId) => void;
   onJumpInvestigator: (name: string) => void;
-  onJumpSite: (siteN: number) => void;
+  onJumpSite: (siteN: number, version?: 'strict' | 'merged') => void;
   onJumpTrial: (nct: string) => void;
   onJumpOrg: (kind: 'cro' | 'irb', org: string) => void;
   onJumpDefinition: (term: string) => void;
@@ -74,6 +74,7 @@ export default function CommandPalette({
   const [irbs, setIrbs] = useState<OrgHit[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const seqRef = useRef(0);
@@ -183,9 +184,9 @@ export default function CommandPalette({
           id: `cmd-site-${s.site_n}`,
           group: 'sites',
           title: s.name,
-          meta: `${s.city}, ${s.country} · ${fmtInt.format(s.n_inv)} invs · ${fmtInt.format(s.n_receipts)} refs`,
+          meta: `${s.city}, ${s.country} · ${fmtCount(s.n_inv, 'investigator')} · ${fmtCount(s.n_receipts, 'IND filing')}`,
           onSelect: () => {
-            onJumpSite(s.site_n);
+            onJumpSite(s.site_n, 'strict');
             onClose();
           },
         })),
@@ -198,7 +199,7 @@ export default function CommandPalette({
           id: `cmd-pi-${p.person_id}`,
           group: 'pis',
           title: p.display_name,
-          meta: `${p.site ?? '—'} · ${p.country} · ${fmtInt.format(p.n_trials)} refs`,
+          meta: `${p.site ?? '—'} · ${p.country} · ${fmtCount(p.n_trials, 'IND filing')}`,
           onSelect: () => {
             onJumpInvestigator(p.display_name);
             onClose();
@@ -213,7 +214,7 @@ export default function CommandPalette({
           id: `cmd-trial-${t.nct}`,
           group: 'trials',
           title: `${t.nct} · ${t.sponsor}`,
-          meta: `${t.phase}${t.start_y ? ` · started ${t.start_y}` : ''}`,
+          meta: `${fmtPhase(t.phase)}${t.start_y ? ` · started ${t.start_y}` : ''}`,
           onSelect: () => {
             onJumpTrial(t.nct);
             onClose();
@@ -318,7 +319,24 @@ export default function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = [
+          ...modalRef.current.querySelectorAll<HTMLElement>(
+            'input, button:not([tabindex="-1"]), a[href], [tabindex]:not([tabindex="-1"])',
+          ),
+        ].filter((el) => !el.hasAttribute('disabled'));
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'ArrowDown') {
@@ -357,12 +375,13 @@ export default function CommandPalette({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="cmd-modal">
+      <div className="cmd-modal" ref={modalRef}>
         <div className="cmd-input-row">
           <IconSearch className="icon muted" />
           <input
             ref={inputRef}
-            type="search"
+            type="text"
+            inputMode="search"
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Search sites, investigators, NCT numbers, sponsors, CROs, IRBs, views, or glossary…"
@@ -393,7 +412,7 @@ export default function CommandPalette({
         <div className="cmd-results" id="cmd-results-list" role="listbox" aria-label="Search results">
           {busy && (
             <p className="muted cmd-status" role="status" aria-live="polite">
-              Searching DuckDB lake…
+              Searching datasets…
             </p>
           )}
 
@@ -411,6 +430,7 @@ export default function CommandPalette({
                       itemRefs.current[idx] = el;
                     }}
                     type="button"
+                    tabIndex={-1}
                     role="option"
                     aria-selected={isActive}
                     className={`cmd-item${isActive ? ' active' : ''}`}

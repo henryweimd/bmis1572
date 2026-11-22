@@ -66,6 +66,7 @@ function ExplorerShell() {
   const [orgJumpKey, setOrgJumpKey] = useState(0);
 
   const seqRef = useRef(0);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const { totalCount } = useShortlist();
 
@@ -73,6 +74,11 @@ function ExplorerShell() {
     seqRef.current += 1;
     return seqRef.current;
   };
+
+  const scrollTopSafe = useCallback(() => {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }, []);
 
   const boot = useCallback(async () => {
     setStatus('loading');
@@ -96,7 +102,17 @@ function ExplorerShell() {
   useEffect(() => {
     writeHash({ t: tab });
     document.title = `${TAB_LABEL[tab]} · Global Clinical Trial Investigator Talent Supply Data Explorer`;
+    const activeBtn = tabRefs.current[TABS.indexOf(tab)];
+    if (activeBtn && activeBtn.offsetParent !== null) {
+      activeBtn.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+    }
   }, [tab]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -128,44 +144,59 @@ function ExplorerShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, [cmdOpen]);
 
-  const navigateTab = useCallback((nextTab: TabId, section?: string) => {
-    setTab(nextTab);
-    if (nextTab === 'inv' && section) {
-      setInvSectionReq({ section, seq: nextSeq() });
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  const navigateTab = useCallback(
+    (nextTab: TabId, section?: string) => {
+      setTab(nextTab);
+      if (nextTab === 'inv' && section) {
+        setInvSectionReq({ section, seq: nextSeq() });
+      }
+      scrollTopSafe();
+    },
+    [scrollTopSafe],
+  );
 
-  const launchFeasibility = useCallback((preset: FeasibilityPreset) => {
-    setFeasPreset({ ...preset, seq: nextSeq() });
-    setTab('feas');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  const launchFeasibility = useCallback(
+    (preset: FeasibilityPreset) => {
+      setFeasPreset({ ...preset, seq: nextSeq() });
+      setTab('feas');
+      scrollTopSafe();
+    },
+    [scrollTopSafe],
+  );
 
   const jumpInvestigator = useCallback((name: string) => {
     setJumpRequest({ name, seq: nextSeq() });
     setTab('inv');
   }, []);
 
-  const jumpToSite = useCallback((siteN: number) => {
-    writeHash({ t: 'site', 'site.v': 'strict', 'site.s': `strict:${siteN}` });
-    setSiteJumpKey((k) => k + 1);
-    setTab('site');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  const jumpToSite = useCallback(
+    (siteN: number, version: 'strict' | 'merged' = 'strict') => {
+      writeHash({ t: 'site', 'site.v': version, 'site.s': `${version}:${siteN}` });
+      setSiteJumpKey((k) => k + 1);
+      setTab('site');
+      scrollTopSafe();
+    },
+    [scrollTopSafe],
+  );
 
-  const jumpToTrial = useCallback((nct: string) => {
-    setTrialJump({ nct, seq: nextSeq() });
-    setTab('trials');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  const jumpToTrial = useCallback(
+    (nct: string) => {
+      setTrialJump({ nct, seq: nextSeq() });
+      setTab('trials');
+      scrollTopSafe();
+    },
+    [scrollTopSafe],
+  );
 
-  const jumpToOrg = useCallback((kind: 'cro' | 'irb', org: string) => {
-    writeHash({ t: kind, [`${kind}.s`]: org });
-    setOrgJumpKey((k) => k + 1);
-    setTab(kind);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  const jumpToOrg = useCallback(
+    (kind: 'cro' | 'irb', org: string) => {
+      writeHash({ t: kind, [`${kind}.s`]: org });
+      setOrgJumpKey((k) => k + 1);
+      setTab(kind);
+      scrollTopSafe();
+    },
+    [scrollTopSafe],
+  );
 
   const jumpDefinition = useCallback((term: string) => {
     setDefFocus({ term, seq: nextSeq() });
@@ -175,7 +206,8 @@ function ExplorerShell() {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 1800);
     } catch {
       /* clipboard blocked in insecure context */
     }
@@ -295,7 +327,7 @@ function ExplorerShell() {
               <span>{copied ? 'Copied' : 'Share'}</span>
             </button>
             <span className={demo ? 'badge demo' : 'badge'}>
-              {demo ? 'demo data' : 'full lake'}
+              {demo ? 'Demo sample' : 'Full dataset'}
             </span>
           </div>
         </div>
@@ -350,6 +382,7 @@ function ExplorerShell() {
             {TABS.map((t, i) => (
               <button
                 key={t}
+                type="button"
                 ref={(el) => {
                   tabRefs.current[i] = el;
                 }}
@@ -364,26 +397,25 @@ function ExplorerShell() {
             ))}
           </div>
 
-          <div className="view-header">
-            <div>
-              <h1>{TAB_LABEL[tab]}</h1>
-              <p className="muted">{TAB_SUBTITLE[tab]}</p>
-            </div>
-            {manifest && !demo && (
-              <span className="muted view-meta">
-                Snapshot built {manifest.generated_at.slice(0, 10)} · CT.gov {ctgovTs}
-              </span>
-            )}
-          </div>
-
-          {demo && (
-            <p className="banner">
-              Showing the committed demo sample. Run <code>uv run python pipeline/build.py</code> to
-              build and explore the full lake locally.
-            </p>
-          )}
-
           <main id="main-content" tabIndex={-1}>
+            <div className="view-header">
+              <div>
+                <h1>{TAB_LABEL[tab]}</h1>
+                <p className="muted">{TAB_SUBTITLE[tab]}</p>
+              </div>
+              {manifest && !demo && (
+                <span className="muted view-meta">
+                  Snapshot built {manifest.generated_at.slice(0, 10)} · CT.gov {ctgovTs}
+                </span>
+              )}
+            </div>
+
+            {demo && (
+              <p className="banner">
+                Showing the committed demo sample. Run <code>uv run python pipeline/build.py</code> to
+                build and explore the full lake locally.
+              </p>
+            )}
             <Suspense fallback={<TabSkeleton />}>
               {tab === 'overview' && (
                 <OverviewTab
@@ -392,7 +424,6 @@ function ExplorerShell() {
                   manifest={manifest}
                   onNavigateTab={navigateTab}
                   onLaunchFeasibility={launchFeasibility}
-                  onOpenSearch={() => setCmdOpen(true)}
                   onJumpDefinition={jumpDefinition}
                 />
               )}
