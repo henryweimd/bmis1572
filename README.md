@@ -1,5 +1,7 @@
 # Global Clinical Trial Investigator Talent Supply Data Explorer (FDA BMIS 1572)
 
+**Live demo:** https://explorer-five-iota.vercel.app/
+
 How has the supply of clinical trial investigators trended over time, and how does
 it compare against industry trial demand?
 
@@ -12,7 +14,7 @@ it compare against industry trial demand?
 ```
 pipeline/  →  data/ (local lake, gitignored)  →  explorer/public/data/ (shipped snapshot)
                                                    ↕
-explorer/ (Vite + React + DuckDB-WASM, static)  →  Vercel (frontend only)
+explorer/ (Vite + React + DuckDB-WASM, static)  →  Vercel (https://explorer-five-iota.vercel.app/)
 charts/ (tracked static PNGs with captioned definitions)
 exports/ (tracked slide-deck PPTX + PDF)
 ```

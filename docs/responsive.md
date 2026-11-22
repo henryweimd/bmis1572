@@ -6,8 +6,9 @@ Goal: every tab reads and operates cleanly at **390px** (phone) and **1280px**
 ## The loop (run on every frontend change)
 
 1. `npm run check:responsive` — static checks (seconds, must pass).
-2. `npm run build` — tsc + vite must stay green.
-3. Manual pass at 390×844 and 1280×800 (DevTools device toolbar):
+2. `npm test` — TypeScript unit tests (`node --test`).
+3. `npm run build` — tsc + vite must stay green.
+4. Manual pass at 390×844 and 1280×800 (DevTools device toolbar) locally and after push on the deployed Vercel site (`https://explorer-five-iota.vercel.app/`):
    - [ ] Tab bar scrolls horizontally; active tab visible.
    - [ ] KPI cards stack (1 col; 2-col for four/five variants).
    - [ ] `.panels` grids collapse to one column.
